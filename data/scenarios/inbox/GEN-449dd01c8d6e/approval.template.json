@@ -1,0 +1,647 @@
+{
+  "schemaVersion": "1.0",
+  "sourceSha256": "449dd01c8d6e0c29046eac03eafd5cbbe3f277f921bc11d744e75fccbdd4be5f",
+  "status": "Draft",
+  "reviewDecisions": [
+    {
+      "reviewId": "REV-0701-501d520a7693",
+      "decision": "Deferred",
+      "reason": "\uC2E4\uC81C \uD65C\uC131 \uC120\uD0DD\uC9C0\uC758 \uAC12\u00B7\uD45C\uC2DC\uBB38\uC790\u00B7\uC778\uB371\uC2A4\uB97C RuntimeTabOrder\uC640 \uD568\uAED8 \uC218\uC9D1 \uD544\uC694",
+      "evidenceRefs": []
+    },
+    {
+      "reviewId": "REV-0701-4f257c6371ac",
+      "decision": "Deferred",
+      "reason": "\uC2E4\uC81C \uD65C\uC131 \uC120\uD0DD\uC9C0\uC758 \uAC12\u00B7\uD45C\uC2DC\uBB38\uC790\u00B7\uC778\uB371\uC2A4\uB97C RuntimeTabOrder\uC640 \uD568\uAED8 \uC218\uC9D1 \uD544\uC694",
+      "evidenceRefs": []
+    },
+    {
+      "reviewId": "REV-0701-aada9feccac5",
+      "decision": "Deferred",
+      "reason": "\uC2E4\uC81C actionable \uC774\uBCA4\uD2B8\uC640 \uD45C\uC2DC\uBB38\uC790 \uD655\uC778 \uD544\uC694",
+      "evidenceRefs": []
+    },
+    {
+      "reviewId": "REV-0701-479b9e889805",
+      "decision": "Informational",
+      "reason": "\uBC84\uD2BC \uD45C\uC2DC\uBB38\uC790\uC640 \uC2E4\uC81C \uC5C5\uBB34 \uD6A8\uACFC \uD655\uC778 \uD544\uC694",
+      "evidenceRefs": []
+    },
+    {
+      "reviewId": "REV-0701-a1ec829b6058",
+      "decision": "Informational",
+      "reason": "\uAE08\uC561\u00B7\uC218\uB7C9\u00B7\uC190\uC775 \uB4F1 \uACB0\uACFC\uAC12 \uC815\uD569\uC131\uAE4C\uC9C0 \uC790\uB3D9 \uD310\uC815\uD558\uB824\uBA74 \uBCC4\uB3C4 \uC5C5\uBB34 \uB370\uC774\uD130/DB \uC624\uB77C\uD074 \uD544\uC694",
+      "evidenceRefs": []
+    },
+    {
+      "reviewId": "REV-0702-5f93c49bd13d",
+      "decision": "Informational",
+      "reason": "\uBC84\uD2BC \uD45C\uC2DC\uBB38\uC790\uC640 \uC2E4\uC81C \uC5C5\uBB34 \uD6A8\uACFC \uD655\uC778 \uD544\uC694",
+      "evidenceRefs": []
+    },
+    {
+      "reviewId": "REV-0702-cb5edbb2a44e",
+      "decision": "Deferred",
+      "reason": "\uC2E4\uC81C actionable \uC774\uBCA4\uD2B8\uC640 \uD45C\uC2DC\uBB38\uC790 \uD655\uC778 \uD544\uC694",
+      "evidenceRefs": []
+    },
+    {
+      "reviewId": "REV-0702-5da14f0bb83d",
+      "decision": "Deferred",
+      "reason": "\uC2E4\uC81C actionable \uC774\uBCA4\uD2B8\uC640 \uD45C\uC2DC\uBB38\uC790 \uD655\uC778 \uD544\uC694",
+      "evidenceRefs": []
+    },
+    {
+      "reviewId": "REV-0702-479b9e889805",
+      "decision": "Informational",
+      "reason": "\uBC84\uD2BC \uD45C\uC2DC\uBB38\uC790\uC640 \uC2E4\uC81C \uC5C5\uBB34 \uD6A8\uACFC \uD655\uC778 \uD544\uC694",
+      "evidenceRefs": []
+    },
+    {
+      "reviewId": "REV-0702-be35d0f72cb6",
+      "decision": "Informational",
+      "reason": "\uBC84\uD2BC \uD45C\uC2DC\uBB38\uC790\uC640 \uC2E4\uC81C \uC5C5\uBB34 \uD6A8\uACFC \uD655\uC778 \uD544\uC694",
+      "evidenceRefs": []
+    },
+    {
+      "reviewId": "REV-0702-a1ec829b6058",
+      "decision": "Informational",
+      "reason": "\uAE08\uC561\u00B7\uC218\uB7C9\u00B7\uC190\uC775 \uB4F1 \uACB0\uACFC\uAC12 \uC815\uD569\uC131\uAE4C\uC9C0 \uC790\uB3D9 \uD310\uC815\uD558\uB824\uBA74 \uBCC4\uB3C4 \uC5C5\uBB34 \uB370\uC774\uD130/DB \uC624\uB77C\uD074 \uD544\uC694",
+      "evidenceRefs": []
+    },
+    {
+      "reviewId": "REV-0705-cf43bf5d03c2",
+      "decision": "Deferred",
+      "reason": "\uCD08\uAE30 \uB85C\uB4DC\uAC00 \uC870\uD68C \uC644\uB8CC \uC0C1\uD0DC\uC778\uC9C0, \uBCC4\uB3C4 \uC870\uD68C \uBC84\uD2BC/\uB2E8\uCD95\uD0A4\uAC00 \uC788\uB294\uC9C0 \uD655\uC778 \uD544\uC694",
+      "evidenceRefs": []
+    },
+    {
+      "reviewId": "REV-0708-405223407259",
+      "decision": "Deferred",
+      "reason": "\uC2E4\uC81C \uD65C\uC131 \uC120\uD0DD\uC9C0\uC758 \uAC12\u00B7\uD45C\uC2DC\uBB38\uC790\u00B7\uC778\uB371\uC2A4\uB97C RuntimeTabOrder\uC640 \uD568\uAED8 \uC218\uC9D1 \uD544\uC694",
+      "evidenceRefs": []
+    },
+    {
+      "reviewId": "REV-0708-ab29482acec8",
+      "decision": "Informational",
+      "reason": "\uC77C\uAD04\uB9E4\uB3C4 \uAC00\uB2A5 \uD56D\uBAA9 0\uAC74 \uC0C1\uD0DC\uB97C \uC548\uC804\uD558\uAC8C \uC7AC\uD604\uD560 \uD14C\uC2A4\uD2B8 \uB370\uC774\uD130 \uD655\uBCF4 \uD544\uC694",
+      "evidenceRefs": []
+    },
+    {
+      "reviewId": "REV-0708-a1ec829b6058",
+      "decision": "Informational",
+      "reason": "\uAE08\uC561\u00B7\uC218\uB7C9\u00B7\uC190\uC775 \uB4F1 \uACB0\uACFC\uAC12 \uC815\uD569\uC131\uAE4C\uC9C0 \uC790\uB3D9 \uD310\uC815\uD558\uB824\uBA74 \uBCC4\uB3C4 \uC5C5\uBB34 \uB370\uC774\uD130/DB \uC624\uB77C\uD074 \uD544\uC694",
+      "evidenceRefs": []
+    },
+    {
+      "reviewId": "REV-0710-a6225e266056",
+      "decision": "Deferred",
+      "reason": "\uC2E4\uC81C \uD65C\uC131 \uC120\uD0DD\uC9C0\uC758 \uAC12\u00B7\uD45C\uC2DC\uBB38\uC790\u00B7\uC778\uB371\uC2A4\uB97C RuntimeTabOrder\uC640 \uD568\uAED8 \uC218\uC9D1 \uD544\uC694",
+      "evidenceRefs": []
+    },
+    {
+      "reviewId": "REV-0711-d639e0dcc927",
+      "decision": "Deferred",
+      "reason": "\uC2E4\uC81C \uD65C\uC131 \uC120\uD0DD\uC9C0\uC758 \uAC12\u00B7\uD45C\uC2DC\uBB38\uC790\u00B7\uC778\uB371\uC2A4\uB97C RuntimeTabOrder\uC640 \uD568\uAED8 \uC218\uC9D1 \uD544\uC694",
+      "evidenceRefs": []
+    },
+    {
+      "reviewId": "REV-0711-a1ec829b6058",
+      "decision": "Informational",
+      "reason": "\uAE08\uC561\u00B7\uC218\uB7C9\u00B7\uC190\uC775 \uB4F1 \uACB0\uACFC\uAC12 \uC815\uD569\uC131\uAE4C\uC9C0 \uC790\uB3D9 \uD310\uC815\uD558\uB824\uBA74 \uBCC4\uB3C4 \uC5C5\uBB34 \uB370\uC774\uD130/DB \uC624\uB77C\uD074 \uD544\uC694",
+      "evidenceRefs": []
+    },
+    {
+      "reviewId": "REV-0712-047c60c03847",
+      "decision": "Deferred",
+      "reason": "\uC2E4\uC81C \uD65C\uC131 \uC120\uD0DD\uC9C0\uC758 \uAC12\u00B7\uD45C\uC2DC\uBB38\uC790\u00B7\uC778\uB371\uC2A4\uB97C RuntimeTabOrder\uC640 \uD568\uAED8 \uC218\uC9D1 \uD544\uC694",
+      "evidenceRefs": []
+    },
+    {
+      "reviewId": "REV-0712-a1ec829b6058",
+      "decision": "Informational",
+      "reason": "\uAE08\uC561\u00B7\uC218\uB7C9\u00B7\uC190\uC775 \uB4F1 \uACB0\uACFC\uAC12 \uC815\uD569\uC131\uAE4C\uC9C0 \uC790\uB3D9 \uD310\uC815\uD558\uB824\uBA74 \uBCC4\uB3C4 \uC5C5\uBB34 \uB370\uC774\uD130/DB \uC624\uB77C\uD074 \uD544\uC694",
+      "evidenceRefs": []
+    },
+    {
+      "reviewId": "REV-0713-a1ec829b6058",
+      "decision": "Informational",
+      "reason": "\uAE08\uC561\u00B7\uC218\uB7C9\u00B7\uC190\uC775 \uB4F1 \uACB0\uACFC\uAC12 \uC815\uD569\uC131\uAE4C\uC9C0 \uC790\uB3D9 \uD310\uC815\uD558\uB824\uBA74 \uBCC4\uB3C4 \uC5C5\uBB34 \uB370\uC774\uD130/DB \uC624\uB77C\uD074 \uD544\uC694",
+      "evidenceRefs": []
+    },
+    {
+      "reviewId": "REV-0714-622a35cde2d7",
+      "decision": "Deferred",
+      "reason": "\uC2E4\uC81C \uD65C\uC131 \uC120\uD0DD\uC9C0\uC758 \uAC12\u00B7\uD45C\uC2DC\uBB38\uC790\u00B7\uC778\uB371\uC2A4\uB97C RuntimeTabOrder\uC640 \uD568\uAED8 \uC218\uC9D1 \uD544\uC694",
+      "evidenceRefs": []
+    },
+    {
+      "reviewId": "REV-0714-744629735a8c",
+      "decision": "Informational",
+      "reason": "\uBC84\uD2BC \uD45C\uC2DC\uBB38\uC790\uC640 \uC2E4\uC81C \uC5C5\uBB34 \uD6A8\uACFC \uD655\uC778 \uD544\uC694",
+      "evidenceRefs": []
+    },
+    {
+      "reviewId": "REV-0714-9d9f1cb89fcd",
+      "decision": "Deferred",
+      "reason": "\uC870\uAC74\uC2DD CHK_2\uC640 \uBA54\uC2DC\uC9C0\uC758 \uC885\uBAA9\uBCC4 \uD45C\uD604\uC774 \uC77C\uCE58\uD558\uB294\uC9C0 \uC6D0 MAP/\uC2E4\uD589 \uD654\uBA74\uC5D0\uC11C \uD655\uC778 \uD544\uC694",
+      "evidenceRefs": []
+    },
+    {
+      "reviewId": "REV-0714-807f047c0758",
+      "decision": "Deferred",
+      "reason": "\uC0C1\uC138\uB0B4\uC5ED \uD655\uC7A5/\uCD95\uC18C\uB97C \uB9CC\uB4DC\uB294 \uC815\uD655\uD55C \uD2B8\uB9AC\uAC70\uC640 CHK_1~3 Enabled=false \uC0C1\uD0DC \uC7AC\uD604 \uC808\uCC28 \uD655\uC778 \uD544\uC694",
+      "evidenceRefs": []
+    },
+    {
+      "reviewId": "REV-0714-a1ec829b6058",
+      "decision": "Informational",
+      "reason": "\uAE08\uC561\u00B7\uC218\uB7C9\u00B7\uC190\uC775 \uB4F1 \uACB0\uACFC\uAC12 \uC815\uD569\uC131\uAE4C\uC9C0 \uC790\uB3D9 \uD310\uC815\uD558\uB824\uBA74 \uBCC4\uB3C4 \uC5C5\uBB34 \uB370\uC774\uD130/DB \uC624\uB77C\uD074 \uD544\uC694",
+      "evidenceRefs": []
+    },
+    {
+      "reviewId": "REV-0720-a1ec829b6058",
+      "decision": "Informational",
+      "reason": "\uAE08\uC561\u00B7\uC218\uB7C9\u00B7\uC190\uC775 \uB4F1 \uACB0\uACFC\uAC12 \uC815\uD569\uC131\uAE4C\uC9C0 \uC790\uB3D9 \uD310\uC815\uD558\uB824\uBA74 \uBCC4\uB3C4 \uC5C5\uBB34 \uB370\uC774\uD130/DB \uC624\uB77C\uD074 \uD544\uC694",
+      "evidenceRefs": []
+    },
+    {
+      "reviewId": "REV-0721-b1fe0c9d15fb",
+      "decision": "Deferred",
+      "reason": "\uC2E4\uC81C \uD65C\uC131 \uC120\uD0DD\uC9C0\uC758 \uAC12\u00B7\uD45C\uC2DC\uBB38\uC790\u00B7\uC778\uB371\uC2A4\uB97C RuntimeTabOrder\uC640 \uD568\uAED8 \uC218\uC9D1 \uD544\uC694",
+      "evidenceRefs": []
+    },
+    {
+      "reviewId": "REV-0721-a1ec829b6058",
+      "decision": "Informational",
+      "reason": "\uAE08\uC561\u00B7\uC218\uB7C9\u00B7\uC190\uC775 \uB4F1 \uACB0\uACFC\uAC12 \uC815\uD569\uC131\uAE4C\uC9C0 \uC790\uB3D9 \uD310\uC815\uD558\uB824\uBA74 \uBCC4\uB3C4 \uC5C5\uBB34 \uB370\uC774\uD130/DB \uC624\uB77C\uD074 \uD544\uC694",
+      "evidenceRefs": []
+    },
+    {
+      "reviewId": "REV-0722-d639e0dcc927",
+      "decision": "Deferred",
+      "reason": "\uC2E4\uC81C \uD65C\uC131 \uC120\uD0DD\uC9C0\uC758 \uAC12\u00B7\uD45C\uC2DC\uBB38\uC790\u00B7\uC778\uB371\uC2A4\uB97C RuntimeTabOrder\uC640 \uD568\uAED8 \uC218\uC9D1 \uD544\uC694",
+      "evidenceRefs": []
+    },
+    {
+      "reviewId": "REV-0722-b8ddc15fb19f",
+      "decision": "Deferred",
+      "reason": "\uC2E4\uC81C \uD65C\uC131 \uC120\uD0DD\uC9C0\uC758 \uAC12\u00B7\uD45C\uC2DC\uBB38\uC790\u00B7\uC778\uB371\uC2A4\uB97C RuntimeTabOrder\uC640 \uD568\uAED8 \uC218\uC9D1 \uD544\uC694",
+      "evidenceRefs": []
+    },
+    {
+      "reviewId": "REV-0722-a1ec829b6058",
+      "decision": "Informational",
+      "reason": "\uAE08\uC561\u00B7\uC218\uB7C9\u00B7\uC190\uC775 \uB4F1 \uACB0\uACFC\uAC12 \uC815\uD569\uC131\uAE4C\uC9C0 \uC790\uB3D9 \uD310\uC815\uD558\uB824\uBA74 \uBCC4\uB3C4 \uC5C5\uBB34 \uB370\uC774\uD130/DB \uC624\uB77C\uD074 \uD544\uC694",
+      "evidenceRefs": []
+    },
+    {
+      "reviewId": "REV-0723-a1ec829b6058",
+      "decision": "Informational",
+      "reason": "\uAE08\uC561\u00B7\uC218\uB7C9\u00B7\uC190\uC775 \uB4F1 \uACB0\uACFC\uAC12 \uC815\uD569\uC131\uAE4C\uC9C0 \uC790\uB3D9 \uD310\uC815\uD558\uB824\uBA74 \uBCC4\uB3C4 \uC5C5\uBB34 \uB370\uC774\uD130/DB \uC624\uB77C\uD074 \uD544\uC694",
+      "evidenceRefs": []
+    },
+    {
+      "reviewId": "REV-0725-a1ec829b6058",
+      "decision": "Informational",
+      "reason": "\uAE08\uC561\u00B7\uC218\uB7C9\u00B7\uC190\uC775 \uB4F1 \uACB0\uACFC\uAC12 \uC815\uD569\uC131\uAE4C\uC9C0 \uC790\uB3D9 \uD310\uC815\uD558\uB824\uBA74 \uBCC4\uB3C4 \uC5C5\uBB34 \uB370\uC774\uD130/DB \uC624\uB77C\uD074 \uD544\uC694",
+      "evidenceRefs": []
+    }
+  ],
+  "scenarioDecisions": [
+    {
+      "scenarioId": "TS-0701-COMMAND_BTN_3",
+      "decision": "Deferred",
+      "reason": "\uC218\uB3D9 \uAC80\uD1A0 \uC2DC\uB098\uB9AC\uC624"
+    },
+    {
+      "scenarioId": "TS-0702-COMMAND_BTN_1",
+      "decision": "Deferred",
+      "reason": "\uC218\uB3D9 \uAC80\uD1A0 \uC2DC\uB098\uB9AC\uC624"
+    },
+    {
+      "scenarioId": "TS-0702-COMMAND_BTN_3",
+      "decision": "Deferred",
+      "reason": "\uC218\uB3D9 \uAC80\uD1A0 \uC2DC\uB098\uB9AC\uC624"
+    },
+    {
+      "scenarioId": "TS-0702-COMMAND_BTN_4",
+      "decision": "Deferred",
+      "reason": "\uC218\uB3D9 \uAC80\uD1A0 \uC2DC\uB098\uB9AC\uC624"
+    },
+    {
+      "scenarioId": "TS-0705-BASIC_QUERY",
+      "decision": "Deferred",
+      "reason": "\uC218\uB3D9 \uAC80\uD1A0 \uC2DC\uB098\uB9AC\uC624"
+    },
+    {
+      "scenarioId": "TS-0708-EXPORT_BTN_GRIDEDIT",
+      "decision": "Deferred",
+      "reason": "\uC218\uB3D9 \uAC80\uD1A0 \uC2DC\uB098\uB9AC\uC624"
+    },
+    {
+      "scenarioId": "TS-0711-EXPORT_BTN_EXCEL",
+      "decision": "Deferred",
+      "reason": "\uC218\uB3D9 \uAC80\uD1A0 \uC2DC\uB098\uB9AC\uC624"
+    },
+    {
+      "scenarioId": "TS-0712-EXPORT_BTN_EXCEL",
+      "decision": "Deferred",
+      "reason": "\uC218\uB3D9 \uAC80\uD1A0 \uC2DC\uB098\uB9AC\uC624"
+    },
+    {
+      "scenarioId": "TS-0712-EXPORT_BTN_GRIDEDIT",
+      "decision": "Deferred",
+      "reason": "\uC218\uB3D9 \uAC80\uD1A0 \uC2DC\uB098\uB9AC\uC624"
+    },
+    {
+      "scenarioId": "TS-0713-EXPORT_BTN_EXCEL",
+      "decision": "Deferred",
+      "reason": "\uC218\uB3D9 \uAC80\uD1A0 \uC2DC\uB098\uB9AC\uC624"
+    },
+    {
+      "scenarioId": "TS-0714-EXPORT_BTN_EXCEL",
+      "decision": "Deferred",
+      "reason": "\uC218\uB3D9 \uAC80\uD1A0 \uC2DC\uB098\uB9AC\uC624"
+    },
+    {
+      "scenarioId": "TS-0714-COMMAND_BTN_CLOSE",
+      "decision": "Deferred",
+      "reason": "\uC218\uB3D9 \uAC80\uD1A0 \uC2DC\uB098\uB9AC\uC624"
+    }
+  ],
+  "coverageGapDecisions": [
+    {
+      "screenNumber": "0701",
+      "gapHash": "6904a4667adc",
+      "decision": "Deferred",
+      "reason": "RDO_1: RadioGroup\uC758 \uC804\uCCB4 \uC120\uD0DD \uD56D\uBAA9/\uD45C\uC2DC\uBB38\uC790\uC640 logicalName \uACB0\uD569 \uADFC\uAC70\uAC00 \uC5C6\uC5B4 \uC720\uD55C \uC120\uD0DD\uC9C0 \uC804\uC218\uB97C \uC0DD\uC131\uD558\uC9C0 \uC54A\uC74C."
+    },
+    {
+      "screenNumber": "0701",
+      "gapHash": "e5a02d886ffd",
+      "decision": "Deferred",
+      "reason": "RDO_2: RadioGroup\uC758 \uC804\uCCB4 \uC120\uD0DD \uD56D\uBAA9/\uD45C\uC2DC\uBB38\uC790\uC640 logicalName \uACB0\uD569 \uADFC\uAC70\uAC00 \uC5C6\uC5B4 \uC720\uD55C \uC120\uD0DD\uC9C0 \uC804\uC218\uB97C \uC0DD\uC131\uD558\uC9C0 \uC54A\uC74C."
+    },
+    {
+      "screenNumber": "0701",
+      "gapHash": "1eb6d27c0c3e",
+      "decision": "Deferred",
+      "reason": "BTN_1: MAP\uC5D0 \uC2E4\uD589 \uC774\uBCA4\uD2B8\uAC00 \uC5C6\uC5B4 \uD074\uB9AD \uB3D9\uC791\uC744 \uBC1C\uBA85\uD558\uC9C0 \uC54A\uC74C."
+    },
+    {
+      "screenNumber": "0702",
+      "gapHash": "2991dfbbb6d9",
+      "decision": "Deferred",
+      "reason": "EB_1: \uCD5C\uB300 \uAE38\uC774 \uACBD\uACC4\uC640 \uD615\uC2DD \uBC16 \uAC12\uC758 \uAD6C\uCCB4 \uAC12/\uD5C8\uC6A9 \uAE38\uC774\uAC00 \uC124\uCE58 \uC790\uB8CC\uC5D0 \uC5C6\uC5B4 \uD574\uB2F9 \uB450 \uACBD\uACC4\uB294 \uC0DD\uC131\uD558\uC9C0 \uC54A\uC74C."
+    },
+    {
+      "screenNumber": "0702",
+      "gapHash": "5d4633762f4c",
+      "decision": "Deferred",
+      "reason": "ME_LOAN_EVL_AMT: \uCD5C\uB300 \uAE38\uC774 \uACBD\uACC4\uC640 \uD615\uC2DD \uBC16 \uAC12\uC758 \uAD6C\uCCB4 \uAC12/\uD5C8\uC6A9 \uAE38\uC774\uAC00 \uC124\uCE58 \uC790\uB8CC\uC5D0 \uC5C6\uC5B4 \uD574\uB2F9 \uB450 \uACBD\uACC4\uB294 \uC0DD\uC131\uD558\uC9C0 \uC54A\uC74C."
+    },
+    {
+      "screenNumber": "0702",
+      "gapHash": "4c143fddc97b",
+      "decision": "Deferred",
+      "reason": "ME_1: \uCD5C\uB300 \uAE38\uC774 \uACBD\uACC4\uC640 \uD615\uC2DD \uBC16 \uAC12\uC758 \uAD6C\uCCB4 \uAC12/\uD5C8\uC6A9 \uAE38\uC774\uAC00 \uC124\uCE58 \uC790\uB8CC\uC5D0 \uC5C6\uC5B4 \uD574\uB2F9 \uB450 \uACBD\uACC4\uB294 \uC0DD\uC131\uD558\uC9C0 \uC54A\uC74C."
+    },
+    {
+      "screenNumber": "0702",
+      "gapHash": "e5ec60a3d959",
+      "decision": "Deferred",
+      "reason": "ME_2: \uCD5C\uB300 \uAE38\uC774 \uACBD\uACC4\uC640 \uD615\uC2DD \uBC16 \uAC12\uC758 \uAD6C\uCCB4 \uAC12/\uD5C8\uC6A9 \uAE38\uC774\uAC00 \uC124\uCE58 \uC790\uB8CC\uC5D0 \uC5C6\uC5B4 \uD574\uB2F9 \uB450 \uACBD\uACC4\uB294 \uC0DD\uC131\uD558\uC9C0 \uC54A\uC74C."
+    },
+    {
+      "screenNumber": "0702",
+      "gapHash": "9c048699e4eb",
+      "decision": "Deferred",
+      "reason": "BTN_6: MAP\uC5D0 \uC2E4\uD589 \uC774\uBCA4\uD2B8\uAC00 \uC5C6\uC5B4 \uD074\uB9AD \uB3D9\uC791\uC744 \uBC1C\uBA85\uD558\uC9C0 \uC54A\uC74C."
+    },
+    {
+      "screenNumber": "0702",
+      "gapHash": "32d99cc5fa40",
+      "decision": "Deferred",
+      "reason": "BTN_8: MAP\uC5D0 \uC2E4\uD589 \uC774\uBCA4\uD2B8\uAC00 \uC5C6\uC5B4 \uD074\uB9AD \uB3D9\uC791\uC744 \uBC1C\uBA85\uD558\uC9C0 \uC54A\uC74C."
+    },
+    {
+      "screenNumber": "0705",
+      "gapHash": "f5549bb5f3e0",
+      "decision": "Deferred",
+      "reason": "\uAE30\uBCF8\uC870\uD68C: MAP behavior.queryControls\uAC00 \uBE44\uC5B4 \uC788\uC5B4 \uC2E4\uC81C \uC870\uD68C \uD2B8\uB9AC\uAC70\uB97C \uD655\uC815\uD560 \uC218 \uC5C6\uC74C. \uB7F0\uD0C0\uC784 \uAD00\uCC30 \uD544\uC694."
+    },
+    {
+      "screenNumber": "0708",
+      "gapHash": "3ff74533a8cb",
+      "decision": "Deferred",
+      "reason": "CB_Gubun: ComboBox\uC758 \uC804\uCCB4 \uC120\uD0DD \uD56D\uBAA9/\uD45C\uC2DC\uBB38\uC790\uC640 logicalName \uACB0\uD569 \uADFC\uAC70\uAC00 \uC5C6\uC5B4 \uC720\uD55C \uC120\uD0DD\uC9C0 \uC804\uC218\uB97C \uC0DD\uC131\uD558\uC9C0 \uC54A\uC74C."
+    },
+    {
+      "screenNumber": "0708",
+      "gapHash": "d72ed0479b32",
+      "decision": "Deferred",
+      "reason": "BTN_GridEdit: \uB0B4\uBCF4\uB0B4\uAE30 \uD30C\uC77C \uACBD\uB85C\u00B7\uD30C\uC77C\uBA85\u00B7\uB0B4\uC6A9 \uC624\uB77C\uD074\uC774 \uC790\uB8CC\uC5D0 \uC5C6\uC5B4 \uD30C\uC77C \uC0DD\uC131/\uB0B4\uC6A9 \uC815\uD569\uC131\uC740 \uC218\uB3D9 \uAC80\uD1A0."
+    },
+    {
+      "screenNumber": "0708",
+      "gapHash": "19f88a945249",
+      "decision": "Deferred",
+      "reason": "MAP-MSG-0708-001: \uBBFC\uAC10 \uC785\uB825 \uC0DD\uC131 \uAE08\uC9C0 \uC815\uCC45 \uB54C\uBB38\uC5D0 \uC798\uBABB\uB41C \uACC4\uC88C/\uC778\uC99D \uC785\uB825\uAC12\uC744 \uB9CC\uB4E4\uC9C0 \uC54A\uC74C. \uB85C\uADF8\uC778\uB41C \uD14C\uC2A4\uD2B8 \uAE30\uBCF8\uAC12\uB9CC \uC0AC\uC6A9."
+    },
+    {
+      "screenNumber": "0708",
+      "gapHash": "3bd70ec3c822",
+      "decision": "Deferred",
+      "reason": "MAP-MSG-0708-002: \uBBFC\uAC10 \uC785\uB825 \uC0DD\uC131 \uAE08\uC9C0 \uC815\uCC45 \uB54C\uBB38\uC5D0 \uC798\uBABB\uB41C \uACC4\uC88C/\uC778\uC99D \uC785\uB825\uAC12\uC744 \uB9CC\uB4E4\uC9C0 \uC54A\uC74C. \uB85C\uADF8\uC778\uB41C \uD14C\uC2A4\uD2B8 \uAE30\uBCF8\uAC12\uB9CC \uC0AC\uC6A9."
+    },
+    {
+      "screenNumber": "0708",
+      "gapHash": "1045893814f7",
+      "decision": "Deferred",
+      "reason": "MAP-MSG-0708-003: \u0027\uC77C\uAD04\uB9E4\uB3C4\uD560 \uC8FC\uBB38\uC774 \uC5C6\uC2B5\uB2C8\uB2E4\u0027 \uC870\uAC74 sUser=\u0022\u0022\uC744 \uB9CC\uB4E4 \uC5C5\uBB34 \uB370\uC774\uD130/\uC0C1\uD0DC \uC624\uB77C\uD074\uC774 \uC5C6\uC5B4 NeedsBusinessData\uB85C \uBBF8\uC0DD\uC131."
+    },
+    {
+      "screenNumber": "0710",
+      "gapHash": "3437ce23b537",
+      "decision": "Deferred",
+      "reason": "TAB_1: Tab\uC758 \uC804\uCCB4 \uC120\uD0DD \uD56D\uBAA9/\uD45C\uC2DC\uBB38\uC790\uC640 logicalName \uACB0\uD569 \uADFC\uAC70\uAC00 \uC5C6\uC5B4 \uC720\uD55C \uC120\uD0DD\uC9C0 \uC804\uC218\uB97C \uC0DD\uC131\uD558\uC9C0 \uC54A\uC74C."
+    },
+    {
+      "screenNumber": "0710",
+      "gapHash": "c4100a3d2362",
+      "decision": "Deferred",
+      "reason": "MAP-MSG-0710-001: \uBBFC\uAC10 \uC785\uB825 \uC0DD\uC131 \uAE08\uC9C0 \uC815\uCC45 \uB54C\uBB38\uC5D0 \uC798\uBABB\uB41C \uACC4\uC88C/\uC778\uC99D \uC785\uB825\uAC12\uC744 \uB9CC\uB4E4\uC9C0 \uC54A\uC74C. \uB85C\uADF8\uC778\uB41C \uD14C\uC2A4\uD2B8 \uAE30\uBCF8\uAC12\uB9CC \uC0AC\uC6A9."
+    },
+    {
+      "screenNumber": "0710",
+      "gapHash": "24e640bd78fc",
+      "decision": "Deferred",
+      "reason": "MAP-MSG-0710-002: \uBBFC\uAC10 \uC785\uB825 \uC0DD\uC131 \uAE08\uC9C0 \uC815\uCC45 \uB54C\uBB38\uC5D0 \uC798\uBABB\uB41C \uACC4\uC88C/\uC778\uC99D \uC785\uB825\uAC12\uC744 \uB9CC\uB4E4\uC9C0 \uC54A\uC74C. \uB85C\uADF8\uC778\uB41C \uD14C\uC2A4\uD2B8 \uAE30\uBCF8\uAC12\uB9CC \uC0AC\uC6A9."
+    },
+    {
+      "screenNumber": "0711",
+      "gapHash": "7a428cbbb39b",
+      "decision": "Deferred",
+      "reason": "CB_SEARCHTYPE: ComboBox\uC758 \uC804\uCCB4 \uC120\uD0DD \uD56D\uBAA9/\uD45C\uC2DC\uBB38\uC790\uC640 logicalName \uACB0\uD569 \uADFC\uAC70\uAC00 \uC5C6\uC5B4 \uC720\uD55C \uC120\uD0DD\uC9C0 \uC804\uC218\uB97C \uC0DD\uC131\uD558\uC9C0 \uC54A\uC74C."
+    },
+    {
+      "screenNumber": "0711",
+      "gapHash": "3c2ee7aade99",
+      "decision": "Deferred",
+      "reason": "BTN_Excel: \uB0B4\uBCF4\uB0B4\uAE30 \uD30C\uC77C \uACBD\uB85C\u00B7\uD30C\uC77C\uBA85\u00B7\uB0B4\uC6A9 \uC624\uB77C\uD074\uC774 \uC790\uB8CC\uC5D0 \uC5C6\uC5B4 \uD30C\uC77C \uC0DD\uC131/\uB0B4\uC6A9 \uC815\uD569\uC131\uC740 \uC218\uB3D9 \uAC80\uD1A0."
+    },
+    {
+      "screenNumber": "0711",
+      "gapHash": "6a9cc764d2aa",
+      "decision": "Deferred",
+      "reason": "MAP-MSG-0711-001: \uBBFC\uAC10 \uC785\uB825 \uC0DD\uC131 \uAE08\uC9C0 \uC815\uCC45 \uB54C\uBB38\uC5D0 \uC798\uBABB\uB41C \uACC4\uC88C/\uC778\uC99D \uC785\uB825\uAC12\uC744 \uB9CC\uB4E4\uC9C0 \uC54A\uC74C. \uB85C\uADF8\uC778\uB41C \uD14C\uC2A4\uD2B8 \uAE30\uBCF8\uAC12\uB9CC \uC0AC\uC6A9."
+    },
+    {
+      "screenNumber": "0711",
+      "gapHash": "8d63580cfad5",
+      "decision": "Deferred",
+      "reason": "MAP-MSG-0711-002: \uBBFC\uAC10 \uC785\uB825 \uC0DD\uC131 \uAE08\uC9C0 \uC815\uCC45 \uB54C\uBB38\uC5D0 \uC798\uBABB\uB41C \uACC4\uC88C/\uC778\uC99D \uC785\uB825\uAC12\uC744 \uB9CC\uB4E4\uC9C0 \uC54A\uC74C. \uB85C\uADF8\uC778\uB41C \uD14C\uC2A4\uD2B8 \uAE30\uBCF8\uAC12\uB9CC \uC0AC\uC6A9."
+    },
+    {
+      "screenNumber": "0712",
+      "gapHash": "8f4edc7a5abb",
+      "decision": "Deferred",
+      "reason": "RDO_Type: RadioGroup\uC758 \uC804\uCCB4 \uC120\uD0DD \uD56D\uBAA9/\uD45C\uC2DC\uBB38\uC790\uC640 logicalName \uACB0\uD569 \uADFC\uAC70\uAC00 \uC5C6\uC5B4 \uC720\uD55C \uC120\uD0DD\uC9C0 \uC804\uC218\uB97C \uC0DD\uC131\uD558\uC9C0 \uC54A\uC74C."
+    },
+    {
+      "screenNumber": "0712",
+      "gapHash": "a890c10f66c4",
+      "decision": "Deferred",
+      "reason": "BTN_Excel: \uB0B4\uBCF4\uB0B4\uAE30 \uD30C\uC77C \uACBD\uB85C\u00B7\uD30C\uC77C\uBA85\u00B7\uB0B4\uC6A9 \uC624\uB77C\uD074\uC774 \uC790\uB8CC\uC5D0 \uC5C6\uC5B4 \uD30C\uC77C \uC0DD\uC131/\uB0B4\uC6A9 \uC815\uD569\uC131\uC740 \uC218\uB3D9 \uAC80\uD1A0."
+    },
+    {
+      "screenNumber": "0712",
+      "gapHash": "1538d9d04e6d",
+      "decision": "Deferred",
+      "reason": "BTN_GridEdit: \uB0B4\uBCF4\uB0B4\uAE30 \uD30C\uC77C \uACBD\uB85C\u00B7\uD30C\uC77C\uBA85\u00B7\uB0B4\uC6A9 \uC624\uB77C\uD074\uC774 \uC790\uB8CC\uC5D0 \uC5C6\uC5B4 \uD30C\uC77C \uC0DD\uC131/\uB0B4\uC6A9 \uC815\uD569\uC131\uC740 \uC218\uB3D9 \uAC80\uD1A0."
+    },
+    {
+      "screenNumber": "0712",
+      "gapHash": "a6e7872aca3a",
+      "decision": "Deferred",
+      "reason": "MAP-MSG-0712-001: \uBBFC\uAC10 \uC785\uB825 \uC0DD\uC131 \uAE08\uC9C0 \uC815\uCC45 \uB54C\uBB38\uC5D0 \uC798\uBABB\uB41C \uACC4\uC88C/\uC778\uC99D \uC785\uB825\uAC12\uC744 \uB9CC\uB4E4\uC9C0 \uC54A\uC74C. \uB85C\uADF8\uC778\uB41C \uD14C\uC2A4\uD2B8 \uAE30\uBCF8\uAC12\uB9CC \uC0AC\uC6A9."
+    },
+    {
+      "screenNumber": "0712",
+      "gapHash": "6012cbd8050a",
+      "decision": "Deferred",
+      "reason": "MAP-MSG-0712-002: \uBBFC\uAC10 \uC785\uB825 \uC0DD\uC131 \uAE08\uC9C0 \uC815\uCC45 \uB54C\uBB38\uC5D0 \uC798\uBABB\uB41C \uACC4\uC88C/\uC778\uC99D \uC785\uB825\uAC12\uC744 \uB9CC\uB4E4\uC9C0 \uC54A\uC74C. \uB85C\uADF8\uC778\uB41C \uD14C\uC2A4\uD2B8 \uAE30\uBCF8\uAC12\uB9CC \uC0AC\uC6A9."
+    },
+    {
+      "screenNumber": "0713",
+      "gapHash": "2ce7ac7c2ac7",
+      "decision": "Deferred",
+      "reason": "ME_1: \uCD5C\uB300 \uAE38\uC774 \uACBD\uACC4\uC640 \uD615\uC2DD \uBC16 \uAC12\uC758 \uAD6C\uCCB4 \uAC12/\uD5C8\uC6A9 \uAE38\uC774\uAC00 \uC124\uCE58 \uC790\uB8CC\uC5D0 \uC5C6\uC5B4 \uD574\uB2F9 \uB450 \uACBD\uACC4\uB294 \uC0DD\uC131\uD558\uC9C0 \uC54A\uC74C."
+    },
+    {
+      "screenNumber": "0713",
+      "gapHash": "a96c46615b2d",
+      "decision": "Deferred",
+      "reason": "BTN_Excel: \uB0B4\uBCF4\uB0B4\uAE30 \uD30C\uC77C \uACBD\uB85C\u00B7\uD30C\uC77C\uBA85\u00B7\uB0B4\uC6A9 \uC624\uB77C\uD074\uC774 \uC790\uB8CC\uC5D0 \uC5C6\uC5B4 \uD30C\uC77C \uC0DD\uC131/\uB0B4\uC6A9 \uC815\uD569\uC131\uC740 \uC218\uB3D9 \uAC80\uD1A0."
+    },
+    {
+      "screenNumber": "0713",
+      "gapHash": "041bd632db77",
+      "decision": "Deferred",
+      "reason": "MAP-MSG-0713-001: \uBBFC\uAC10 \uC785\uB825 \uC0DD\uC131 \uAE08\uC9C0 \uC815\uCC45 \uB54C\uBB38\uC5D0 \uC798\uBABB\uB41C \uACC4\uC88C/\uC778\uC99D \uC785\uB825\uAC12\uC744 \uB9CC\uB4E4\uC9C0 \uC54A\uC74C. \uB85C\uADF8\uC778\uB41C \uD14C\uC2A4\uD2B8 \uAE30\uBCF8\uAC12\uB9CC \uC0AC\uC6A9."
+    },
+    {
+      "screenNumber": "0713",
+      "gapHash": "d0736f27b663",
+      "decision": "Deferred",
+      "reason": "MAP-MSG-0713-002: \uBBFC\uAC10 \uC785\uB825 \uC0DD\uC131 \uAE08\uC9C0 \uC815\uCC45 \uB54C\uBB38\uC5D0 \uC798\uBABB\uB41C \uACC4\uC88C/\uC778\uC99D \uC785\uB825\uAC12\uC744 \uB9CC\uB4E4\uC9C0 \uC54A\uC74C. \uB85C\uADF8\uC778\uB41C \uD14C\uC2A4\uD2B8 \uAE30\uBCF8\uAC12\uB9CC \uC0AC\uC6A9."
+    },
+    {
+      "screenNumber": "0714",
+      "gapHash": "3a2531276109",
+      "decision": "Deferred",
+      "reason": "CB_1: ComboBox\uC758 \uC804\uCCB4 \uC120\uD0DD \uD56D\uBAA9/\uD45C\uC2DC\uBB38\uC790\uC640 logicalName \uACB0\uD569 \uADFC\uAC70\uAC00 \uC5C6\uC5B4 \uC720\uD55C \uC120\uD0DD\uC9C0 \uC804\uC218\uB97C \uC0DD\uC131\uD558\uC9C0 \uC54A\uC74C."
+    },
+    {
+      "screenNumber": "0714",
+      "gapHash": "9941b4cbebc5",
+      "decision": "Deferred",
+      "reason": "CAL_ED1: \uCD5C\uB300 \uAE38\uC774 \uACBD\uACC4\uC640 \uD615\uC2DD \uBC16 \uAC12\uC758 \uAD6C\uCCB4 \uAC12/\uD5C8\uC6A9 \uAE38\uC774\uAC00 \uC124\uCE58 \uC790\uB8CC\uC5D0 \uC5C6\uC5B4 \uD574\uB2F9 \uB450 \uACBD\uACC4\uB294 \uC0DD\uC131\uD558\uC9C0 \uC54A\uC74C."
+    },
+    {
+      "screenNumber": "0714",
+      "gapHash": "abcfaae40d9d",
+      "decision": "Deferred",
+      "reason": "BTN_Excel: \uB0B4\uBCF4\uB0B4\uAE30 \uD30C\uC77C \uACBD\uB85C\u00B7\uD30C\uC77C\uBA85\u00B7\uB0B4\uC6A9 \uC624\uB77C\uD074\uC774 \uC790\uB8CC\uC5D0 \uC5C6\uC5B4 \uD30C\uC77C \uC0DD\uC131/\uB0B4\uC6A9 \uC815\uD569\uC131\uC740 \uC218\uB3D9 \uAC80\uD1A0."
+    },
+    {
+      "screenNumber": "0714",
+      "gapHash": "c4ca1bbd9c9b",
+      "decision": "Deferred",
+      "reason": "MAP-MSG-0714-008: \uC870\uAC74\uC2DD/\uBA54\uC2DC\uC9C0\uC758 \uBAA8\uB4DC \uB610\uB294 \uC0C1\uC138\uB0B4\uC5ED \uC0C1\uD0DC \uACB0\uD569\uC744 \uD604\uC7AC \uC790\uB8CC\uB9CC\uC73C\uB85C \uC548\uC804\uD558\uAC8C \uC7AC\uD604\uD560 \uC218 \uC5C6\uC5B4 \uBBF8\uC0DD\uC131. message=\u0027\uC885\uBAA9\uBCC4 \uC870\uD68C\uC2DC \uB2F9\uC77C\uCE58\uB294 \uBC18\uC601\uB418\uC9C0 \uC54A\uC2B5\uB2C8\uB2E4. \uC804\uC77C\uC790\uB85C \uBCC0\uACBD\uD558\uC5EC \uC870\uD68C\uB429\uB2C8\uB2E4.\u0027 condition=\u0027IsValidAccPw( strAccNm, strPwNm ) = True AND ELSE(CHK_2.CheckState  = \u00221\u0022) AND CAL_TODAY.GetCaptionCtrl(  ) = CAL_ED.GetCaptionCtrl(  )\u0027"
+    },
+    {
+      "screenNumber": "0714",
+      "gapHash": "0fdc6debde18",
+      "decision": "Deferred",
+      "reason": "MAP-MSG-0714-009: \uC870\uAC74\uC2DD/\uBA54\uC2DC\uC9C0\uC758 \uBAA8\uB4DC \uB610\uB294 \uC0C1\uC138\uB0B4\uC5ED \uC0C1\uD0DC \uACB0\uD569\uC744 \uD604\uC7AC \uC790\uB8CC\uB9CC\uC73C\uB85C \uC548\uC804\uD558\uAC8C \uC7AC\uD604\uD560 \uC218 \uC5C6\uC5B4 \uBBF8\uC0DD\uC131. message=\u0027\uC0C1\uC138\uB0B4\uC5ED \uCD95\uC18C \uCC98\uB9AC \uD6C4 \uBCC0\uACBD \uAC00\uB2A5\uD569\uB2C8\uB2E4.\u0027 condition=\u0027CHK_1.Enabled = false\u0027"
+    },
+    {
+      "screenNumber": "0714",
+      "gapHash": "962bb232405d",
+      "decision": "Deferred",
+      "reason": "MAP-MSG-0714-010: \uC870\uAC74\uC2DD/\uBA54\uC2DC\uC9C0\uC758 \uBAA8\uB4DC \uB610\uB294 \uC0C1\uC138\uB0B4\uC5ED \uC0C1\uD0DC \uACB0\uD569\uC744 \uD604\uC7AC \uC790\uB8CC\uB9CC\uC73C\uB85C \uC548\uC804\uD558\uAC8C \uC7AC\uD604\uD560 \uC218 \uC5C6\uC5B4 \uBBF8\uC0DD\uC131. message=\u0027\uC0C1\uC138\uB0B4\uC5ED \uCD95\uC18C \uCC98\uB9AC \uD6C4 \uBCC0\uACBD \uAC00\uB2A5\uD569\uB2C8\uB2E4.\u0027 condition=\u0027CHK_2.Enabled = false\u0027"
+    },
+    {
+      "screenNumber": "0714",
+      "gapHash": "713bf3d91986",
+      "decision": "Deferred",
+      "reason": "MAP-MSG-0714-011: \uC870\uAC74\uC2DD/\uBA54\uC2DC\uC9C0\uC758 \uBAA8\uB4DC \uB610\uB294 \uC0C1\uC138\uB0B4\uC5ED \uC0C1\uD0DC \uACB0\uD569\uC744 \uD604\uC7AC \uC790\uB8CC\uB9CC\uC73C\uB85C \uC548\uC804\uD558\uAC8C \uC7AC\uD604\uD560 \uC218 \uC5C6\uC5B4 \uBBF8\uC0DD\uC131. message=\u0027\uC0C1\uC138\uB0B4\uC5ED \uCD95\uC18C \uCC98\uB9AC \uD6C4 \uBCC0\uACBD \uAC00\uB2A5\uD569\uB2C8\uB2E4.\u0027 condition=\u0027CHK_3.Enabled = false\u0027"
+    },
+    {
+      "screenNumber": "0714",
+      "gapHash": "af1d06f383dc",
+      "decision": "Deferred",
+      "reason": "MAP-MSG-0714-001: \uBBFC\uAC10 \uC785\uB825 \uC0DD\uC131 \uAE08\uC9C0 \uC815\uCC45 \uB54C\uBB38\uC5D0 \uC798\uBABB\uB41C \uACC4\uC88C/\uC778\uC99D \uC785\uB825\uAC12\uC744 \uB9CC\uB4E4\uC9C0 \uC54A\uC74C. \uB85C\uADF8\uC778\uB41C \uD14C\uC2A4\uD2B8 \uAE30\uBCF8\uAC12\uB9CC \uC0AC\uC6A9."
+    },
+    {
+      "screenNumber": "0714",
+      "gapHash": "28b6086e674f",
+      "decision": "Deferred",
+      "reason": "MAP-MSG-0714-002: \uBBFC\uAC10 \uC785\uB825 \uC0DD\uC131 \uAE08\uC9C0 \uC815\uCC45 \uB54C\uBB38\uC5D0 \uC798\uBABB\uB41C \uACC4\uC88C/\uC778\uC99D \uC785\uB825\uAC12\uC744 \uB9CC\uB4E4\uC9C0 \uC54A\uC74C. \uB85C\uADF8\uC778\uB41C \uD14C\uC2A4\uD2B8 \uAE30\uBCF8\uAC12\uB9CC \uC0AC\uC6A9."
+    },
+    {
+      "screenNumber": "0720",
+      "gapHash": "f4de013bf8e4",
+      "decision": "Deferred",
+      "reason": "MAP-MSG-0720-001: \uBBFC\uAC10 \uC785\uB825 \uC0DD\uC131 \uAE08\uC9C0 \uC815\uCC45 \uB54C\uBB38\uC5D0 \uC798\uBABB\uB41C \uACC4\uC88C/\uC778\uC99D \uC785\uB825\uAC12\uC744 \uB9CC\uB4E4\uC9C0 \uC54A\uC74C. \uB85C\uADF8\uC778\uB41C \uD14C\uC2A4\uD2B8 \uAE30\uBCF8\uAC12\uB9CC \uC0AC\uC6A9."
+    },
+    {
+      "screenNumber": "0720",
+      "gapHash": "c9c502ea4e62",
+      "decision": "Deferred",
+      "reason": "MAP-MSG-0720-002: \uBBFC\uAC10 \uC785\uB825 \uC0DD\uC131 \uAE08\uC9C0 \uC815\uCC45 \uB54C\uBB38\uC5D0 \uC798\uBABB\uB41C \uACC4\uC88C/\uC778\uC99D \uC785\uB825\uAC12\uC744 \uB9CC\uB4E4\uC9C0 \uC54A\uC74C. \uB85C\uADF8\uC778\uB41C \uD14C\uC2A4\uD2B8 \uAE30\uBCF8\uAC12\uB9CC \uC0AC\uC6A9."
+    },
+    {
+      "screenNumber": "0721",
+      "gapHash": "0db5b8c8cf88",
+      "decision": "Deferred",
+      "reason": "CB_ENTERINTO: ComboBox\uC758 \uC804\uCCB4 \uC120\uD0DD \uD56D\uBAA9/\uD45C\uC2DC\uBB38\uC790\uC640 logicalName \uACB0\uD569 \uADFC\uAC70\uAC00 \uC5C6\uC5B4 \uC720\uD55C \uC120\uD0DD\uC9C0 \uC804\uC218\uB97C \uC0DD\uC131\uD558\uC9C0 \uC54A\uC74C."
+    },
+    {
+      "screenNumber": "0721",
+      "gapHash": "a098b9a23009",
+      "decision": "Deferred",
+      "reason": "EB_WARENTTOT: \uCD5C\uB300 \uAE38\uC774 \uACBD\uACC4\uC640 \uD615\uC2DD \uBC16 \uAC12\uC758 \uAD6C\uCCB4 \uAC12/\uD5C8\uC6A9 \uAE38\uC774\uAC00 \uC124\uCE58 \uC790\uB8CC\uC5D0 \uC5C6\uC5B4 \uD574\uB2F9 \uB450 \uACBD\uACC4\uB294 \uC0DD\uC131\uD558\uC9C0 \uC54A\uC74C."
+    },
+    {
+      "screenNumber": "0721",
+      "gapHash": "28ab18164d71",
+      "decision": "Deferred",
+      "reason": "ST_SALEOPS_CONT: \uCD5C\uB300 \uAE38\uC774 \uACBD\uACC4\uC640 \uD615\uC2DD \uBC16 \uAC12\uC758 \uAD6C\uCCB4 \uAC12/\uD5C8\uC6A9 \uAE38\uC774\uAC00 \uC124\uCE58 \uC790\uB8CC\uC5D0 \uC5C6\uC5B4 \uD574\uB2F9 \uB450 \uACBD\uACC4\uB294 \uC0DD\uC131\uD558\uC9C0 \uC54A\uC74C."
+    },
+    {
+      "screenNumber": "0721",
+      "gapHash": "54250c96c47c",
+      "decision": "Deferred",
+      "reason": "ST_SALEOPS_CONT1: \uCD5C\uB300 \uAE38\uC774 \uACBD\uACC4\uC640 \uD615\uC2DD \uBC16 \uAC12\uC758 \uAD6C\uCCB4 \uAC12/\uD5C8\uC6A9 \uAE38\uC774\uAC00 \uC124\uCE58 \uC790\uB8CC\uC5D0 \uC5C6\uC5B4 \uD574\uB2F9 \uB450 \uACBD\uACC4\uB294 \uC0DD\uC131\uD558\uC9C0 \uC54A\uC74C."
+    },
+    {
+      "screenNumber": "0721",
+      "gapHash": "2d21e038bbe4",
+      "decision": "Deferred",
+      "reason": "ST_SALEOPS_CONT3: \uCD5C\uB300 \uAE38\uC774 \uACBD\uACC4\uC640 \uD615\uC2DD \uBC16 \uAC12\uC758 \uAD6C\uCCB4 \uAC12/\uD5C8\uC6A9 \uAE38\uC774\uAC00 \uC124\uCE58 \uC790\uB8CC\uC5D0 \uC5C6\uC5B4 \uD574\uB2F9 \uB450 \uACBD\uACC4\uB294 \uC0DD\uC131\uD558\uC9C0 \uC54A\uC74C."
+    },
+    {
+      "screenNumber": "0721",
+      "gapHash": "86d7742a0db7",
+      "decision": "Deferred",
+      "reason": "EB_WARENTRATIO: \uCD5C\uB300 \uAE38\uC774 \uACBD\uACC4\uC640 \uD615\uC2DD \uBC16 \uAC12\uC758 \uAD6C\uCCB4 \uAC12/\uD5C8\uC6A9 \uAE38\uC774\uAC00 \uC124\uCE58 \uC790\uB8CC\uC5D0 \uC5C6\uC5B4 \uD574\uB2F9 \uB450 \uACBD\uACC4\uB294 \uC0DD\uC131\uD558\uC9C0 \uC54A\uC74C."
+    },
+    {
+      "screenNumber": "0721",
+      "gapHash": "be24ac50f1eb",
+      "decision": "Deferred",
+      "reason": "ST_SALEOPS_CONT2: \uCD5C\uB300 \uAE38\uC774 \uACBD\uACC4\uC640 \uD615\uC2DD \uBC16 \uAC12\uC758 \uAD6C\uCCB4 \uAC12/\uD5C8\uC6A9 \uAE38\uC774\uAC00 \uC124\uCE58 \uC790\uB8CC\uC5D0 \uC5C6\uC5B4 \uD574\uB2F9 \uB450 \uACBD\uACC4\uB294 \uC0DD\uC131\uD558\uC9C0 \uC54A\uC74C."
+    },
+    {
+      "screenNumber": "0721",
+      "gapHash": "2b09feeea484",
+      "decision": "Deferred",
+      "reason": "ST_SALEOPS_CONT5: \uCD5C\uB300 \uAE38\uC774 \uACBD\uACC4\uC640 \uD615\uC2DD \uBC16 \uAC12\uC758 \uAD6C\uCCB4 \uAC12/\uD5C8\uC6A9 \uAE38\uC774\uAC00 \uC124\uCE58 \uC790\uB8CC\uC5D0 \uC5C6\uC5B4 \uD574\uB2F9 \uB450 \uACBD\uACC4\uB294 \uC0DD\uC131\uD558\uC9C0 \uC54A\uC74C."
+    },
+    {
+      "screenNumber": "0721",
+      "gapHash": "a3fd35d5abb0",
+      "decision": "Deferred",
+      "reason": "ST_SALEOPS_CONT4: \uCD5C\uB300 \uAE38\uC774 \uACBD\uACC4\uC640 \uD615\uC2DD \uBC16 \uAC12\uC758 \uAD6C\uCCB4 \uAC12/\uD5C8\uC6A9 \uAE38\uC774\uAC00 \uC124\uCE58 \uC790\uB8CC\uC5D0 \uC5C6\uC5B4 \uD574\uB2F9 \uB450 \uACBD\uACC4\uB294 \uC0DD\uC131\uD558\uC9C0 \uC54A\uC74C."
+    },
+    {
+      "screenNumber": "0721",
+      "gapHash": "b64924777d97",
+      "decision": "Deferred",
+      "reason": "ST_SALEOPS_CONT6: \uCD5C\uB300 \uAE38\uC774 \uACBD\uACC4\uC640 \uD615\uC2DD \uBC16 \uAC12\uC758 \uAD6C\uCCB4 \uAC12/\uD5C8\uC6A9 \uAE38\uC774\uAC00 \uC124\uCE58 \uC790\uB8CC\uC5D0 \uC5C6\uC5B4 \uD574\uB2F9 \uB450 \uACBD\uACC4\uB294 \uC0DD\uC131\uD558\uC9C0 \uC54A\uC74C."
+    },
+    {
+      "screenNumber": "0721",
+      "gapHash": "c593671537a5",
+      "decision": "Deferred",
+      "reason": "MAP-MSG-0721-001: \uBBFC\uAC10 \uC785\uB825 \uC0DD\uC131 \uAE08\uC9C0 \uC815\uCC45 \uB54C\uBB38\uC5D0 \uC798\uBABB\uB41C \uACC4\uC88C/\uC778\uC99D \uC785\uB825\uAC12\uC744 \uB9CC\uB4E4\uC9C0 \uC54A\uC74C. \uB85C\uADF8\uC778\uB41C \uD14C\uC2A4\uD2B8 \uAE30\uBCF8\uAC12\uB9CC \uC0AC\uC6A9."
+    },
+    {
+      "screenNumber": "0721",
+      "gapHash": "121308f6be3c",
+      "decision": "Deferred",
+      "reason": "MAP-MSG-0721-002: \uBBFC\uAC10 \uC785\uB825 \uC0DD\uC131 \uAE08\uC9C0 \uC815\uCC45 \uB54C\uBB38\uC5D0 \uC798\uBABB\uB41C \uACC4\uC88C/\uC778\uC99D \uC785\uB825\uAC12\uC744 \uB9CC\uB4E4\uC9C0 \uC54A\uC74C. \uB85C\uADF8\uC778\uB41C \uD14C\uC2A4\uD2B8 \uAE30\uBCF8\uAC12\uB9CC \uC0AC\uC6A9."
+    },
+    {
+      "screenNumber": "0722",
+      "gapHash": "5d9c06e06b7e",
+      "decision": "Deferred",
+      "reason": "CB_SEARCHTYPE: ComboBox\uC758 \uC804\uCCB4 \uC120\uD0DD \uD56D\uBAA9/\uD45C\uC2DC\uBB38\uC790\uC640 logicalName \uACB0\uD569 \uADFC\uAC70\uAC00 \uC5C6\uC5B4 \uC720\uD55C \uC120\uD0DD\uC9C0 \uC804\uC218\uB97C \uC0DD\uC131\uD558\uC9C0 \uC54A\uC74C."
+    },
+    {
+      "screenNumber": "0722",
+      "gapHash": "14d71573a17f",
+      "decision": "Deferred",
+      "reason": "CB_INTERSTTPE: ComboBox\uC758 \uC804\uCCB4 \uC120\uD0DD \uD56D\uBAA9/\uD45C\uC2DC\uBB38\uC790\uC640 logicalName \uACB0\uD569 \uADFC\uAC70\uAC00 \uC5C6\uC5B4 \uC720\uD55C \uC120\uD0DD\uC9C0 \uC804\uC218\uB97C \uC0DD\uC131\uD558\uC9C0 \uC54A\uC74C."
+    },
+    {
+      "screenNumber": "0722",
+      "gapHash": "679344a1471e",
+      "decision": "Deferred",
+      "reason": "MAP-MSG-0722-001: \uBBFC\uAC10 \uC785\uB825 \uC0DD\uC131 \uAE08\uC9C0 \uC815\uCC45 \uB54C\uBB38\uC5D0 \uC798\uBABB\uB41C \uACC4\uC88C/\uC778\uC99D \uC785\uB825\uAC12\uC744 \uB9CC\uB4E4\uC9C0 \uC54A\uC74C. \uB85C\uADF8\uC778\uB41C \uD14C\uC2A4\uD2B8 \uAE30\uBCF8\uAC12\uB9CC \uC0AC\uC6A9."
+    },
+    {
+      "screenNumber": "0722",
+      "gapHash": "cde52eb37355",
+      "decision": "Deferred",
+      "reason": "MAP-MSG-0722-002: \uBBFC\uAC10 \uC785\uB825 \uC0DD\uC131 \uAE08\uC9C0 \uC815\uCC45 \uB54C\uBB38\uC5D0 \uC798\uBABB\uB41C \uACC4\uC88C/\uC778\uC99D \uC785\uB825\uAC12\uC744 \uB9CC\uB4E4\uC9C0 \uC54A\uC74C. \uB85C\uADF8\uC778\uB41C \uD14C\uC2A4\uD2B8 \uAE30\uBCF8\uAC12\uB9CC \uC0AC\uC6A9."
+    },
+    {
+      "screenNumber": "0723",
+      "gapHash": "e62648490470",
+      "decision": "Deferred",
+      "reason": "MAP-MSG-0723-001: \uBBFC\uAC10 \uC785\uB825 \uC0DD\uC131 \uAE08\uC9C0 \uC815\uCC45 \uB54C\uBB38\uC5D0 \uC798\uBABB\uB41C \uACC4\uC88C/\uC778\uC99D \uC785\uB825\uAC12\uC744 \uB9CC\uB4E4\uC9C0 \uC54A\uC74C. \uB85C\uADF8\uC778\uB41C \uD14C\uC2A4\uD2B8 \uAE30\uBCF8\uAC12\uB9CC \uC0AC\uC6A9."
+    },
+    {
+      "screenNumber": "0723",
+      "gapHash": "934c269d69fd",
+      "decision": "Deferred",
+      "reason": "MAP-MSG-0723-002: \uBBFC\uAC10 \uC785\uB825 \uC0DD\uC131 \uAE08\uC9C0 \uC815\uCC45 \uB54C\uBB38\uC5D0 \uC798\uBABB\uB41C \uACC4\uC88C/\uC778\uC99D \uC785\uB825\uAC12\uC744 \uB9CC\uB4E4\uC9C0 \uC54A\uC74C. \uB85C\uADF8\uC778\uB41C \uD14C\uC2A4\uD2B8 \uAE30\uBCF8\uAC12\uB9CC \uC0AC\uC6A9."
+    },
+    {
+      "screenNumber": "0725",
+      "gapHash": "66d26c5e4cfb",
+      "decision": "Deferred",
+      "reason": "MAP-MSG-0725-001: \uBBFC\uAC10 \uC785\uB825 \uC0DD\uC131 \uAE08\uC9C0 \uC815\uCC45 \uB54C\uBB38\uC5D0 \uC798\uBABB\uB41C \uACC4\uC88C/\uC778\uC99D \uC785\uB825\uAC12\uC744 \uB9CC\uB4E4\uC9C0 \uC54A\uC74C. \uB85C\uADF8\uC778\uB41C \uD14C\uC2A4\uD2B8 \uAE30\uBCF8\uAC12\uB9CC \uC0AC\uC6A9."
+    },
+    {
+      "screenNumber": "0725",
+      "gapHash": "ee6b5bdb098e",
+      "decision": "Deferred",
+      "reason": "MAP-MSG-0725-002: \uBBFC\uAC10 \uC785\uB825 \uC0DD\uC131 \uAE08\uC9C0 \uC815\uCC45 \uB54C\uBB38\uC5D0 \uC798\uBABB\uB41C \uACC4\uC88C/\uC778\uC99D \uC785\uB825\uAC12\uC744 \uB9CC\uB4E4\uC9C0 \uC54A\uC74C. \uB85C\uADF8\uC778\uB41C \uD14C\uC2A4\uD2B8 \uAE30\uBCF8\uAC12\uB9CC \uC0AC\uC6A9."
+    }
+  ]
+}

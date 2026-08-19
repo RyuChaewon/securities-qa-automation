@@ -1,0 +1,652 @@
+{
+  "sourceSha256": "7636a6effd7a087360df3442f76e3b1f429b07d685b025eb93f8f1b383ef66e4",
+  "status": "VALIDATED_WITH_WARNINGS",
+  "isValid": true,
+  "screens": 1,
+  "scenarios": 1159,
+  "variables": 457,
+  "locatorRequests": 368,
+  "reviewItems": 26,
+  "requiredReviewItems": 26,
+  "coveredControls": 242,
+  "coveredValidationRules": 56,
+  "unusedVariables": 0,
+  "issues": [
+    {
+      "code": "SCENARIO.NO_EFFECT_STEP",
+      "message": "TC-0101-MSG-0506\uC5D0\uB294 \uC870\uC791 \uB610\uB294 \uC591\uC131 \uACB0\uACFC \uAC80\uC99D \uB2E8\uACC4\uAC00 \uC5C6\uC5B4 \uC2E4\uD589 PASS\uB85C \uD310\uC815\uD560 \uC218 \uC5C6\uC2B5\uB2C8\uB2E4.",
+      "stepId": "TC-0101-MSG-0506",
+      "severity": "WARNING"
+    },
+    {
+      "code": "SCENARIO.NO_EFFECT_STEP",
+      "message": "TC-0101-MSG-0509\uC5D0\uB294 \uC870\uC791 \uB610\uB294 \uC591\uC131 \uACB0\uACFC \uAC80\uC99D \uB2E8\uACC4\uAC00 \uC5C6\uC5B4 \uC2E4\uD589 PASS\uB85C \uD310\uC815\uD560 \uC218 \uC5C6\uC2B5\uB2C8\uB2E4.",
+      "stepId": "TC-0101-MSG-0509",
+      "severity": "WARNING"
+    },
+    {
+      "code": "SCENARIO.NO_EFFECT_STEP",
+      "message": "TC-0101-MSG-0510\uC5D0\uB294 \uC870\uC791 \uB610\uB294 \uC591\uC131 \uACB0\uACFC \uAC80\uC99D \uB2E8\uACC4\uAC00 \uC5C6\uC5B4 \uC2E4\uD589 PASS\uB85C \uD310\uC815\uD560 \uC218 \uC5C6\uC2B5\uB2C8\uB2E4.",
+      "stepId": "TC-0101-MSG-0510",
+      "severity": "WARNING"
+    },
+    {
+      "code": "SCENARIO.NO_EFFECT_STEP",
+      "message": "TC-0101-MSG-0512\uC5D0\uB294 \uC870\uC791 \uB610\uB294 \uC591\uC131 \uACB0\uACFC \uAC80\uC99D \uB2E8\uACC4\uAC00 \uC5C6\uC5B4 \uC2E4\uD589 PASS\uB85C \uD310\uC815\uD560 \uC218 \uC5C6\uC2B5\uB2C8\uB2E4.",
+      "stepId": "TC-0101-MSG-0512",
+      "severity": "WARNING"
+    },
+    {
+      "code": "SCENARIO.NO_EFFECT_STEP",
+      "message": "TC-0101-MSG-0513\uC5D0\uB294 \uC870\uC791 \uB610\uB294 \uC591\uC131 \uACB0\uACFC \uAC80\uC99D \uB2E8\uACC4\uAC00 \uC5C6\uC5B4 \uC2E4\uD589 PASS\uB85C \uD310\uC815\uD560 \uC218 \uC5C6\uC2B5\uB2C8\uB2E4.",
+      "stepId": "TC-0101-MSG-0513",
+      "severity": "WARNING"
+    },
+    {
+      "code": "SCENARIO.NO_EFFECT_STEP",
+      "message": "TC-0101-MSG-0515\uC5D0\uB294 \uC870\uC791 \uB610\uB294 \uC591\uC131 \uACB0\uACFC \uAC80\uC99D \uB2E8\uACC4\uAC00 \uC5C6\uC5B4 \uC2E4\uD589 PASS\uB85C \uD310\uC815\uD560 \uC218 \uC5C6\uC2B5\uB2C8\uB2E4.",
+      "stepId": "TC-0101-MSG-0515",
+      "severity": "WARNING"
+    },
+    {
+      "code": "SCENARIO.NO_EFFECT_STEP",
+      "message": "TC-0101-MSG-0516\uC5D0\uB294 \uC870\uC791 \uB610\uB294 \uC591\uC131 \uACB0\uACFC \uAC80\uC99D \uB2E8\uACC4\uAC00 \uC5C6\uC5B4 \uC2E4\uD589 PASS\uB85C \uD310\uC815\uD560 \uC218 \uC5C6\uC2B5\uB2C8\uB2E4.",
+      "stepId": "TC-0101-MSG-0516",
+      "severity": "WARNING"
+    },
+    {
+      "code": "SCENARIO.NO_EFFECT_STEP",
+      "message": "TC-0101-MSG-0517\uC5D0\uB294 \uC870\uC791 \uB610\uB294 \uC591\uC131 \uACB0\uACFC \uAC80\uC99D \uB2E8\uACC4\uAC00 \uC5C6\uC5B4 \uC2E4\uD589 PASS\uB85C \uD310\uC815\uD560 \uC218 \uC5C6\uC2B5\uB2C8\uB2E4.",
+      "stepId": "TC-0101-MSG-0517",
+      "severity": "WARNING"
+    },
+    {
+      "code": "SCENARIO.NO_EFFECT_STEP",
+      "message": "TC-0101-MSG-0518\uC5D0\uB294 \uC870\uC791 \uB610\uB294 \uC591\uC131 \uACB0\uACFC \uAC80\uC99D \uB2E8\uACC4\uAC00 \uC5C6\uC5B4 \uC2E4\uD589 PASS\uB85C \uD310\uC815\uD560 \uC218 \uC5C6\uC2B5\uB2C8\uB2E4.",
+      "stepId": "TC-0101-MSG-0518",
+      "severity": "WARNING"
+    },
+    {
+      "code": "SCENARIO.NO_EFFECT_STEP",
+      "message": "TC-0101-MSG-0521\uC5D0\uB294 \uC870\uC791 \uB610\uB294 \uC591\uC131 \uACB0\uACFC \uAC80\uC99D \uB2E8\uACC4\uAC00 \uC5C6\uC5B4 \uC2E4\uD589 PASS\uB85C \uD310\uC815\uD560 \uC218 \uC5C6\uC2B5\uB2C8\uB2E4.",
+      "stepId": "TC-0101-MSG-0521",
+      "severity": "WARNING"
+    },
+    {
+      "code": "SCENARIO.NO_EFFECT_STEP",
+      "message": "TC-0101-MSG-0522\uC5D0\uB294 \uC870\uC791 \uB610\uB294 \uC591\uC131 \uACB0\uACFC \uAC80\uC99D \uB2E8\uACC4\uAC00 \uC5C6\uC5B4 \uC2E4\uD589 PASS\uB85C \uD310\uC815\uD560 \uC218 \uC5C6\uC2B5\uB2C8\uB2E4.",
+      "stepId": "TC-0101-MSG-0522",
+      "severity": "WARNING"
+    },
+    {
+      "code": "SCENARIO.NO_EFFECT_STEP",
+      "message": "TC-0101-MSG-0523\uC5D0\uB294 \uC870\uC791 \uB610\uB294 \uC591\uC131 \uACB0\uACFC \uAC80\uC99D \uB2E8\uACC4\uAC00 \uC5C6\uC5B4 \uC2E4\uD589 PASS\uB85C \uD310\uC815\uD560 \uC218 \uC5C6\uC2B5\uB2C8\uB2E4.",
+      "stepId": "TC-0101-MSG-0523",
+      "severity": "WARNING"
+    },
+    {
+      "code": "SCENARIO.NO_EFFECT_STEP",
+      "message": "TC-0101-MSG-0524\uC5D0\uB294 \uC870\uC791 \uB610\uB294 \uC591\uC131 \uACB0\uACFC \uAC80\uC99D \uB2E8\uACC4\uAC00 \uC5C6\uC5B4 \uC2E4\uD589 PASS\uB85C \uD310\uC815\uD560 \uC218 \uC5C6\uC2B5\uB2C8\uB2E4.",
+      "stepId": "TC-0101-MSG-0524",
+      "severity": "WARNING"
+    },
+    {
+      "code": "SCENARIO.NO_EFFECT_STEP",
+      "message": "TC-0101-MSG-0525\uC5D0\uB294 \uC870\uC791 \uB610\uB294 \uC591\uC131 \uACB0\uACFC \uAC80\uC99D \uB2E8\uACC4\uAC00 \uC5C6\uC5B4 \uC2E4\uD589 PASS\uB85C \uD310\uC815\uD560 \uC218 \uC5C6\uC2B5\uB2C8\uB2E4.",
+      "stepId": "TC-0101-MSG-0525",
+      "severity": "WARNING"
+    },
+    {
+      "code": "SCENARIO.NO_EFFECT_STEP",
+      "message": "TC-0101-MSG-0526\uC5D0\uB294 \uC870\uC791 \uB610\uB294 \uC591\uC131 \uACB0\uACFC \uAC80\uC99D \uB2E8\uACC4\uAC00 \uC5C6\uC5B4 \uC2E4\uD589 PASS\uB85C \uD310\uC815\uD560 \uC218 \uC5C6\uC2B5\uB2C8\uB2E4.",
+      "stepId": "TC-0101-MSG-0526",
+      "severity": "WARNING"
+    },
+    {
+      "code": "SCENARIO.NO_EFFECT_STEP",
+      "message": "TC-0101-MSG-0527\uC5D0\uB294 \uC870\uC791 \uB610\uB294 \uC591\uC131 \uACB0\uACFC \uAC80\uC99D \uB2E8\uACC4\uAC00 \uC5C6\uC5B4 \uC2E4\uD589 PASS\uB85C \uD310\uC815\uD560 \uC218 \uC5C6\uC2B5\uB2C8\uB2E4.",
+      "stepId": "TC-0101-MSG-0527",
+      "severity": "WARNING"
+    },
+    {
+      "code": "SCENARIO.NO_EFFECT_STEP",
+      "message": "TC-0101-MSG-0528\uC5D0\uB294 \uC870\uC791 \uB610\uB294 \uC591\uC131 \uACB0\uACFC \uAC80\uC99D \uB2E8\uACC4\uAC00 \uC5C6\uC5B4 \uC2E4\uD589 PASS\uB85C \uD310\uC815\uD560 \uC218 \uC5C6\uC2B5\uB2C8\uB2E4.",
+      "stepId": "TC-0101-MSG-0528",
+      "severity": "WARNING"
+    },
+    {
+      "code": "SCENARIO.NO_EFFECT_STEP",
+      "message": "TC-0101-MSG-0530\uC5D0\uB294 \uC870\uC791 \uB610\uB294 \uC591\uC131 \uACB0\uACFC \uAC80\uC99D \uB2E8\uACC4\uAC00 \uC5C6\uC5B4 \uC2E4\uD589 PASS\uB85C \uD310\uC815\uD560 \uC218 \uC5C6\uC2B5\uB2C8\uB2E4.",
+      "stepId": "TC-0101-MSG-0530",
+      "severity": "WARNING"
+    },
+    {
+      "code": "SCENARIO.NO_EFFECT_STEP",
+      "message": "TC-0101-MSG-0531\uC5D0\uB294 \uC870\uC791 \uB610\uB294 \uC591\uC131 \uACB0\uACFC \uAC80\uC99D \uB2E8\uACC4\uAC00 \uC5C6\uC5B4 \uC2E4\uD589 PASS\uB85C \uD310\uC815\uD560 \uC218 \uC5C6\uC2B5\uB2C8\uB2E4.",
+      "stepId": "TC-0101-MSG-0531",
+      "severity": "WARNING"
+    },
+    {
+      "code": "SCENARIO.NO_EFFECT_STEP",
+      "message": "TC-0101-MSG-0532\uC5D0\uB294 \uC870\uC791 \uB610\uB294 \uC591\uC131 \uACB0\uACFC \uAC80\uC99D \uB2E8\uACC4\uAC00 \uC5C6\uC5B4 \uC2E4\uD589 PASS\uB85C \uD310\uC815\uD560 \uC218 \uC5C6\uC2B5\uB2C8\uB2E4.",
+      "stepId": "TC-0101-MSG-0532",
+      "severity": "WARNING"
+    },
+    {
+      "code": "SCENARIO.NO_EFFECT_STEP",
+      "message": "TC-0101-RQ-0533\uC5D0\uB294 \uC870\uC791 \uB610\uB294 \uC591\uC131 \uACB0\uACFC \uAC80\uC99D \uB2E8\uACC4\uAC00 \uC5C6\uC5B4 \uC2E4\uD589 PASS\uB85C \uD310\uC815\uD560 \uC218 \uC5C6\uC2B5\uB2C8\uB2E4.",
+      "stepId": "TC-0101-RQ-0533",
+      "severity": "WARNING"
+    },
+    {
+      "code": "SCENARIO.NO_EFFECT_STEP",
+      "message": "TC-0101-RQ-0534\uC5D0\uB294 \uC870\uC791 \uB610\uB294 \uC591\uC131 \uACB0\uACFC \uAC80\uC99D \uB2E8\uACC4\uAC00 \uC5C6\uC5B4 \uC2E4\uD589 PASS\uB85C \uD310\uC815\uD560 \uC218 \uC5C6\uC2B5\uB2C8\uB2E4.",
+      "stepId": "TC-0101-RQ-0534",
+      "severity": "WARNING"
+    },
+    {
+      "code": "SCENARIO.NO_EFFECT_STEP",
+      "message": "TC-0101-RQ-0535\uC5D0\uB294 \uC870\uC791 \uB610\uB294 \uC591\uC131 \uACB0\uACFC \uAC80\uC99D \uB2E8\uACC4\uAC00 \uC5C6\uC5B4 \uC2E4\uD589 PASS\uB85C \uD310\uC815\uD560 \uC218 \uC5C6\uC2B5\uB2C8\uB2E4.",
+      "stepId": "TC-0101-RQ-0535",
+      "severity": "WARNING"
+    },
+    {
+      "code": "SCENARIO.NO_EFFECT_STEP",
+      "message": "TC-0101-RQ-0536\uC5D0\uB294 \uC870\uC791 \uB610\uB294 \uC591\uC131 \uACB0\uACFC \uAC80\uC99D \uB2E8\uACC4\uAC00 \uC5C6\uC5B4 \uC2E4\uD589 PASS\uB85C \uD310\uC815\uD560 \uC218 \uC5C6\uC2B5\uB2C8\uB2E4.",
+      "stepId": "TC-0101-RQ-0536",
+      "severity": "WARNING"
+    },
+    {
+      "code": "SCENARIO.NO_EFFECT_STEP",
+      "message": "TC-0101-RQ-0537\uC5D0\uB294 \uC870\uC791 \uB610\uB294 \uC591\uC131 \uACB0\uACFC \uAC80\uC99D \uB2E8\uACC4\uAC00 \uC5C6\uC5B4 \uC2E4\uD589 PASS\uB85C \uD310\uC815\uD560 \uC218 \uC5C6\uC2B5\uB2C8\uB2E4.",
+      "stepId": "TC-0101-RQ-0537",
+      "severity": "WARNING"
+    },
+    {
+      "code": "SCENARIO.NO_EFFECT_STEP",
+      "message": "TC-0101-RQ-0538\uC5D0\uB294 \uC870\uC791 \uB610\uB294 \uC591\uC131 \uACB0\uACFC \uAC80\uC99D \uB2E8\uACC4\uAC00 \uC5C6\uC5B4 \uC2E4\uD589 PASS\uB85C \uD310\uC815\uD560 \uC218 \uC5C6\uC2B5\uB2C8\uB2E4.",
+      "stepId": "TC-0101-RQ-0538",
+      "severity": "WARNING"
+    },
+    {
+      "code": "SCENARIO.NO_EFFECT_STEP",
+      "message": "TC-0101-RQ-0539\uC5D0\uB294 \uC870\uC791 \uB610\uB294 \uC591\uC131 \uACB0\uACFC \uAC80\uC99D \uB2E8\uACC4\uAC00 \uC5C6\uC5B4 \uC2E4\uD589 PASS\uB85C \uD310\uC815\uD560 \uC218 \uC5C6\uC2B5\uB2C8\uB2E4.",
+      "stepId": "TC-0101-RQ-0539",
+      "severity": "WARNING"
+    },
+    {
+      "code": "SCENARIO.NO_EFFECT_STEP",
+      "message": "TC-0101-RQ-0540\uC5D0\uB294 \uC870\uC791 \uB610\uB294 \uC591\uC131 \uACB0\uACFC \uAC80\uC99D \uB2E8\uACC4\uAC00 \uC5C6\uC5B4 \uC2E4\uD589 PASS\uB85C \uD310\uC815\uD560 \uC218 \uC5C6\uC2B5\uB2C8\uB2E4.",
+      "stepId": "TC-0101-RQ-0540",
+      "severity": "WARNING"
+    },
+    {
+      "code": "SCENARIO.NO_EFFECT_STEP",
+      "message": "TC-0101-RQ-0541\uC5D0\uB294 \uC870\uC791 \uB610\uB294 \uC591\uC131 \uACB0\uACFC \uAC80\uC99D \uB2E8\uACC4\uAC00 \uC5C6\uC5B4 \uC2E4\uD589 PASS\uB85C \uD310\uC815\uD560 \uC218 \uC5C6\uC2B5\uB2C8\uB2E4.",
+      "stepId": "TC-0101-RQ-0541",
+      "severity": "WARNING"
+    },
+    {
+      "code": "SCENARIO.NO_EFFECT_STEP",
+      "message": "TC-0101-RQ-0542\uC5D0\uB294 \uC870\uC791 \uB610\uB294 \uC591\uC131 \uACB0\uACFC \uAC80\uC99D \uB2E8\uACC4\uAC00 \uC5C6\uC5B4 \uC2E4\uD589 PASS\uB85C \uD310\uC815\uD560 \uC218 \uC5C6\uC2B5\uB2C8\uB2E4.",
+      "stepId": "TC-0101-RQ-0542",
+      "severity": "WARNING"
+    },
+    {
+      "code": "SCENARIO.NO_EFFECT_STEP",
+      "message": "TC-0101-RQ-0543\uC5D0\uB294 \uC870\uC791 \uB610\uB294 \uC591\uC131 \uACB0\uACFC \uAC80\uC99D \uB2E8\uACC4\uAC00 \uC5C6\uC5B4 \uC2E4\uD589 PASS\uB85C \uD310\uC815\uD560 \uC218 \uC5C6\uC2B5\uB2C8\uB2E4.",
+      "stepId": "TC-0101-RQ-0543",
+      "severity": "WARNING"
+    },
+    {
+      "code": "SCENARIO.NO_EFFECT_STEP",
+      "message": "TC-0101-RQ-0544\uC5D0\uB294 \uC870\uC791 \uB610\uB294 \uC591\uC131 \uACB0\uACFC \uAC80\uC99D \uB2E8\uACC4\uAC00 \uC5C6\uC5B4 \uC2E4\uD589 PASS\uB85C \uD310\uC815\uD560 \uC218 \uC5C6\uC2B5\uB2C8\uB2E4.",
+      "stepId": "TC-0101-RQ-0544",
+      "severity": "WARNING"
+    },
+    {
+      "code": "SCENARIO.NO_EFFECT_STEP",
+      "message": "TC-0101-RQ-0545\uC5D0\uB294 \uC870\uC791 \uB610\uB294 \uC591\uC131 \uACB0\uACFC \uAC80\uC99D \uB2E8\uACC4\uAC00 \uC5C6\uC5B4 \uC2E4\uD589 PASS\uB85C \uD310\uC815\uD560 \uC218 \uC5C6\uC2B5\uB2C8\uB2E4.",
+      "stepId": "TC-0101-RQ-0545",
+      "severity": "WARNING"
+    },
+    {
+      "code": "SCENARIO.NO_EFFECT_STEP",
+      "message": "TC-0101-RQ-0546\uC5D0\uB294 \uC870\uC791 \uB610\uB294 \uC591\uC131 \uACB0\uACFC \uAC80\uC99D \uB2E8\uACC4\uAC00 \uC5C6\uC5B4 \uC2E4\uD589 PASS\uB85C \uD310\uC815\uD560 \uC218 \uC5C6\uC2B5\uB2C8\uB2E4.",
+      "stepId": "TC-0101-RQ-0546",
+      "severity": "WARNING"
+    },
+    {
+      "code": "SCENARIO.NO_EFFECT_STEP",
+      "message": "TC-0101-RQ-0547\uC5D0\uB294 \uC870\uC791 \uB610\uB294 \uC591\uC131 \uACB0\uACFC \uAC80\uC99D \uB2E8\uACC4\uAC00 \uC5C6\uC5B4 \uC2E4\uD589 PASS\uB85C \uD310\uC815\uD560 \uC218 \uC5C6\uC2B5\uB2C8\uB2E4.",
+      "stepId": "TC-0101-RQ-0547",
+      "severity": "WARNING"
+    },
+    {
+      "code": "SCENARIO.NO_EFFECT_STEP",
+      "message": "TC-0101-RQ-0548\uC5D0\uB294 \uC870\uC791 \uB610\uB294 \uC591\uC131 \uACB0\uACFC \uAC80\uC99D \uB2E8\uACC4\uAC00 \uC5C6\uC5B4 \uC2E4\uD589 PASS\uB85C \uD310\uC815\uD560 \uC218 \uC5C6\uC2B5\uB2C8\uB2E4.",
+      "stepId": "TC-0101-RQ-0548",
+      "severity": "WARNING"
+    },
+    {
+      "code": "SCENARIO.NO_EFFECT_STEP",
+      "message": "TC-0101-RQ-0577\uC5D0\uB294 \uC870\uC791 \uB610\uB294 \uC591\uC131 \uACB0\uACFC \uAC80\uC99D \uB2E8\uACC4\uAC00 \uC5C6\uC5B4 \uC2E4\uD589 PASS\uB85C \uD310\uC815\uD560 \uC218 \uC5C6\uC2B5\uB2C8\uB2E4.",
+      "stepId": "TC-0101-RQ-0577",
+      "severity": "WARNING"
+    },
+    {
+      "code": "SCENARIO.NO_EFFECT_STEP",
+      "message": "TC-0101-RQ-0578\uC5D0\uB294 \uC870\uC791 \uB610\uB294 \uC591\uC131 \uACB0\uACFC \uAC80\uC99D \uB2E8\uACC4\uAC00 \uC5C6\uC5B4 \uC2E4\uD589 PASS\uB85C \uD310\uC815\uD560 \uC218 \uC5C6\uC2B5\uB2C8\uB2E4.",
+      "stepId": "TC-0101-RQ-0578",
+      "severity": "WARNING"
+    },
+    {
+      "code": "SCENARIO.NO_EFFECT_STEP",
+      "message": "TC-0101-RQ-0579\uC5D0\uB294 \uC870\uC791 \uB610\uB294 \uC591\uC131 \uACB0\uACFC \uAC80\uC99D \uB2E8\uACC4\uAC00 \uC5C6\uC5B4 \uC2E4\uD589 PASS\uB85C \uD310\uC815\uD560 \uC218 \uC5C6\uC2B5\uB2C8\uB2E4.",
+      "stepId": "TC-0101-RQ-0579",
+      "severity": "WARNING"
+    },
+    {
+      "code": "SCENARIO.NO_EFFECT_STEP",
+      "message": "TC-0101-RQ-0580\uC5D0\uB294 \uC870\uC791 \uB610\uB294 \uC591\uC131 \uACB0\uACFC \uAC80\uC99D \uB2E8\uACC4\uAC00 \uC5C6\uC5B4 \uC2E4\uD589 PASS\uB85C \uD310\uC815\uD560 \uC218 \uC5C6\uC2B5\uB2C8\uB2E4.",
+      "stepId": "TC-0101-RQ-0580",
+      "severity": "WARNING"
+    },
+    {
+      "code": "SCENARIO.NO_EFFECT_STEP",
+      "message": "TC-0101-SCOPE-1068\uC5D0\uB294 \uC870\uC791 \uB610\uB294 \uC591\uC131 \uACB0\uACFC \uAC80\uC99D \uB2E8\uACC4\uAC00 \uC5C6\uC5B4 \uC2E4\uD589 PASS\uB85C \uD310\uC815\uD560 \uC218 \uC5C6\uC2B5\uB2C8\uB2E4.",
+      "stepId": "TC-0101-SCOPE-1068",
+      "severity": "WARNING"
+    },
+    {
+      "code": "SCENARIO.NO_EFFECT_STEP",
+      "message": "TC-0101-SCOPE-1070\uC5D0\uB294 \uC870\uC791 \uB610\uB294 \uC591\uC131 \uACB0\uACFC \uAC80\uC99D \uB2E8\uACC4\uAC00 \uC5C6\uC5B4 \uC2E4\uD589 PASS\uB85C \uD310\uC815\uD560 \uC218 \uC5C6\uC2B5\uB2C8\uB2E4.",
+      "stepId": "TC-0101-SCOPE-1070",
+      "severity": "WARNING"
+    },
+    {
+      "code": "SCENARIO.NO_EFFECT_STEP",
+      "message": "TC-0101-VIEW-1004\uC5D0\uB294 \uC870\uC791 \uB610\uB294 \uC591\uC131 \uACB0\uACFC \uAC80\uC99D \uB2E8\uACC4\uAC00 \uC5C6\uC5B4 \uC2E4\uD589 PASS\uB85C \uD310\uC815\uD560 \uC218 \uC5C6\uC2B5\uB2C8\uB2E4.",
+      "stepId": "TC-0101-VIEW-1004",
+      "severity": "WARNING"
+    },
+    {
+      "code": "SCENARIO.NO_EFFECT_STEP",
+      "message": "TC-0101-VIEW-1005\uC5D0\uB294 \uC870\uC791 \uB610\uB294 \uC591\uC131 \uACB0\uACFC \uAC80\uC99D \uB2E8\uACC4\uAC00 \uC5C6\uC5B4 \uC2E4\uD589 PASS\uB85C \uD310\uC815\uD560 \uC218 \uC5C6\uC2B5\uB2C8\uB2E4.",
+      "stepId": "TC-0101-VIEW-1005",
+      "severity": "WARNING"
+    },
+    {
+      "code": "SCENARIO.NO_EFFECT_STEP",
+      "message": "TC-0101-VIEW-1006\uC5D0\uB294 \uC870\uC791 \uB610\uB294 \uC591\uC131 \uACB0\uACFC \uAC80\uC99D \uB2E8\uACC4\uAC00 \uC5C6\uC5B4 \uC2E4\uD589 PASS\uB85C \uD310\uC815\uD560 \uC218 \uC5C6\uC2B5\uB2C8\uB2E4.",
+      "stepId": "TC-0101-VIEW-1006",
+      "severity": "WARNING"
+    },
+    {
+      "code": "SCENARIO.NO_EFFECT_STEP",
+      "message": "TC-0101-VIEW-1007\uC5D0\uB294 \uC870\uC791 \uB610\uB294 \uC591\uC131 \uACB0\uACFC \uAC80\uC99D \uB2E8\uACC4\uAC00 \uC5C6\uC5B4 \uC2E4\uD589 PASS\uB85C \uD310\uC815\uD560 \uC218 \uC5C6\uC2B5\uB2C8\uB2E4.",
+      "stepId": "TC-0101-VIEW-1007",
+      "severity": "WARNING"
+    },
+    {
+      "code": "SCENARIO.NO_EFFECT_STEP",
+      "message": "TC-0101-VIEW-1008\uC5D0\uB294 \uC870\uC791 \uB610\uB294 \uC591\uC131 \uACB0\uACFC \uAC80\uC99D \uB2E8\uACC4\uAC00 \uC5C6\uC5B4 \uC2E4\uD589 PASS\uB85C \uD310\uC815\uD560 \uC218 \uC5C6\uC2B5\uB2C8\uB2E4.",
+      "stepId": "TC-0101-VIEW-1008",
+      "severity": "WARNING"
+    },
+    {
+      "code": "SCENARIO.NO_EFFECT_STEP",
+      "message": "TC-0101-VIEW-1009\uC5D0\uB294 \uC870\uC791 \uB610\uB294 \uC591\uC131 \uACB0\uACFC \uAC80\uC99D \uB2E8\uACC4\uAC00 \uC5C6\uC5B4 \uC2E4\uD589 PASS\uB85C \uD310\uC815\uD560 \uC218 \uC5C6\uC2B5\uB2C8\uB2E4.",
+      "stepId": "TC-0101-VIEW-1009",
+      "severity": "WARNING"
+    },
+    {
+      "code": "SCENARIO.NO_EFFECT_STEP",
+      "message": "TC-0101-VIEW-1010\uC5D0\uB294 \uC870\uC791 \uB610\uB294 \uC591\uC131 \uACB0\uACFC \uAC80\uC99D \uB2E8\uACC4\uAC00 \uC5C6\uC5B4 \uC2E4\uD589 PASS\uB85C \uD310\uC815\uD560 \uC218 \uC5C6\uC2B5\uB2C8\uB2E4.",
+      "stepId": "TC-0101-VIEW-1010",
+      "severity": "WARNING"
+    },
+    {
+      "code": "SCENARIO.NO_EFFECT_STEP",
+      "message": "TC-0101-VIEW-1011\uC5D0\uB294 \uC870\uC791 \uB610\uB294 \uC591\uC131 \uACB0\uACFC \uAC80\uC99D \uB2E8\uACC4\uAC00 \uC5C6\uC5B4 \uC2E4\uD589 PASS\uB85C \uD310\uC815\uD560 \uC218 \uC5C6\uC2B5\uB2C8\uB2E4.",
+      "stepId": "TC-0101-VIEW-1011",
+      "severity": "WARNING"
+    },
+    {
+      "code": "SCENARIO.NO_EFFECT_STEP",
+      "message": "TC-0101-VIEW-1012\uC5D0\uB294 \uC870\uC791 \uB610\uB294 \uC591\uC131 \uACB0\uACFC \uAC80\uC99D \uB2E8\uACC4\uAC00 \uC5C6\uC5B4 \uC2E4\uD589 PASS\uB85C \uD310\uC815\uD560 \uC218 \uC5C6\uC2B5\uB2C8\uB2E4.",
+      "stepId": "TC-0101-VIEW-1012",
+      "severity": "WARNING"
+    },
+    {
+      "code": "SCENARIO.NO_EFFECT_STEP",
+      "message": "TC-0101-VIEW-1013\uC5D0\uB294 \uC870\uC791 \uB610\uB294 \uC591\uC131 \uACB0\uACFC \uAC80\uC99D \uB2E8\uACC4\uAC00 \uC5C6\uC5B4 \uC2E4\uD589 PASS\uB85C \uD310\uC815\uD560 \uC218 \uC5C6\uC2B5\uB2C8\uB2E4.",
+      "stepId": "TC-0101-VIEW-1013",
+      "severity": "WARNING"
+    },
+    {
+      "code": "SCENARIO.NO_EFFECT_STEP",
+      "message": "TC-0101-VIEW-1014\uC5D0\uB294 \uC870\uC791 \uB610\uB294 \uC591\uC131 \uACB0\uACFC \uAC80\uC99D \uB2E8\uACC4\uAC00 \uC5C6\uC5B4 \uC2E4\uD589 PASS\uB85C \uD310\uC815\uD560 \uC218 \uC5C6\uC2B5\uB2C8\uB2E4.",
+      "stepId": "TC-0101-VIEW-1014",
+      "severity": "WARNING"
+    },
+    {
+      "code": "SCENARIO.NO_EFFECT_STEP",
+      "message": "TC-0101-VIEW-1015\uC5D0\uB294 \uC870\uC791 \uB610\uB294 \uC591\uC131 \uACB0\uACFC \uAC80\uC99D \uB2E8\uACC4\uAC00 \uC5C6\uC5B4 \uC2E4\uD589 PASS\uB85C \uD310\uC815\uD560 \uC218 \uC5C6\uC2B5\uB2C8\uB2E4.",
+      "stepId": "TC-0101-VIEW-1015",
+      "severity": "WARNING"
+    },
+    {
+      "code": "SCENARIO.NO_EFFECT_STEP",
+      "message": "TC-0101-VIEW-1016\uC5D0\uB294 \uC870\uC791 \uB610\uB294 \uC591\uC131 \uACB0\uACFC \uAC80\uC99D \uB2E8\uACC4\uAC00 \uC5C6\uC5B4 \uC2E4\uD589 PASS\uB85C \uD310\uC815\uD560 \uC218 \uC5C6\uC2B5\uB2C8\uB2E4.",
+      "stepId": "TC-0101-VIEW-1016",
+      "severity": "WARNING"
+    },
+    {
+      "code": "SCENARIO.NO_EFFECT_STEP",
+      "message": "TC-0101-VIEW-1017\uC5D0\uB294 \uC870\uC791 \uB610\uB294 \uC591\uC131 \uACB0\uACFC \uAC80\uC99D \uB2E8\uACC4\uAC00 \uC5C6\uC5B4 \uC2E4\uD589 PASS\uB85C \uD310\uC815\uD560 \uC218 \uC5C6\uC2B5\uB2C8\uB2E4.",
+      "stepId": "TC-0101-VIEW-1017",
+      "severity": "WARNING"
+    },
+    {
+      "code": "SCENARIO.NO_EFFECT_STEP",
+      "message": "TC-0101-VIEW-1018\uC5D0\uB294 \uC870\uC791 \uB610\uB294 \uC591\uC131 \uACB0\uACFC \uAC80\uC99D \uB2E8\uACC4\uAC00 \uC5C6\uC5B4 \uC2E4\uD589 PASS\uB85C \uD310\uC815\uD560 \uC218 \uC5C6\uC2B5\uB2C8\uB2E4.",
+      "stepId": "TC-0101-VIEW-1018",
+      "severity": "WARNING"
+    },
+    {
+      "code": "SCENARIO.NO_EFFECT_STEP",
+      "message": "TC-0101-VIEW-1019\uC5D0\uB294 \uC870\uC791 \uB610\uB294 \uC591\uC131 \uACB0\uACFC \uAC80\uC99D \uB2E8\uACC4\uAC00 \uC5C6\uC5B4 \uC2E4\uD589 PASS\uB85C \uD310\uC815\uD560 \uC218 \uC5C6\uC2B5\uB2C8\uB2E4.",
+      "stepId": "TC-0101-VIEW-1019",
+      "severity": "WARNING"
+    },
+    {
+      "code": "SCENARIO.NO_EFFECT_STEP",
+      "message": "TC-0101-VIEW-1020\uC5D0\uB294 \uC870\uC791 \uB610\uB294 \uC591\uC131 \uACB0\uACFC \uAC80\uC99D \uB2E8\uACC4\uAC00 \uC5C6\uC5B4 \uC2E4\uD589 PASS\uB85C \uD310\uC815\uD560 \uC218 \uC5C6\uC2B5\uB2C8\uB2E4.",
+      "stepId": "TC-0101-VIEW-1020",
+      "severity": "WARNING"
+    },
+    {
+      "code": "SCENARIO.NO_EFFECT_STEP",
+      "message": "TC-0101-VIEW-1021\uC5D0\uB294 \uC870\uC791 \uB610\uB294 \uC591\uC131 \uACB0\uACFC \uAC80\uC99D \uB2E8\uACC4\uAC00 \uC5C6\uC5B4 \uC2E4\uD589 PASS\uB85C \uD310\uC815\uD560 \uC218 \uC5C6\uC2B5\uB2C8\uB2E4.",
+      "stepId": "TC-0101-VIEW-1021",
+      "severity": "WARNING"
+    },
+    {
+      "code": "SCENARIO.NO_EFFECT_STEP",
+      "message": "TC-0101-VIEW-1022\uC5D0\uB294 \uC870\uC791 \uB610\uB294 \uC591\uC131 \uACB0\uACFC \uAC80\uC99D \uB2E8\uACC4\uAC00 \uC5C6\uC5B4 \uC2E4\uD589 PASS\uB85C \uD310\uC815\uD560 \uC218 \uC5C6\uC2B5\uB2C8\uB2E4.",
+      "stepId": "TC-0101-VIEW-1022",
+      "severity": "WARNING"
+    },
+    {
+      "code": "SCENARIO.NO_EFFECT_STEP",
+      "message": "TC-0101-VIEW-1023\uC5D0\uB294 \uC870\uC791 \uB610\uB294 \uC591\uC131 \uACB0\uACFC \uAC80\uC99D \uB2E8\uACC4\uAC00 \uC5C6\uC5B4 \uC2E4\uD589 PASS\uB85C \uD310\uC815\uD560 \uC218 \uC5C6\uC2B5\uB2C8\uB2E4.",
+      "stepId": "TC-0101-VIEW-1023",
+      "severity": "WARNING"
+    },
+    {
+      "code": "SCENARIO.NO_EFFECT_STEP",
+      "message": "TC-0101-VIEW-1024\uC5D0\uB294 \uC870\uC791 \uB610\uB294 \uC591\uC131 \uACB0\uACFC \uAC80\uC99D \uB2E8\uACC4\uAC00 \uC5C6\uC5B4 \uC2E4\uD589 PASS\uB85C \uD310\uC815\uD560 \uC218 \uC5C6\uC2B5\uB2C8\uB2E4.",
+      "stepId": "TC-0101-VIEW-1024",
+      "severity": "WARNING"
+    },
+    {
+      "code": "SCENARIO.NO_EFFECT_STEP",
+      "message": "TC-0101-VIEW-1025\uC5D0\uB294 \uC870\uC791 \uB610\uB294 \uC591\uC131 \uACB0\uACFC \uAC80\uC99D \uB2E8\uACC4\uAC00 \uC5C6\uC5B4 \uC2E4\uD589 PASS\uB85C \uD310\uC815\uD560 \uC218 \uC5C6\uC2B5\uB2C8\uB2E4.",
+      "stepId": "TC-0101-VIEW-1025",
+      "severity": "WARNING"
+    },
+    {
+      "code": "SCENARIO.NO_EFFECT_STEP",
+      "message": "TC-0101-VIEW-1026\uC5D0\uB294 \uC870\uC791 \uB610\uB294 \uC591\uC131 \uACB0\uACFC \uAC80\uC99D \uB2E8\uACC4\uAC00 \uC5C6\uC5B4 \uC2E4\uD589 PASS\uB85C \uD310\uC815\uD560 \uC218 \uC5C6\uC2B5\uB2C8\uB2E4.",
+      "stepId": "TC-0101-VIEW-1026",
+      "severity": "WARNING"
+    },
+    {
+      "code": "SCENARIO.NO_EFFECT_STEP",
+      "message": "TC-0101-VIEW-1027\uC5D0\uB294 \uC870\uC791 \uB610\uB294 \uC591\uC131 \uACB0\uACFC \uAC80\uC99D \uB2E8\uACC4\uAC00 \uC5C6\uC5B4 \uC2E4\uD589 PASS\uB85C \uD310\uC815\uD560 \uC218 \uC5C6\uC2B5\uB2C8\uB2E4.",
+      "stepId": "TC-0101-VIEW-1027",
+      "severity": "WARNING"
+    },
+    {
+      "code": "SCENARIO.NO_EFFECT_STEP",
+      "message": "TC-0101-VIEW-1028\uC5D0\uB294 \uC870\uC791 \uB610\uB294 \uC591\uC131 \uACB0\uACFC \uAC80\uC99D \uB2E8\uACC4\uAC00 \uC5C6\uC5B4 \uC2E4\uD589 PASS\uB85C \uD310\uC815\uD560 \uC218 \uC5C6\uC2B5\uB2C8\uB2E4.",
+      "stepId": "TC-0101-VIEW-1028",
+      "severity": "WARNING"
+    },
+    {
+      "code": "SCENARIO.NO_EFFECT_STEP",
+      "message": "TC-0101-VIEW-1029\uC5D0\uB294 \uC870\uC791 \uB610\uB294 \uC591\uC131 \uACB0\uACFC \uAC80\uC99D \uB2E8\uACC4\uAC00 \uC5C6\uC5B4 \uC2E4\uD589 PASS\uB85C \uD310\uC815\uD560 \uC218 \uC5C6\uC2B5\uB2C8\uB2E4.",
+      "stepId": "TC-0101-VIEW-1029",
+      "severity": "WARNING"
+    },
+    {
+      "code": "SCENARIO.NO_EFFECT_STEP",
+      "message": "TC-0101-VIEW-1030\uC5D0\uB294 \uC870\uC791 \uB610\uB294 \uC591\uC131 \uACB0\uACFC \uAC80\uC99D \uB2E8\uACC4\uAC00 \uC5C6\uC5B4 \uC2E4\uD589 PASS\uB85C \uD310\uC815\uD560 \uC218 \uC5C6\uC2B5\uB2C8\uB2E4.",
+      "stepId": "TC-0101-VIEW-1030",
+      "severity": "WARNING"
+    },
+    {
+      "code": "SCENARIO.NO_EFFECT_STEP",
+      "message": "TC-0101-VIEW-1031\uC5D0\uB294 \uC870\uC791 \uB610\uB294 \uC591\uC131 \uACB0\uACFC \uAC80\uC99D \uB2E8\uACC4\uAC00 \uC5C6\uC5B4 \uC2E4\uD589 PASS\uB85C \uD310\uC815\uD560 \uC218 \uC5C6\uC2B5\uB2C8\uB2E4.",
+      "stepId": "TC-0101-VIEW-1031",
+      "severity": "WARNING"
+    },
+    {
+      "code": "SCENARIO.NO_EFFECT_STEP",
+      "message": "TC-0101-VIEW-1032\uC5D0\uB294 \uC870\uC791 \uB610\uB294 \uC591\uC131 \uACB0\uACFC \uAC80\uC99D \uB2E8\uACC4\uAC00 \uC5C6\uC5B4 \uC2E4\uD589 PASS\uB85C \uD310\uC815\uD560 \uC218 \uC5C6\uC2B5\uB2C8\uB2E4.",
+      "stepId": "TC-0101-VIEW-1032",
+      "severity": "WARNING"
+    },
+    {
+      "code": "SCENARIO.NO_EFFECT_STEP",
+      "message": "TC-0101-VIEW-1033\uC5D0\uB294 \uC870\uC791 \uB610\uB294 \uC591\uC131 \uACB0\uACFC \uAC80\uC99D \uB2E8\uACC4\uAC00 \uC5C6\uC5B4 \uC2E4\uD589 PASS\uB85C \uD310\uC815\uD560 \uC218 \uC5C6\uC2B5\uB2C8\uB2E4.",
+      "stepId": "TC-0101-VIEW-1033",
+      "severity": "WARNING"
+    },
+    {
+      "code": "SCENARIO.NO_EFFECT_STEP",
+      "message": "TC-0101-VIEW-1034\uC5D0\uB294 \uC870\uC791 \uB610\uB294 \uC591\uC131 \uACB0\uACFC \uAC80\uC99D \uB2E8\uACC4\uAC00 \uC5C6\uC5B4 \uC2E4\uD589 PASS\uB85C \uD310\uC815\uD560 \uC218 \uC5C6\uC2B5\uB2C8\uB2E4.",
+      "stepId": "TC-0101-VIEW-1034",
+      "severity": "WARNING"
+    },
+    {
+      "code": "SCENARIO.NO_EFFECT_STEP",
+      "message": "TC-0101-VIEW-1035\uC5D0\uB294 \uC870\uC791 \uB610\uB294 \uC591\uC131 \uACB0\uACFC \uAC80\uC99D \uB2E8\uACC4\uAC00 \uC5C6\uC5B4 \uC2E4\uD589 PASS\uB85C \uD310\uC815\uD560 \uC218 \uC5C6\uC2B5\uB2C8\uB2E4.",
+      "stepId": "TC-0101-VIEW-1035",
+      "severity": "WARNING"
+    },
+    {
+      "code": "SCENARIO.NO_EFFECT_STEP",
+      "message": "TC-0101-VIEW-1036\uC5D0\uB294 \uC870\uC791 \uB610\uB294 \uC591\uC131 \uACB0\uACFC \uAC80\uC99D \uB2E8\uACC4\uAC00 \uC5C6\uC5B4 \uC2E4\uD589 PASS\uB85C \uD310\uC815\uD560 \uC218 \uC5C6\uC2B5\uB2C8\uB2E4.",
+      "stepId": "TC-0101-VIEW-1036",
+      "severity": "WARNING"
+    },
+    {
+      "code": "SCENARIO.NO_EFFECT_STEP",
+      "message": "TC-0101-VIEW-1037\uC5D0\uB294 \uC870\uC791 \uB610\uB294 \uC591\uC131 \uACB0\uACFC \uAC80\uC99D \uB2E8\uACC4\uAC00 \uC5C6\uC5B4 \uC2E4\uD589 PASS\uB85C \uD310\uC815\uD560 \uC218 \uC5C6\uC2B5\uB2C8\uB2E4.",
+      "stepId": "TC-0101-VIEW-1037",
+      "severity": "WARNING"
+    },
+    {
+      "code": "SCENARIO.NO_EFFECT_STEP",
+      "message": "TC-0101-VIEW-1038\uC5D0\uB294 \uC870\uC791 \uB610\uB294 \uC591\uC131 \uACB0\uACFC \uAC80\uC99D \uB2E8\uACC4\uAC00 \uC5C6\uC5B4 \uC2E4\uD589 PASS\uB85C \uD310\uC815\uD560 \uC218 \uC5C6\uC2B5\uB2C8\uB2E4.",
+      "stepId": "TC-0101-VIEW-1038",
+      "severity": "WARNING"
+    },
+    {
+      "code": "SCENARIO.NO_EFFECT_STEP",
+      "message": "TC-0101-VIEW-1039\uC5D0\uB294 \uC870\uC791 \uB610\uB294 \uC591\uC131 \uACB0\uACFC \uAC80\uC99D \uB2E8\uACC4\uAC00 \uC5C6\uC5B4 \uC2E4\uD589 PASS\uB85C \uD310\uC815\uD560 \uC218 \uC5C6\uC2B5\uB2C8\uB2E4.",
+      "stepId": "TC-0101-VIEW-1039",
+      "severity": "WARNING"
+    },
+    {
+      "code": "SCENARIO.NO_EFFECT_STEP",
+      "message": "TC-0101-VIEW-1040\uC5D0\uB294 \uC870\uC791 \uB610\uB294 \uC591\uC131 \uACB0\uACFC \uAC80\uC99D \uB2E8\uACC4\uAC00 \uC5C6\uC5B4 \uC2E4\uD589 PASS\uB85C \uD310\uC815\uD560 \uC218 \uC5C6\uC2B5\uB2C8\uB2E4.",
+      "stepId": "TC-0101-VIEW-1040",
+      "severity": "WARNING"
+    },
+    {
+      "code": "SCENARIO.NO_EFFECT_STEP",
+      "message": "TC-0101-VIEW-1041\uC5D0\uB294 \uC870\uC791 \uB610\uB294 \uC591\uC131 \uACB0\uACFC \uAC80\uC99D \uB2E8\uACC4\uAC00 \uC5C6\uC5B4 \uC2E4\uD589 PASS\uB85C \uD310\uC815\uD560 \uC218 \uC5C6\uC2B5\uB2C8\uB2E4.",
+      "stepId": "TC-0101-VIEW-1041",
+      "severity": "WARNING"
+    },
+    {
+      "code": "SCENARIO.NO_EFFECT_STEP",
+      "message": "TC-0101-VIEW-1042\uC5D0\uB294 \uC870\uC791 \uB610\uB294 \uC591\uC131 \uACB0\uACFC \uAC80\uC99D \uB2E8\uACC4\uAC00 \uC5C6\uC5B4 \uC2E4\uD589 PASS\uB85C \uD310\uC815\uD560 \uC218 \uC5C6\uC2B5\uB2C8\uB2E4.",
+      "stepId": "TC-0101-VIEW-1042",
+      "severity": "WARNING"
+    },
+    {
+      "code": "SCENARIO.NO_EFFECT_STEP",
+      "message": "TC-0101-VIEW-1043\uC5D0\uB294 \uC870\uC791 \uB610\uB294 \uC591\uC131 \uACB0\uACFC \uAC80\uC99D \uB2E8\uACC4\uAC00 \uC5C6\uC5B4 \uC2E4\uD589 PASS\uB85C \uD310\uC815\uD560 \uC218 \uC5C6\uC2B5\uB2C8\uB2E4.",
+      "stepId": "TC-0101-VIEW-1043",
+      "severity": "WARNING"
+    },
+    {
+      "code": "SCENARIO.NO_EFFECT_STEP",
+      "message": "TC-0101-VIEW-1044\uC5D0\uB294 \uC870\uC791 \uB610\uB294 \uC591\uC131 \uACB0\uACFC \uAC80\uC99D \uB2E8\uACC4\uAC00 \uC5C6\uC5B4 \uC2E4\uD589 PASS\uB85C \uD310\uC815\uD560 \uC218 \uC5C6\uC2B5\uB2C8\uB2E4.",
+      "stepId": "TC-0101-VIEW-1044",
+      "severity": "WARNING"
+    },
+    {
+      "code": "SCENARIO.NO_EFFECT_STEP",
+      "message": "TC-0101-VIEW-1045\uC5D0\uB294 \uC870\uC791 \uB610\uB294 \uC591\uC131 \uACB0\uACFC \uAC80\uC99D \uB2E8\uACC4\uAC00 \uC5C6\uC5B4 \uC2E4\uD589 PASS\uB85C \uD310\uC815\uD560 \uC218 \uC5C6\uC2B5\uB2C8\uB2E4.",
+      "stepId": "TC-0101-VIEW-1045",
+      "severity": "WARNING"
+    },
+    {
+      "code": "SCENARIO.NO_EFFECT_STEP",
+      "message": "TC-0101-VIEW-1046\uC5D0\uB294 \uC870\uC791 \uB610\uB294 \uC591\uC131 \uACB0\uACFC \uAC80\uC99D \uB2E8\uACC4\uAC00 \uC5C6\uC5B4 \uC2E4\uD589 PASS\uB85C \uD310\uC815\uD560 \uC218 \uC5C6\uC2B5\uB2C8\uB2E4.",
+      "stepId": "TC-0101-VIEW-1046",
+      "severity": "WARNING"
+    },
+    {
+      "code": "SCENARIO.NO_EFFECT_STEP",
+      "message": "TC-0101-VIEW-1047\uC5D0\uB294 \uC870\uC791 \uB610\uB294 \uC591\uC131 \uACB0\uACFC \uAC80\uC99D \uB2E8\uACC4\uAC00 \uC5C6\uC5B4 \uC2E4\uD589 PASS\uB85C \uD310\uC815\uD560 \uC218 \uC5C6\uC2B5\uB2C8\uB2E4.",
+      "stepId": "TC-0101-VIEW-1047",
+      "severity": "WARNING"
+    },
+    {
+      "code": "SCENARIO.NO_EFFECT_STEP",
+      "message": "TC-0101-VIEW-1048\uC5D0\uB294 \uC870\uC791 \uB610\uB294 \uC591\uC131 \uACB0\uACFC \uAC80\uC99D \uB2E8\uACC4\uAC00 \uC5C6\uC5B4 \uC2E4\uD589 PASS\uB85C \uD310\uC815\uD560 \uC218 \uC5C6\uC2B5\uB2C8\uB2E4.",
+      "stepId": "TC-0101-VIEW-1048",
+      "severity": "WARNING"
+    },
+    {
+      "code": "SCENARIO.NO_EFFECT_STEP",
+      "message": "TC-0101-VIEW-1049\uC5D0\uB294 \uC870\uC791 \uB610\uB294 \uC591\uC131 \uACB0\uACFC \uAC80\uC99D \uB2E8\uACC4\uAC00 \uC5C6\uC5B4 \uC2E4\uD589 PASS\uB85C \uD310\uC815\uD560 \uC218 \uC5C6\uC2B5\uB2C8\uB2E4.",
+      "stepId": "TC-0101-VIEW-1049",
+      "severity": "WARNING"
+    },
+    {
+      "code": "SCENARIO.NO_EFFECT_STEP",
+      "message": "TC-0101-VIEW-1050\uC5D0\uB294 \uC870\uC791 \uB610\uB294 \uC591\uC131 \uACB0\uACFC \uAC80\uC99D \uB2E8\uACC4\uAC00 \uC5C6\uC5B4 \uC2E4\uD589 PASS\uB85C \uD310\uC815\uD560 \uC218 \uC5C6\uC2B5\uB2C8\uB2E4.",
+      "stepId": "TC-0101-VIEW-1050",
+      "severity": "WARNING"
+    },
+    {
+      "code": "SCENARIO.NO_EFFECT_STEP",
+      "message": "TC-0101-VIEW-1051\uC5D0\uB294 \uC870\uC791 \uB610\uB294 \uC591\uC131 \uACB0\uACFC \uAC80\uC99D \uB2E8\uACC4\uAC00 \uC5C6\uC5B4 \uC2E4\uD589 PASS\uB85C \uD310\uC815\uD560 \uC218 \uC5C6\uC2B5\uB2C8\uB2E4.",
+      "stepId": "TC-0101-VIEW-1051",
+      "severity": "WARNING"
+    },
+    {
+      "code": "SCENARIO.NO_EFFECT_STEP",
+      "message": "TC-0101-VIEW-1052\uC5D0\uB294 \uC870\uC791 \uB610\uB294 \uC591\uC131 \uACB0\uACFC \uAC80\uC99D \uB2E8\uACC4\uAC00 \uC5C6\uC5B4 \uC2E4\uD589 PASS\uB85C \uD310\uC815\uD560 \uC218 \uC5C6\uC2B5\uB2C8\uB2E4.",
+      "stepId": "TC-0101-VIEW-1052",
+      "severity": "WARNING"
+    },
+    {
+      "code": "SCENARIO.NO_EFFECT_STEP",
+      "message": "TC-0101-VIEW-1053\uC5D0\uB294 \uC870\uC791 \uB610\uB294 \uC591\uC131 \uACB0\uACFC \uAC80\uC99D \uB2E8\uACC4\uAC00 \uC5C6\uC5B4 \uC2E4\uD589 PASS\uB85C \uD310\uC815\uD560 \uC218 \uC5C6\uC2B5\uB2C8\uB2E4.",
+      "stepId": "TC-0101-VIEW-1053",
+      "severity": "WARNING"
+    },
+    {
+      "code": "SCENARIO.NO_EFFECT_STEP",
+      "message": "TC-0101-VIEW-1054\uC5D0\uB294 \uC870\uC791 \uB610\uB294 \uC591\uC131 \uACB0\uACFC \uAC80\uC99D \uB2E8\uACC4\uAC00 \uC5C6\uC5B4 \uC2E4\uD589 PASS\uB85C \uD310\uC815\uD560 \uC218 \uC5C6\uC2B5\uB2C8\uB2E4.",
+      "stepId": "TC-0101-VIEW-1054",
+      "severity": "WARNING"
+    },
+    {
+      "code": "SCENARIO.NO_EFFECT_STEP",
+      "message": "TC-0101-VIEW-1055\uC5D0\uB294 \uC870\uC791 \uB610\uB294 \uC591\uC131 \uACB0\uACFC \uAC80\uC99D \uB2E8\uACC4\uAC00 \uC5C6\uC5B4 \uC2E4\uD589 PASS\uB85C \uD310\uC815\uD560 \uC218 \uC5C6\uC2B5\uB2C8\uB2E4.",
+      "stepId": "TC-0101-VIEW-1055",
+      "severity": "WARNING"
+    },
+    {
+      "code": "SCENARIO.NO_EFFECT_STEP",
+      "message": "TC-0101-VIEW-1056\uC5D0\uB294 \uC870\uC791 \uB610\uB294 \uC591\uC131 \uACB0\uACFC \uAC80\uC99D \uB2E8\uACC4\uAC00 \uC5C6\uC5B4 \uC2E4\uD589 PASS\uB85C \uD310\uC815\uD560 \uC218 \uC5C6\uC2B5\uB2C8\uB2E4.",
+      "stepId": "TC-0101-VIEW-1056",
+      "severity": "WARNING"
+    },
+    {
+      "code": "SCENARIO.NO_EFFECT_STEP",
+      "message": "TC-0101-VIEW-1057\uC5D0\uB294 \uC870\uC791 \uB610\uB294 \uC591\uC131 \uACB0\uACFC \uAC80\uC99D \uB2E8\uACC4\uAC00 \uC5C6\uC5B4 \uC2E4\uD589 PASS\uB85C \uD310\uC815\uD560 \uC218 \uC5C6\uC2B5\uB2C8\uB2E4.",
+      "stepId": "TC-0101-VIEW-1057",
+      "severity": "WARNING"
+    },
+    {
+      "code": "SCENARIO.NO_EFFECT_STEP",
+      "message": "TC-0101-VIEW-1058\uC5D0\uB294 \uC870\uC791 \uB610\uB294 \uC591\uC131 \uACB0\uACFC \uAC80\uC99D \uB2E8\uACC4\uAC00 \uC5C6\uC5B4 \uC2E4\uD589 PASS\uB85C \uD310\uC815\uD560 \uC218 \uC5C6\uC2B5\uB2C8\uB2E4.",
+      "stepId": "TC-0101-VIEW-1058",
+      "severity": "WARNING"
+    },
+    {
+      "code": "SCENARIO.NO_EFFECT_STEP",
+      "message": "TC-0101-VIEW-1059\uC5D0\uB294 \uC870\uC791 \uB610\uB294 \uC591\uC131 \uACB0\uACFC \uAC80\uC99D \uB2E8\uACC4\uAC00 \uC5C6\uC5B4 \uC2E4\uD589 PASS\uB85C \uD310\uC815\uD560 \uC218 \uC5C6\uC2B5\uB2C8\uB2E4.",
+      "stepId": "TC-0101-VIEW-1059",
+      "severity": "WARNING"
+    },
+    {
+      "code": "SCENARIO.NO_EFFECT_STEP",
+      "message": "TC-0101-VIEW-1060\uC5D0\uB294 \uC870\uC791 \uB610\uB294 \uC591\uC131 \uACB0\uACFC \uAC80\uC99D \uB2E8\uACC4\uAC00 \uC5C6\uC5B4 \uC2E4\uD589 PASS\uB85C \uD310\uC815\uD560 \uC218 \uC5C6\uC2B5\uB2C8\uB2E4.",
+      "stepId": "TC-0101-VIEW-1060",
+      "severity": "WARNING"
+    },
+    {
+      "code": "SCENARIO.NO_EFFECT_STEP",
+      "message": "TC-0101-VIEW-1061\uC5D0\uB294 \uC870\uC791 \uB610\uB294 \uC591\uC131 \uACB0\uACFC \uAC80\uC99D \uB2E8\uACC4\uAC00 \uC5C6\uC5B4 \uC2E4\uD589 PASS\uB85C \uD310\uC815\uD560 \uC218 \uC5C6\uC2B5\uB2C8\uB2E4.",
+      "stepId": "TC-0101-VIEW-1061",
+      "severity": "WARNING"
+    },
+    {
+      "code": "SCENARIO.NO_EFFECT_STEP",
+      "message": "TC-0101-VIEW-1062\uC5D0\uB294 \uC870\uC791 \uB610\uB294 \uC591\uC131 \uACB0\uACFC \uAC80\uC99D \uB2E8\uACC4\uAC00 \uC5C6\uC5B4 \uC2E4\uD589 PASS\uB85C \uD310\uC815\uD560 \uC218 \uC5C6\uC2B5\uB2C8\uB2E4.",
+      "stepId": "TC-0101-VIEW-1062",
+      "severity": "WARNING"
+    },
+    {
+      "code": "SCENARIO.NO_EFFECT_STEP",
+      "message": "TC-0101-VIEW-1063\uC5D0\uB294 \uC870\uC791 \uB610\uB294 \uC591\uC131 \uACB0\uACFC \uAC80\uC99D \uB2E8\uACC4\uAC00 \uC5C6\uC5B4 \uC2E4\uD589 PASS\uB85C \uD310\uC815\uD560 \uC218 \uC5C6\uC2B5\uB2C8\uB2E4.",
+      "stepId": "TC-0101-VIEW-1063",
+      "severity": "WARNING"
+    },
+    {
+      "code": "SCENARIO.NO_EFFECT_STEP",
+      "message": "TC-0101-VIEW-1064\uC5D0\uB294 \uC870\uC791 \uB610\uB294 \uC591\uC131 \uACB0\uACFC \uAC80\uC99D \uB2E8\uACC4\uAC00 \uC5C6\uC5B4 \uC2E4\uD589 PASS\uB85C \uD310\uC815\uD560 \uC218 \uC5C6\uC2B5\uB2C8\uB2E4.",
+      "stepId": "TC-0101-VIEW-1064",
+      "severity": "WARNING"
+    },
+    {
+      "code": "SCENARIO.NO_EFFECT_STEP",
+      "message": "TC-0101-VIEW-1065\uC5D0\uB294 \uC870\uC791 \uB610\uB294 \uC591\uC131 \uACB0\uACFC \uAC80\uC99D \uB2E8\uACC4\uAC00 \uC5C6\uC5B4 \uC2E4\uD589 PASS\uB85C \uD310\uC815\uD560 \uC218 \uC5C6\uC2B5\uB2C8\uB2E4.",
+      "stepId": "TC-0101-VIEW-1065",
+      "severity": "WARNING"
+    },
+    {
+      "code": "SCENARIO.NO_EFFECT_STEP",
+      "message": "TC-0101-VIEW-1066\uC5D0\uB294 \uC870\uC791 \uB610\uB294 \uC591\uC131 \uACB0\uACFC \uAC80\uC99D \uB2E8\uACC4\uAC00 \uC5C6\uC5B4 \uC2E4\uD589 PASS\uB85C \uD310\uC815\uD560 \uC218 \uC5C6\uC2B5\uB2C8\uB2E4.",
+      "stepId": "TC-0101-VIEW-1066",
+      "severity": "WARNING"
+    },
+    {
+      "code": "SCENARIO.NO_EFFECT_STEP",
+      "message": "TC-0101-VIEW-1067\uC5D0\uB294 \uC870\uC791 \uB610\uB294 \uC591\uC131 \uACB0\uACFC \uAC80\uC99D \uB2E8\uACC4\uAC00 \uC5C6\uC5B4 \uC2E4\uD589 PASS\uB85C \uD310\uC815\uD560 \uC218 \uC5C6\uC2B5\uB2C8\uB2E4.",
+      "stepId": "TC-0101-VIEW-1067",
+      "severity": "WARNING"
+    }
+  ]
+}

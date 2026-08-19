@@ -1,0 +1,31 @@
+{
+  "sourceSha256": "449dd01c8d6e0c29046eac03eafd5cbbe3f277f921bc11d744e75fccbdd4be5f",
+  "status": "VALIDATED_WITH_WARNINGS",
+  "isValid": true,
+  "screens": 14,
+  "scenarios": 103,
+  "variables": 78,
+  "locatorRequests": 144,
+  "reviewItems": 34,
+  "requiredReviewItems": 16,
+  "coveredControls": 133,
+  "coveredValidationRules": 7,
+  "unusedVariables": 3,
+  "issues": [
+    {
+      "code": "SCENARIO.UNUSED_VARIABLE",
+      "message": "\uC5B4\uB5A4 \uC2DC\uB098\uB9AC\uC624\uC5D0\uC11C\uB3C4 \uC0AC\uC6A9\uD558\uC9C0 \uC54A\uB294 \uBCC0\uC218\uC785\uB2C8\uB2E4: v_0714_CHK_1_state",
+      "severity": "WARNING"
+    },
+    {
+      "code": "SCENARIO.UNUSED_VARIABLE",
+      "message": "\uC5B4\uB5A4 \uC2DC\uB098\uB9AC\uC624\uC5D0\uC11C\uB3C4 \uC0AC\uC6A9\uD558\uC9C0 \uC54A\uB294 \uBCC0\uC218\uC785\uB2C8\uB2E4: v_0714_CHK_2_state",
+      "severity": "WARNING"
+    },
+    {
+      "code": "SCENARIO.UNUSED_VARIABLE",
+      "message": "\uC5B4\uB5A4 \uC2DC\uB098\uB9AC\uC624\uC5D0\uC11C\uB3C4 \uC0AC\uC6A9\uD558\uC9C0 \uC54A\uB294 \uBCC0\uC218\uC785\uB2C8\uB2E4: v_0714_CHK_3_state",
+      "severity": "WARNING"
+    }
+  ]
+}

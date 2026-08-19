@@ -1,0 +1,25 @@
+{
+  "screenNumber": "0101",
+  "screenName": "국내주식 매수주문",
+  "familyFiles": [
+    "ht010100.map",
+    "ht010101.map",
+    "ht010102.map",
+    "ht010103.map",
+    "ht010104.map",
+    "ht010105.map",
+    "ht010106.map",
+    "ht010107.map",
+    "ht010108.map",
+    "ht010109.map",
+    "ht01010h.map",
+    "ht010110.map",
+    "ht010111.map",
+    "ht010112.map",
+    "ht010113.map",
+    "ht010114.map",
+    "ht010115.map",
+    "ht010116.map",
+    "ht010199.map"
+  ]
+}

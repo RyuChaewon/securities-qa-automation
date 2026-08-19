@@ -1,0 +1,50 @@
+﻿
+Microsoft Visual Studio Solution File, Format Version 12.00
+# Visual Studio Version 17
+VisualStudioVersion = 17.0.31903.59
+MinimumVisualStudioVersion = 10.0.40219.1
+Project("{2150E333-8FDC-42A3-9474-1A3956D46DE8}") = "src", "src", "{FC8996F5-294E-4CFB-B907-AE6C9034FCC2}"
+EndProject
+Project("{FAE04EC0-301F-11D3-BF4B-00C04F79EFBC}") = "HtsQa.Core", "src\HtsQa.Core\HtsQa.Core.csproj", "{A6646875-0614-4DA4-9E3F-DC9874638B16}"
+EndProject
+Project("{FAE04EC0-301F-11D3-BF4B-00C04F79EFBC}") = "HtsQa.Cli", "src\HtsQa.Cli\HtsQa.Cli.csproj", "{B52C45B9-D3C6-4C9B-B02F-32CCBEDA8487}"
+EndProject
+Project("{2150E333-8FDC-42A3-9474-1A3956D46DE8}") = "tests", "tests", "{499C822F-5C2A-4B3C-BABD-3241931570A8}"
+EndProject
+Project("{FAE04EC0-301F-11D3-BF4B-00C04F79EFBC}") = "HtsQa.Tests", "tests\HtsQa.Tests\HtsQa.Tests.csproj", "{DC3279AE-6774-4AC3-B2BD-BE516E16215F}"
+EndProject
+Project("{FAE04EC0-301F-11D3-BF4B-00C04F79EFBC}") = "HtsQa.FlaUi", "src\HtsQa.FlaUi\HtsQa.FlaUi.csproj", "{19087C78-336D-4F93-BF98-8E786E5CD866}"
+EndProject
+Global
+	GlobalSection(SolutionConfigurationPlatforms) = preSolution
+		Debug|Any CPU = Debug|Any CPU
+		Release|Any CPU = Release|Any CPU
+	EndGlobalSection
+	GlobalSection(SolutionProperties) = preSolution
+		HideSolutionNode = FALSE
+	EndGlobalSection
+	GlobalSection(ProjectConfigurationPlatforms) = postSolution
+		{A6646875-0614-4DA4-9E3F-DC9874638B16}.Debug|Any CPU.ActiveCfg = Debug|Any CPU
+		{A6646875-0614-4DA4-9E3F-DC9874638B16}.Debug|Any CPU.Build.0 = Debug|Any CPU
+		{A6646875-0614-4DA4-9E3F-DC9874638B16}.Release|Any CPU.ActiveCfg = Release|Any CPU
+		{A6646875-0614-4DA4-9E3F-DC9874638B16}.Release|Any CPU.Build.0 = Release|Any CPU
+		{B52C45B9-D3C6-4C9B-B02F-32CCBEDA8487}.Debug|Any CPU.ActiveCfg = Debug|Any CPU
+		{B52C45B9-D3C6-4C9B-B02F-32CCBEDA8487}.Debug|Any CPU.Build.0 = Debug|Any CPU
+		{B52C45B9-D3C6-4C9B-B02F-32CCBEDA8487}.Release|Any CPU.ActiveCfg = Release|Any CPU
+		{B52C45B9-D3C6-4C9B-B02F-32CCBEDA8487}.Release|Any CPU.Build.0 = Release|Any CPU
+		{DC3279AE-6774-4AC3-B2BD-BE516E16215F}.Debug|Any CPU.ActiveCfg = Debug|Any CPU
+		{DC3279AE-6774-4AC3-B2BD-BE516E16215F}.Debug|Any CPU.Build.0 = Debug|Any CPU
+		{DC3279AE-6774-4AC3-B2BD-BE516E16215F}.Release|Any CPU.ActiveCfg = Release|Any CPU
+		{DC3279AE-6774-4AC3-B2BD-BE516E16215F}.Release|Any CPU.Build.0 = Release|Any CPU
+		{19087C78-336D-4F93-BF98-8E786E5CD866}.Debug|Any CPU.ActiveCfg = Debug|Any CPU
+		{19087C78-336D-4F93-BF98-8E786E5CD866}.Debug|Any CPU.Build.0 = Debug|Any CPU
+		{19087C78-336D-4F93-BF98-8E786E5CD866}.Release|Any CPU.ActiveCfg = Release|Any CPU
+		{19087C78-336D-4F93-BF98-8E786E5CD866}.Release|Any CPU.Build.0 = Release|Any CPU
+	EndGlobalSection
+	GlobalSection(NestedProjects) = preSolution
+		{A6646875-0614-4DA4-9E3F-DC9874638B16} = {FC8996F5-294E-4CFB-B907-AE6C9034FCC2}
+		{B52C45B9-D3C6-4C9B-B02F-32CCBEDA8487} = {FC8996F5-294E-4CFB-B907-AE6C9034FCC2}
+		{DC3279AE-6774-4AC3-B2BD-BE516E16215F} = {499C822F-5C2A-4B3C-BABD-3241931570A8}
+		{19087C78-336D-4F93-BF98-8E786E5CD866} = {FC8996F5-294E-4CFB-B907-AE6C9034FCC2}
+	EndGlobalSection
+EndGlobal

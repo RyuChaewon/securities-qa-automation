@@ -1,0 +1,2199 @@
+{
+  "packageVersion": "1.0",
+  "generatedAt": "2026-08-10T10:41:44.600Z",
+  "referenceDate": "20260810",
+  "sourceInstallationFingerprint": "674dff5dc207d0b98d12e4725d17d99fdeff797218a2413141796c91dfbbb3fc",
+  "accountPolicy": {
+    "inputMode": "Prefilled",
+    "guidance": "로그인된 테스트 계좌의 화면 기본값을 사용한다. 계좌번호·예금주·비밀번호를 생성하거나 출력하지 않는다."
+  },
+  "officialInputDictionaries": [
+    {
+      "screenNumber": "0708",
+      "usage": "InputOptions",
+      "section": "잔고",
+      "boundControl": "CB__ExchConfAts",
+      "sourceFile": "data/exchange.ini",
+      "options": [
+        {
+          "id": "code-03",
+          "value": "03",
+          "displayValue": "통합",
+          "index": 0,
+          "expectedOutcome": {
+            "type": "Unspecified",
+            "messagePatterns": [],
+            "errorCodes": [],
+            "queryShouldComplete": null,
+            "source": "Unspecified",
+            "confidence": "Unspecified",
+            "evidence": []
+          }
+        },
+        {
+          "id": "code-KRX",
+          "value": "KRX",
+          "displayValue": "01",
+          "index": 1,
+          "expectedOutcome": {
+            "type": "Unspecified",
+            "messagePatterns": [],
+            "errorCodes": [],
+            "queryShouldComplete": null,
+            "source": "Unspecified",
+            "confidence": "Unspecified",
+            "evidence": []
+          }
+        },
+        {
+          "id": "code-NXT",
+          "value": "NXT",
+          "displayValue": "02",
+          "index": 2,
+          "expectedOutcome": {
+            "type": "Unspecified",
+            "messagePatterns": [],
+            "errorCodes": [],
+            "queryShouldComplete": null,
+            "source": "Unspecified",
+            "confidence": "Unspecified",
+            "evidence": []
+          }
+        }
+      ]
+    },
+    {
+      "screenNumber": "0722",
+      "usage": "InputOptions",
+      "section": "신용공여구분코드",
+      "boundControl": "CB_CREDITTYPE",
+      "sourceFile": "data/empcommon.ini",
+      "options": [
+        {
+          "id": "code-01",
+          "value": "01",
+          "displayValue": "신용거래융자",
+          "index": 0,
+          "expectedOutcome": {
+            "type": "Unspecified",
+            "messagePatterns": [],
+            "errorCodes": [],
+            "queryShouldComplete": null,
+            "source": "Unspecified",
+            "confidence": "Unspecified",
+            "evidence": []
+          }
+        },
+        {
+          "id": "code-02",
+          "value": "02",
+          "displayValue": "신용거래대주",
+          "index": 1,
+          "expectedOutcome": {
+            "type": "Unspecified",
+            "messagePatterns": [],
+            "errorCodes": [],
+            "queryShouldComplete": null,
+            "source": "Unspecified",
+            "confidence": "Unspecified",
+            "evidence": []
+          }
+        },
+        {
+          "id": "code-03",
+          "value": "03",
+          "displayValue": "주식담보대출",
+          "index": 2,
+          "expectedOutcome": {
+            "type": "Unspecified",
+            "messagePatterns": [],
+            "errorCodes": [],
+            "queryShouldComplete": null,
+            "source": "Unspecified",
+            "confidence": "Unspecified",
+            "evidence": []
+          }
+        },
+        {
+          "id": "code-04",
+          "value": "04",
+          "displayValue": "해외주식담보대출",
+          "index": 3,
+          "expectedOutcome": {
+            "type": "Unspecified",
+            "messagePatterns": [],
+            "errorCodes": [],
+            "queryShouldComplete": null,
+            "source": "Unspecified",
+            "confidence": "Unspecified",
+            "evidence": []
+          }
+        },
+        {
+          "id": "code-05",
+          "value": "05",
+          "displayValue": "비상장주식담보대출",
+          "index": 4,
+          "expectedOutcome": {
+            "type": "Unspecified",
+            "messagePatterns": [],
+            "errorCodes": [],
+            "queryShouldComplete": null,
+            "source": "Unspecified",
+            "confidence": "Unspecified",
+            "evidence": []
+          }
+        },
+        {
+          "id": "code-06",
+          "value": "06",
+          "displayValue": "채권담보대출",
+          "index": 5,
+          "expectedOutcome": {
+            "type": "Unspecified",
+            "messagePatterns": [],
+            "errorCodes": [],
+            "queryShouldComplete": null,
+            "source": "Unspecified",
+            "confidence": "Unspecified",
+            "evidence": []
+          }
+        },
+        {
+          "id": "code-07",
+          "value": "07",
+          "displayValue": "ELS/DLS담보대출",
+          "index": 6,
+          "expectedOutcome": {
+            "type": "Unspecified",
+            "messagePatterns": [],
+            "errorCodes": [],
+            "queryShouldComplete": null,
+            "source": "Unspecified",
+            "confidence": "Unspecified",
+            "evidence": []
+          }
+        },
+        {
+          "id": "code-08",
+          "value": "08",
+          "displayValue": "집합투자증권담보대출",
+          "index": 7,
+          "expectedOutcome": {
+            "type": "Unspecified",
+            "messagePatterns": [],
+            "errorCodes": [],
+            "queryShouldComplete": null,
+            "source": "Unspecified",
+            "confidence": "Unspecified",
+            "evidence": []
+          }
+        },
+        {
+          "id": "code-09",
+          "value": "09",
+          "displayValue": "매도담보대출",
+          "index": 8,
+          "expectedOutcome": {
+            "type": "Unspecified",
+            "messagePatterns": [],
+            "errorCodes": [],
+            "queryShouldComplete": null,
+            "source": "Unspecified",
+            "confidence": "Unspecified",
+            "evidence": []
+          }
+        },
+        {
+          "id": "code-10",
+          "value": "10",
+          "displayValue": "청약자금대출",
+          "index": 9,
+          "expectedOutcome": {
+            "type": "Unspecified",
+            "messagePatterns": [],
+            "errorCodes": [],
+            "queryShouldComplete": null,
+            "source": "Unspecified",
+            "confidence": "Unspecified",
+            "evidence": []
+          }
+        }
+      ]
+    }
+  ],
+  "resultCodeDictionaries": [
+    {
+      "screenNumber": "0712",
+      "usage": "ResultCodeDictionary",
+      "section": "통신주문구분코드",
+      "boundControl": "",
+      "sourceFile": "data/empcommon.ini",
+      "options": [
+        {
+          "id": "code-00",
+          "value": "00",
+          "displayValue": "일반",
+          "index": 0,
+          "expectedOutcome": {
+            "type": "Unspecified",
+            "messagePatterns": [],
+            "errorCodes": [],
+            "queryShouldComplete": null,
+            "source": "Unspecified",
+            "confidence": "Unspecified",
+            "evidence": []
+          }
+        },
+        {
+          "id": "code-01",
+          "value": "01",
+          "displayValue": "오토지점",
+          "index": 1,
+          "expectedOutcome": {
+            "type": "Unspecified",
+            "messagePatterns": [],
+            "errorCodes": [],
+            "queryShouldComplete": null,
+            "source": "Unspecified",
+            "confidence": "Unspecified",
+            "evidence": []
+          }
+        },
+        {
+          "id": "code-10",
+          "value": "10",
+          "displayValue": "HTS(고객)",
+          "index": 2,
+          "expectedOutcome": {
+            "type": "Unspecified",
+            "messagePatterns": [],
+            "errorCodes": [],
+            "queryShouldComplete": null,
+            "source": "Unspecified",
+            "confidence": "Unspecified",
+            "evidence": []
+          }
+        },
+        {
+          "id": "code-11",
+          "value": "11",
+          "displayValue": "ARS",
+          "index": 3,
+          "expectedOutcome": {
+            "type": "Unspecified",
+            "messagePatterns": [],
+            "errorCodes": [],
+            "queryShouldComplete": null,
+            "source": "Unspecified",
+            "confidence": "Unspecified",
+            "evidence": []
+          }
+        },
+        {
+          "id": "code-12",
+          "value": "12",
+          "displayValue": "아이폰",
+          "index": 4,
+          "expectedOutcome": {
+            "type": "Unspecified",
+            "messagePatterns": [],
+            "errorCodes": [],
+            "queryShouldComplete": null,
+            "source": "Unspecified",
+            "confidence": "Unspecified",
+            "evidence": []
+          }
+        },
+        {
+          "id": "code-13",
+          "value": "13",
+          "displayValue": "안드로이드",
+          "index": 5,
+          "expectedOutcome": {
+            "type": "Unspecified",
+            "messagePatterns": [],
+            "errorCodes": [],
+            "queryShouldComplete": null,
+            "source": "Unspecified",
+            "confidence": "Unspecified",
+            "evidence": []
+          }
+        },
+        {
+          "id": "code-14",
+          "value": "14",
+          "displayValue": "SKT",
+          "index": 6,
+          "expectedOutcome": {
+            "type": "Unspecified",
+            "messagePatterns": [],
+            "errorCodes": [],
+            "queryShouldComplete": null,
+            "source": "Unspecified",
+            "confidence": "Unspecified",
+            "evidence": []
+          }
+        },
+        {
+          "id": "code-15",
+          "value": "15",
+          "displayValue": "KTF",
+          "index": 7,
+          "expectedOutcome": {
+            "type": "Unspecified",
+            "messagePatterns": [],
+            "errorCodes": [],
+            "queryShouldComplete": null,
+            "source": "Unspecified",
+            "confidence": "Unspecified",
+            "evidence": []
+          }
+        },
+        {
+          "id": "code-16",
+          "value": "16",
+          "displayValue": "LGT",
+          "index": 8,
+          "expectedOutcome": {
+            "type": "Unspecified",
+            "messagePatterns": [],
+            "errorCodes": [],
+            "queryShouldComplete": null,
+            "source": "Unspecified",
+            "confidence": "Unspecified",
+            "evidence": []
+          }
+        },
+        {
+          "id": "code-17",
+          "value": "17",
+          "displayValue": "PDA",
+          "index": 9,
+          "expectedOutcome": {
+            "type": "Unspecified",
+            "messagePatterns": [],
+            "errorCodes": [],
+            "queryShouldComplete": null,
+            "source": "Unspecified",
+            "confidence": "Unspecified",
+            "evidence": []
+          }
+        },
+        {
+          "id": "code-18",
+          "value": "18",
+          "displayValue": "HTS(FOtrade)",
+          "index": 10,
+          "expectedOutcome": {
+            "type": "Unspecified",
+            "messagePatterns": [],
+            "errorCodes": [],
+            "queryShouldComplete": null,
+            "source": "Unspecified",
+            "confidence": "Unspecified",
+            "evidence": []
+          }
+        },
+        {
+          "id": "code-19",
+          "value": "19",
+          "displayValue": "GTS(CME)",
+          "index": 11,
+          "expectedOutcome": {
+            "type": "Unspecified",
+            "messagePatterns": [],
+            "errorCodes": [],
+            "queryShouldComplete": null,
+            "source": "Unspecified",
+            "confidence": "Unspecified",
+            "evidence": []
+          }
+        },
+        {
+          "id": "code-1A",
+          "value": "1A",
+          "displayValue": "한경TV",
+          "index": 12,
+          "expectedOutcome": {
+            "type": "Unspecified",
+            "messagePatterns": [],
+            "errorCodes": [],
+            "queryShouldComplete": null,
+            "source": "Unspecified",
+            "confidence": "Unspecified",
+            "evidence": []
+          }
+        },
+        {
+          "id": "code-1B",
+          "value": "1B",
+          "displayValue": "증권통",
+          "index": 13,
+          "expectedOutcome": {
+            "type": "Unspecified",
+            "messagePatterns": [],
+            "errorCodes": [],
+            "queryShouldComplete": null,
+            "source": "Unspecified",
+            "confidence": "Unspecified",
+            "evidence": []
+          }
+        },
+        {
+          "id": "code-1C",
+          "value": "1C",
+          "displayValue": "증권통RMS",
+          "index": 14,
+          "expectedOutcome": {
+            "type": "Unspecified",
+            "messagePatterns": [],
+            "errorCodes": [],
+            "queryShouldComplete": null,
+            "source": "Unspecified",
+            "confidence": "Unspecified",
+            "evidence": []
+          }
+        },
+        {
+          "id": "code-1D",
+          "value": "1D",
+          "displayValue": "스마트폰ASP",
+          "index": 15,
+          "expectedOutcome": {
+            "type": "Unspecified",
+            "messagePatterns": [],
+            "errorCodes": [],
+            "queryShouldComplete": null,
+            "source": "Unspecified",
+            "confidence": "Unspecified",
+            "evidence": []
+          }
+        },
+        {
+          "id": "code-1E",
+          "value": "1E",
+          "displayValue": "고수로",
+          "index": 16,
+          "expectedOutcome": {
+            "type": "Unspecified",
+            "messagePatterns": [],
+            "errorCodes": [],
+            "queryShouldComplete": null,
+            "source": "Unspecified",
+            "confidence": "Unspecified",
+            "evidence": []
+          }
+        },
+        {
+          "id": "code-1F",
+          "value": "1F",
+          "displayValue": "MP트레블러",
+          "index": 17,
+          "expectedOutcome": {
+            "type": "Unspecified",
+            "messagePatterns": [],
+            "errorCodes": [],
+            "queryShouldComplete": null,
+            "source": "Unspecified",
+            "confidence": "Unspecified",
+            "evidence": []
+          }
+        },
+        {
+          "id": "code-1G",
+          "value": "1G",
+          "displayValue": "아이폰2",
+          "index": 18,
+          "expectedOutcome": {
+            "type": "Unspecified",
+            "messagePatterns": [],
+            "errorCodes": [],
+            "queryShouldComplete": null,
+            "source": "Unspecified",
+            "confidence": "Unspecified",
+            "evidence": []
+          }
+        },
+        {
+          "id": "code-1H",
+          "value": "1H",
+          "displayValue": "안드로이드2",
+          "index": 19,
+          "expectedOutcome": {
+            "type": "Unspecified",
+            "messagePatterns": [],
+            "errorCodes": [],
+            "queryShouldComplete": null,
+            "source": "Unspecified",
+            "confidence": "Unspecified",
+            "evidence": []
+          }
+        },
+        {
+          "id": "code-1I",
+          "value": "1I",
+          "displayValue": "주식창App",
+          "index": 20,
+          "expectedOutcome": {
+            "type": "Unspecified",
+            "messagePatterns": [],
+            "errorCodes": [],
+            "queryShouldComplete": null,
+            "source": "Unspecified",
+            "confidence": "Unspecified",
+            "evidence": []
+          }
+        },
+        {
+          "id": "code-1J",
+          "value": "1J",
+          "displayValue": "HTS(Hi-Speed)",
+          "index": 21,
+          "expectedOutcome": {
+            "type": "Unspecified",
+            "messagePatterns": [],
+            "errorCodes": [],
+            "queryShouldComplete": null,
+            "source": "Unspecified",
+            "confidence": "Unspecified",
+            "evidence": []
+          }
+        },
+        {
+          "id": "code-1Y",
+          "value": "1Y",
+          "displayValue": "특화주문II(미니원장)",
+          "index": 22,
+          "expectedOutcome": {
+            "type": "Unspecified",
+            "messagePatterns": [],
+            "errorCodes": [],
+            "queryShouldComplete": null,
+            "source": "Unspecified",
+            "confidence": "Unspecified",
+            "evidence": []
+          }
+        },
+        {
+          "id": "code-20",
+          "value": "20",
+          "displayValue": "콜센터",
+          "index": 23,
+          "expectedOutcome": {
+            "type": "Unspecified",
+            "messagePatterns": [],
+            "errorCodes": [],
+            "queryShouldComplete": null,
+            "source": "Unspecified",
+            "confidence": "Unspecified",
+            "evidence": []
+          }
+        },
+        {
+          "id": "code-30",
+          "value": "30",
+          "displayValue": "오토고객",
+          "index": 24,
+          "expectedOutcome": {
+            "type": "Unspecified",
+            "messagePatterns": [],
+            "errorCodes": [],
+            "queryShouldComplete": null,
+            "source": "Unspecified",
+            "confidence": "Unspecified",
+            "evidence": []
+          }
+        },
+        {
+          "id": "code-50",
+          "value": "50",
+          "displayValue": "프로그램매매",
+          "index": 25,
+          "expectedOutcome": {
+            "type": "Unspecified",
+            "messagePatterns": [],
+            "errorCodes": [],
+            "queryShouldComplete": null,
+            "source": "Unspecified",
+            "confidence": "Unspecified",
+            "evidence": []
+          }
+        },
+        {
+          "id": "code-60",
+          "value": "60",
+          "displayValue": "Exture+",
+          "index": 26,
+          "expectedOutcome": {
+            "type": "Unspecified",
+            "messagePatterns": [],
+            "errorCodes": [],
+            "queryShouldComplete": null,
+            "source": "Unspecified",
+            "confidence": "Unspecified",
+            "evidence": []
+          }
+        },
+        {
+          "id": "code-88",
+          "value": "88",
+          "displayValue": "사이버",
+          "index": 27,
+          "expectedOutcome": {
+            "type": "Unspecified",
+            "messagePatterns": [],
+            "errorCodes": [],
+            "queryShouldComplete": null,
+            "source": "Unspecified",
+            "confidence": "Unspecified",
+            "evidence": []
+          }
+        },
+        {
+          "id": "code-99",
+          "value": "99",
+          "displayValue": "오프라인(일반+콜센터)",
+          "index": 28,
+          "expectedOutcome": {
+            "type": "Unspecified",
+            "messagePatterns": [],
+            "errorCodes": [],
+            "queryShouldComplete": null,
+            "source": "Unspecified",
+            "confidence": "Unspecified",
+            "evidence": []
+          }
+        },
+        {
+          "id": "code-ZZ",
+          "value": "ZZ",
+          "displayValue": "전체",
+          "index": 29,
+          "expectedOutcome": {
+            "type": "Unspecified",
+            "messagePatterns": [],
+            "errorCodes": [],
+            "queryShouldComplete": null,
+            "source": "Unspecified",
+            "confidence": "Unspecified",
+            "evidence": []
+          }
+        }
+      ]
+    },
+    {
+      "screenNumber": "0720",
+      "usage": "ResultCodeDictionary",
+      "section": "신용공여구분코드",
+      "boundControl": "",
+      "sourceFile": "data/empcommon.ini",
+      "options": [
+        {
+          "id": "code-01",
+          "value": "01",
+          "displayValue": "신용거래융자",
+          "index": 0,
+          "expectedOutcome": {
+            "type": "Unspecified",
+            "messagePatterns": [],
+            "errorCodes": [],
+            "queryShouldComplete": null,
+            "source": "Unspecified",
+            "confidence": "Unspecified",
+            "evidence": []
+          }
+        },
+        {
+          "id": "code-02",
+          "value": "02",
+          "displayValue": "신용거래대주",
+          "index": 1,
+          "expectedOutcome": {
+            "type": "Unspecified",
+            "messagePatterns": [],
+            "errorCodes": [],
+            "queryShouldComplete": null,
+            "source": "Unspecified",
+            "confidence": "Unspecified",
+            "evidence": []
+          }
+        },
+        {
+          "id": "code-03",
+          "value": "03",
+          "displayValue": "주식담보대출",
+          "index": 2,
+          "expectedOutcome": {
+            "type": "Unspecified",
+            "messagePatterns": [],
+            "errorCodes": [],
+            "queryShouldComplete": null,
+            "source": "Unspecified",
+            "confidence": "Unspecified",
+            "evidence": []
+          }
+        },
+        {
+          "id": "code-04",
+          "value": "04",
+          "displayValue": "해외주식담보대출",
+          "index": 3,
+          "expectedOutcome": {
+            "type": "Unspecified",
+            "messagePatterns": [],
+            "errorCodes": [],
+            "queryShouldComplete": null,
+            "source": "Unspecified",
+            "confidence": "Unspecified",
+            "evidence": []
+          }
+        },
+        {
+          "id": "code-05",
+          "value": "05",
+          "displayValue": "비상장주식담보대출",
+          "index": 4,
+          "expectedOutcome": {
+            "type": "Unspecified",
+            "messagePatterns": [],
+            "errorCodes": [],
+            "queryShouldComplete": null,
+            "source": "Unspecified",
+            "confidence": "Unspecified",
+            "evidence": []
+          }
+        },
+        {
+          "id": "code-06",
+          "value": "06",
+          "displayValue": "채권담보대출",
+          "index": 5,
+          "expectedOutcome": {
+            "type": "Unspecified",
+            "messagePatterns": [],
+            "errorCodes": [],
+            "queryShouldComplete": null,
+            "source": "Unspecified",
+            "confidence": "Unspecified",
+            "evidence": []
+          }
+        },
+        {
+          "id": "code-07",
+          "value": "07",
+          "displayValue": "ELS/DLS담보대출",
+          "index": 6,
+          "expectedOutcome": {
+            "type": "Unspecified",
+            "messagePatterns": [],
+            "errorCodes": [],
+            "queryShouldComplete": null,
+            "source": "Unspecified",
+            "confidence": "Unspecified",
+            "evidence": []
+          }
+        },
+        {
+          "id": "code-08",
+          "value": "08",
+          "displayValue": "집합투자증권담보대출",
+          "index": 7,
+          "expectedOutcome": {
+            "type": "Unspecified",
+            "messagePatterns": [],
+            "errorCodes": [],
+            "queryShouldComplete": null,
+            "source": "Unspecified",
+            "confidence": "Unspecified",
+            "evidence": []
+          }
+        },
+        {
+          "id": "code-09",
+          "value": "09",
+          "displayValue": "매도담보대출",
+          "index": 8,
+          "expectedOutcome": {
+            "type": "Unspecified",
+            "messagePatterns": [],
+            "errorCodes": [],
+            "queryShouldComplete": null,
+            "source": "Unspecified",
+            "confidence": "Unspecified",
+            "evidence": []
+          }
+        },
+        {
+          "id": "code-10",
+          "value": "10",
+          "displayValue": "청약자금대출",
+          "index": 9,
+          "expectedOutcome": {
+            "type": "Unspecified",
+            "messagePatterns": [],
+            "errorCodes": [],
+            "queryShouldComplete": null,
+            "source": "Unspecified",
+            "confidence": "Unspecified",
+            "evidence": []
+          }
+        }
+      ]
+    },
+    {
+      "screenNumber": "0723",
+      "usage": "ResultCodeDictionary",
+      "section": "신용공여구분코드",
+      "boundControl": "",
+      "sourceFile": "data/empcommon.ini",
+      "options": [
+        {
+          "id": "code-01",
+          "value": "01",
+          "displayValue": "신용거래융자",
+          "index": 0,
+          "expectedOutcome": {
+            "type": "Unspecified",
+            "messagePatterns": [],
+            "errorCodes": [],
+            "queryShouldComplete": null,
+            "source": "Unspecified",
+            "confidence": "Unspecified",
+            "evidence": []
+          }
+        },
+        {
+          "id": "code-02",
+          "value": "02",
+          "displayValue": "신용거래대주",
+          "index": 1,
+          "expectedOutcome": {
+            "type": "Unspecified",
+            "messagePatterns": [],
+            "errorCodes": [],
+            "queryShouldComplete": null,
+            "source": "Unspecified",
+            "confidence": "Unspecified",
+            "evidence": []
+          }
+        },
+        {
+          "id": "code-03",
+          "value": "03",
+          "displayValue": "주식담보대출",
+          "index": 2,
+          "expectedOutcome": {
+            "type": "Unspecified",
+            "messagePatterns": [],
+            "errorCodes": [],
+            "queryShouldComplete": null,
+            "source": "Unspecified",
+            "confidence": "Unspecified",
+            "evidence": []
+          }
+        },
+        {
+          "id": "code-04",
+          "value": "04",
+          "displayValue": "해외주식담보대출",
+          "index": 3,
+          "expectedOutcome": {
+            "type": "Unspecified",
+            "messagePatterns": [],
+            "errorCodes": [],
+            "queryShouldComplete": null,
+            "source": "Unspecified",
+            "confidence": "Unspecified",
+            "evidence": []
+          }
+        },
+        {
+          "id": "code-05",
+          "value": "05",
+          "displayValue": "비상장주식담보대출",
+          "index": 4,
+          "expectedOutcome": {
+            "type": "Unspecified",
+            "messagePatterns": [],
+            "errorCodes": [],
+            "queryShouldComplete": null,
+            "source": "Unspecified",
+            "confidence": "Unspecified",
+            "evidence": []
+          }
+        },
+        {
+          "id": "code-06",
+          "value": "06",
+          "displayValue": "채권담보대출",
+          "index": 5,
+          "expectedOutcome": {
+            "type": "Unspecified",
+            "messagePatterns": [],
+            "errorCodes": [],
+            "queryShouldComplete": null,
+            "source": "Unspecified",
+            "confidence": "Unspecified",
+            "evidence": []
+          }
+        },
+        {
+          "id": "code-07",
+          "value": "07",
+          "displayValue": "ELS/DLS담보대출",
+          "index": 6,
+          "expectedOutcome": {
+            "type": "Unspecified",
+            "messagePatterns": [],
+            "errorCodes": [],
+            "queryShouldComplete": null,
+            "source": "Unspecified",
+            "confidence": "Unspecified",
+            "evidence": []
+          }
+        },
+        {
+          "id": "code-08",
+          "value": "08",
+          "displayValue": "집합투자증권담보대출",
+          "index": 7,
+          "expectedOutcome": {
+            "type": "Unspecified",
+            "messagePatterns": [],
+            "errorCodes": [],
+            "queryShouldComplete": null,
+            "source": "Unspecified",
+            "confidence": "Unspecified",
+            "evidence": []
+          }
+        },
+        {
+          "id": "code-09",
+          "value": "09",
+          "displayValue": "매도담보대출",
+          "index": 8,
+          "expectedOutcome": {
+            "type": "Unspecified",
+            "messagePatterns": [],
+            "errorCodes": [],
+            "queryShouldComplete": null,
+            "source": "Unspecified",
+            "confidence": "Unspecified",
+            "evidence": []
+          }
+        },
+        {
+          "id": "code-10",
+          "value": "10",
+          "displayValue": "청약자금대출",
+          "index": 9,
+          "expectedOutcome": {
+            "type": "Unspecified",
+            "messagePatterns": [],
+            "errorCodes": [],
+            "queryShouldComplete": null,
+            "source": "Unspecified",
+            "confidence": "Unspecified",
+            "evidence": []
+          }
+        }
+      ]
+    },
+    {
+      "screenNumber": "0725",
+      "usage": "ResultCodeDictionary",
+      "section": "반대매매사유구분코드",
+      "boundControl": "",
+      "sourceFile": "data/empcommon.ini",
+      "options": [
+        {
+          "id": "code-01",
+          "value": "01",
+          "displayValue": "현금미수",
+          "index": 0,
+          "expectedOutcome": {
+            "type": "Unspecified",
+            "messagePatterns": [],
+            "errorCodes": [],
+            "queryShouldComplete": null,
+            "source": "Unspecified",
+            "confidence": "Unspecified",
+            "evidence": []
+          }
+        },
+        {
+          "id": "code-02",
+          "value": "02",
+          "displayValue": "신용담보부족",
+          "index": 1,
+          "expectedOutcome": {
+            "type": "Unspecified",
+            "messagePatterns": [],
+            "errorCodes": [],
+            "queryShouldComplete": null,
+            "source": "Unspecified",
+            "confidence": "Unspecified",
+            "evidence": []
+          }
+        },
+        {
+          "id": "code-03",
+          "value": "03",
+          "displayValue": "만기미상환",
+          "index": 2,
+          "expectedOutcome": {
+            "type": "Unspecified",
+            "messagePatterns": [],
+            "errorCodes": [],
+            "queryShouldComplete": null,
+            "source": "Unspecified",
+            "confidence": "Unspecified",
+            "evidence": []
+          }
+        },
+        {
+          "id": "code-04",
+          "value": "04",
+          "displayValue": "미수유가증권",
+          "index": 3,
+          "expectedOutcome": {
+            "type": "Unspecified",
+            "messagePatterns": [],
+            "errorCodes": [],
+            "queryShouldComplete": null,
+            "source": "Unspecified",
+            "confidence": "Unspecified",
+            "evidence": []
+          }
+        },
+        {
+          "id": "code-05",
+          "value": "05",
+          "displayValue": "대차담보부족",
+          "index": 4,
+          "expectedOutcome": {
+            "type": "Unspecified",
+            "messagePatterns": [],
+            "errorCodes": [],
+            "queryShouldComplete": null,
+            "source": "Unspecified",
+            "confidence": "Unspecified",
+            "evidence": []
+          }
+        },
+        {
+          "id": "code-06",
+          "value": "06",
+          "displayValue": "대차만기미상환",
+          "index": 5,
+          "expectedOutcome": {
+            "type": "Unspecified",
+            "messagePatterns": [],
+            "errorCodes": [],
+            "queryShouldComplete": null,
+            "source": "Unspecified",
+            "confidence": "Unspecified",
+            "evidence": []
+          }
+        },
+        {
+          "id": "code-07",
+          "value": "07",
+          "displayValue": "대차권리미반환",
+          "index": 6,
+          "expectedOutcome": {
+            "type": "Unspecified",
+            "messagePatterns": [],
+            "errorCodes": [],
+            "queryShouldComplete": null,
+            "source": "Unspecified",
+            "confidence": "Unspecified",
+            "evidence": []
+          }
+        },
+        {
+          "id": "code-08",
+          "value": "08",
+          "displayValue": "대차중개풀수량부족",
+          "index": 7,
+          "expectedOutcome": {
+            "type": "Unspecified",
+            "messagePatterns": [],
+            "errorCodes": [],
+            "queryShouldComplete": null,
+            "source": "Unspecified",
+            "confidence": "Unspecified",
+            "evidence": []
+          }
+        }
+      ]
+    },
+    {
+      "screenNumber": "0725",
+      "usage": "ResultCodeDictionary",
+      "section": "신용거래구분코드",
+      "boundControl": "",
+      "sourceFile": "data/empcommon.ini",
+      "options": [
+        {
+          "id": "code-00",
+          "value": "00",
+          "displayValue": "보통매매",
+          "index": 0,
+          "expectedOutcome": {
+            "type": "Unspecified",
+            "messagePatterns": [],
+            "errorCodes": [],
+            "queryShouldComplete": null,
+            "source": "Unspecified",
+            "confidence": "Unspecified",
+            "evidence": []
+          }
+        },
+        {
+          "id": "code-01",
+          "value": "01",
+          "displayValue": "유통융자매수",
+          "index": 1,
+          "expectedOutcome": {
+            "type": "Unspecified",
+            "messagePatterns": [],
+            "errorCodes": [],
+            "queryShouldComplete": null,
+            "source": "Unspecified",
+            "confidence": "Unspecified",
+            "evidence": []
+          }
+        },
+        {
+          "id": "code-03",
+          "value": "03",
+          "displayValue": "자기융자매수",
+          "index": 2,
+          "expectedOutcome": {
+            "type": "Unspecified",
+            "messagePatterns": [],
+            "errorCodes": [],
+            "queryShouldComplete": null,
+            "source": "Unspecified",
+            "confidence": "Unspecified",
+            "evidence": []
+          }
+        },
+        {
+          "id": "code-04",
+          "value": "04",
+          "displayValue": "유통차입매도",
+          "index": 3,
+          "expectedOutcome": {
+            "type": "Unspecified",
+            "messagePatterns": [],
+            "errorCodes": [],
+            "queryShouldComplete": null,
+            "source": "Unspecified",
+            "confidence": "Unspecified",
+            "evidence": []
+          }
+        },
+        {
+          "id": "code-05",
+          "value": "05",
+          "displayValue": "유통대주매도",
+          "index": 4,
+          "expectedOutcome": {
+            "type": "Unspecified",
+            "messagePatterns": [],
+            "errorCodes": [],
+            "queryShouldComplete": null,
+            "source": "Unspecified",
+            "confidence": "Unspecified",
+            "evidence": []
+          }
+        },
+        {
+          "id": "code-06",
+          "value": "06",
+          "displayValue": "대용융자매수",
+          "index": 5,
+          "expectedOutcome": {
+            "type": "Unspecified",
+            "messagePatterns": [],
+            "errorCodes": [],
+            "queryShouldComplete": null,
+            "source": "Unspecified",
+            "confidence": "Unspecified",
+            "evidence": []
+          }
+        },
+        {
+          "id": "code-07",
+          "value": "07",
+          "displayValue": "자기대주매도",
+          "index": 6,
+          "expectedOutcome": {
+            "type": "Unspecified",
+            "messagePatterns": [],
+            "errorCodes": [],
+            "queryShouldComplete": null,
+            "source": "Unspecified",
+            "confidence": "Unspecified",
+            "evidence": []
+          }
+        },
+        {
+          "id": "code-08",
+          "value": "08",
+          "displayValue": "예탁담보대출",
+          "index": 7,
+          "expectedOutcome": {
+            "type": "Unspecified",
+            "messagePatterns": [],
+            "errorCodes": [],
+            "queryShouldComplete": null,
+            "source": "Unspecified",
+            "confidence": "Unspecified",
+            "evidence": []
+          }
+        },
+        {
+          "id": "code-09",
+          "value": "09",
+          "displayValue": "공모주대출",
+          "index": 8,
+          "expectedOutcome": {
+            "type": "Unspecified",
+            "messagePatterns": [],
+            "errorCodes": [],
+            "queryShouldComplete": null,
+            "source": "Unspecified",
+            "confidence": "Unspecified",
+            "evidence": []
+          }
+        },
+        {
+          "id": "code-11",
+          "value": "11",
+          "displayValue": "유통융자매도상환",
+          "index": 9,
+          "expectedOutcome": {
+            "type": "Unspecified",
+            "messagePatterns": [],
+            "errorCodes": [],
+            "queryShouldComplete": null,
+            "source": "Unspecified",
+            "confidence": "Unspecified",
+            "evidence": []
+          }
+        },
+        {
+          "id": "code-12",
+          "value": "12",
+          "displayValue": "유통융자현금상환",
+          "index": 10,
+          "expectedOutcome": {
+            "type": "Unspecified",
+            "messagePatterns": [],
+            "errorCodes": [],
+            "queryShouldComplete": null,
+            "source": "Unspecified",
+            "confidence": "Unspecified",
+            "evidence": []
+          }
+        },
+        {
+          "id": "code-13",
+          "value": "13",
+          "displayValue": "유통융자현금상환취소",
+          "index": 11,
+          "expectedOutcome": {
+            "type": "Unspecified",
+            "messagePatterns": [],
+            "errorCodes": [],
+            "queryShouldComplete": null,
+            "source": "Unspecified",
+            "confidence": "Unspecified",
+            "evidence": []
+          }
+        },
+        {
+          "id": "code-33",
+          "value": "33",
+          "displayValue": "자기융자매도상환",
+          "index": 12,
+          "expectedOutcome": {
+            "type": "Unspecified",
+            "messagePatterns": [],
+            "errorCodes": [],
+            "queryShouldComplete": null,
+            "source": "Unspecified",
+            "confidence": "Unspecified",
+            "evidence": []
+          }
+        },
+        {
+          "id": "code-34",
+          "value": "34",
+          "displayValue": "자기융자현금상환",
+          "index": 13,
+          "expectedOutcome": {
+            "type": "Unspecified",
+            "messagePatterns": [],
+            "errorCodes": [],
+            "queryShouldComplete": null,
+            "source": "Unspecified",
+            "confidence": "Unspecified",
+            "evidence": []
+          }
+        },
+        {
+          "id": "code-35",
+          "value": "35",
+          "displayValue": "자기융자현금상환취소",
+          "index": 14,
+          "expectedOutcome": {
+            "type": "Unspecified",
+            "messagePatterns": [],
+            "errorCodes": [],
+            "queryShouldComplete": null,
+            "source": "Unspecified",
+            "confidence": "Unspecified",
+            "evidence": []
+          }
+        },
+        {
+          "id": "code-44",
+          "value": "44",
+          "displayValue": "유통차입매수상환",
+          "index": 15,
+          "expectedOutcome": {
+            "type": "Unspecified",
+            "messagePatterns": [],
+            "errorCodes": [],
+            "queryShouldComplete": null,
+            "source": "Unspecified",
+            "confidence": "Unspecified",
+            "evidence": []
+          }
+        },
+        {
+          "id": "code-45",
+          "value": "45",
+          "displayValue": "유통차입현물상환",
+          "index": 16,
+          "expectedOutcome": {
+            "type": "Unspecified",
+            "messagePatterns": [],
+            "errorCodes": [],
+            "queryShouldComplete": null,
+            "source": "Unspecified",
+            "confidence": "Unspecified",
+            "evidence": []
+          }
+        },
+        {
+          "id": "code-55",
+          "value": "55",
+          "displayValue": "유통대주매수상환",
+          "index": 17,
+          "expectedOutcome": {
+            "type": "Unspecified",
+            "messagePatterns": [],
+            "errorCodes": [],
+            "queryShouldComplete": null,
+            "source": "Unspecified",
+            "confidence": "Unspecified",
+            "evidence": []
+          }
+        },
+        {
+          "id": "code-56",
+          "value": "56",
+          "displayValue": "유통대주현물상환",
+          "index": 18,
+          "expectedOutcome": {
+            "type": "Unspecified",
+            "messagePatterns": [],
+            "errorCodes": [],
+            "queryShouldComplete": null,
+            "source": "Unspecified",
+            "confidence": "Unspecified",
+            "evidence": []
+          }
+        },
+        {
+          "id": "code-57",
+          "value": "57",
+          "displayValue": "유통대주현물상환취소",
+          "index": 19,
+          "expectedOutcome": {
+            "type": "Unspecified",
+            "messagePatterns": [],
+            "errorCodes": [],
+            "queryShouldComplete": null,
+            "source": "Unspecified",
+            "confidence": "Unspecified",
+            "evidence": []
+          }
+        },
+        {
+          "id": "code-66",
+          "value": "66",
+          "displayValue": "대용융자매도상환",
+          "index": 20,
+          "expectedOutcome": {
+            "type": "Unspecified",
+            "messagePatterns": [],
+            "errorCodes": [],
+            "queryShouldComplete": null,
+            "source": "Unspecified",
+            "confidence": "Unspecified",
+            "evidence": []
+          }
+        },
+        {
+          "id": "code-67",
+          "value": "67",
+          "displayValue": "대용융자현금상환",
+          "index": 21,
+          "expectedOutcome": {
+            "type": "Unspecified",
+            "messagePatterns": [],
+            "errorCodes": [],
+            "queryShouldComplete": null,
+            "source": "Unspecified",
+            "confidence": "Unspecified",
+            "evidence": []
+          }
+        },
+        {
+          "id": "code-68",
+          "value": "68",
+          "displayValue": "신용이자",
+          "index": 22,
+          "expectedOutcome": {
+            "type": "Unspecified",
+            "messagePatterns": [],
+            "errorCodes": [],
+            "queryShouldComplete": null,
+            "source": "Unspecified",
+            "confidence": "Unspecified",
+            "evidence": []
+          }
+        },
+        {
+          "id": "code-69",
+          "value": "69",
+          "displayValue": "대주이용료",
+          "index": 23,
+          "expectedOutcome": {
+            "type": "Unspecified",
+            "messagePatterns": [],
+            "errorCodes": [],
+            "queryShouldComplete": null,
+            "source": "Unspecified",
+            "confidence": "Unspecified",
+            "evidence": []
+          }
+        },
+        {
+          "id": "code-77",
+          "value": "77",
+          "displayValue": "자기대주매수상환",
+          "index": 24,
+          "expectedOutcome": {
+            "type": "Unspecified",
+            "messagePatterns": [],
+            "errorCodes": [],
+            "queryShouldComplete": null,
+            "source": "Unspecified",
+            "confidence": "Unspecified",
+            "evidence": []
+          }
+        },
+        {
+          "id": "code-78",
+          "value": "78",
+          "displayValue": "자기대주현물상환",
+          "index": 25,
+          "expectedOutcome": {
+            "type": "Unspecified",
+            "messagePatterns": [],
+            "errorCodes": [],
+            "queryShouldComplete": null,
+            "source": "Unspecified",
+            "confidence": "Unspecified",
+            "evidence": []
+          }
+        },
+        {
+          "id": "code-79",
+          "value": "79",
+          "displayValue": "자기대주현물상환취소",
+          "index": 26,
+          "expectedOutcome": {
+            "type": "Unspecified",
+            "messagePatterns": [],
+            "errorCodes": [],
+            "queryShouldComplete": null,
+            "source": "Unspecified",
+            "confidence": "Unspecified",
+            "evidence": []
+          }
+        },
+        {
+          "id": "code-88",
+          "value": "88",
+          "displayValue": "예탁담보대출매도상환",
+          "index": 27,
+          "expectedOutcome": {
+            "type": "Unspecified",
+            "messagePatterns": [],
+            "errorCodes": [],
+            "queryShouldComplete": null,
+            "source": "Unspecified",
+            "confidence": "Unspecified",
+            "evidence": []
+          }
+        },
+        {
+          "id": "code-89",
+          "value": "89",
+          "displayValue": "예탁담보대출현금상환",
+          "index": 28,
+          "expectedOutcome": {
+            "type": "Unspecified",
+            "messagePatterns": [],
+            "errorCodes": [],
+            "queryShouldComplete": null,
+            "source": "Unspecified",
+            "confidence": "Unspecified",
+            "evidence": []
+          }
+        },
+        {
+          "id": "code-99",
+          "value": "99",
+          "displayValue": "공모주대출상환",
+          "index": 29,
+          "expectedOutcome": {
+            "type": "Unspecified",
+            "messagePatterns": [],
+            "errorCodes": [],
+            "queryShouldComplete": null,
+            "source": "Unspecified",
+            "confidence": "Unspecified",
+            "evidence": []
+          }
+        }
+      ]
+    }
+  ],
+  "instrumentMasters": [
+    {
+      "id": "KRX_STOCK",
+      "purpose": "KRX 주식 종목 입력값",
+      "relativePath": "mst/stkcode.cod",
+      "recordCount": 4293,
+      "integrityStatus": "MATCH",
+      "samples": [
+        {
+          "code": "000020",
+          "name": "동화약품",
+          "market": "KRX",
+          "expectedOutcome": {
+            "type": "Success",
+            "messagePatterns": [],
+            "errorCodes": [],
+            "queryShouldComplete": true,
+            "source": "InstallationMaster",
+            "confidence": "High",
+            "evidence": [
+              "HTS 설치 종목 마스터: KRX_STOCK"
+            ]
+          }
+        },
+        {
+          "code": "000040",
+          "name": "KR모터스",
+          "market": "KRX",
+          "expectedOutcome": {
+            "type": "Success",
+            "messagePatterns": [],
+            "errorCodes": [],
+            "queryShouldComplete": true,
+            "source": "InstallationMaster",
+            "confidence": "High",
+            "evidence": [
+              "HTS 설치 종목 마스터: KRX_STOCK"
+            ]
+          }
+        },
+        {
+          "code": "000050",
+          "name": "경방",
+          "market": "KRX",
+          "expectedOutcome": {
+            "type": "Success",
+            "messagePatterns": [],
+            "errorCodes": [],
+            "queryShouldComplete": true,
+            "source": "InstallationMaster",
+            "confidence": "High",
+            "evidence": [
+              "HTS 설치 종목 마스터: KRX_STOCK"
+            ]
+          }
+        },
+        {
+          "code": "000070",
+          "name": "삼양홀딩스",
+          "market": "KRX",
+          "expectedOutcome": {
+            "type": "Success",
+            "messagePatterns": [],
+            "errorCodes": [],
+            "queryShouldComplete": true,
+            "source": "InstallationMaster",
+            "confidence": "High",
+            "evidence": [
+              "HTS 설치 종목 마스터: KRX_STOCK"
+            ]
+          }
+        },
+        {
+          "code": "000080",
+          "name": "하이트진로",
+          "market": "KRX",
+          "expectedOutcome": {
+            "type": "Success",
+            "messagePatterns": [],
+            "errorCodes": [],
+            "queryShouldComplete": true,
+            "source": "InstallationMaster",
+            "confidence": "High",
+            "evidence": [
+              "HTS 설치 종목 마스터: KRX_STOCK"
+            ]
+          }
+        }
+      ]
+    },
+    {
+      "id": "NXT_STOCK",
+      "purpose": "NXT 주식 종목 입력값",
+      "relativePath": "mst/nxtcode.cod",
+      "recordCount": 2650,
+      "integrityStatus": "MATCH",
+      "samples": [
+        {
+          "code": "000020",
+          "name": "동화약품",
+          "market": "NXT",
+          "expectedOutcome": {
+            "type": "Success",
+            "messagePatterns": [],
+            "errorCodes": [],
+            "queryShouldComplete": true,
+            "source": "InstallationMaster",
+            "confidence": "High",
+            "evidence": [
+              "HTS 설치 종목 마스터: NXT_STOCK"
+            ]
+          }
+        },
+        {
+          "code": "000040",
+          "name": "KR모터스",
+          "market": "NXT",
+          "expectedOutcome": {
+            "type": "Success",
+            "messagePatterns": [],
+            "errorCodes": [],
+            "queryShouldComplete": true,
+            "source": "InstallationMaster",
+            "confidence": "High",
+            "evidence": [
+              "HTS 설치 종목 마스터: NXT_STOCK"
+            ]
+          }
+        },
+        {
+          "code": "000050",
+          "name": "경방",
+          "market": "NXT",
+          "expectedOutcome": {
+            "type": "Success",
+            "messagePatterns": [],
+            "errorCodes": [],
+            "queryShouldComplete": true,
+            "source": "InstallationMaster",
+            "confidence": "High",
+            "evidence": [
+              "HTS 설치 종목 마스터: NXT_STOCK"
+            ]
+          }
+        },
+        {
+          "code": "000070",
+          "name": "삼양홀딩스",
+          "market": "NXT",
+          "expectedOutcome": {
+            "type": "Success",
+            "messagePatterns": [],
+            "errorCodes": [],
+            "queryShouldComplete": true,
+            "source": "InstallationMaster",
+            "confidence": "High",
+            "evidence": [
+              "HTS 설치 종목 마스터: NXT_STOCK"
+            ]
+          }
+        },
+        {
+          "code": "000080",
+          "name": "하이트진로",
+          "market": "NXT",
+          "expectedOutcome": {
+            "type": "Success",
+            "messagePatterns": [],
+            "errorCodes": [],
+            "queryShouldComplete": true,
+            "source": "InstallationMaster",
+            "confidence": "High",
+            "evidence": [
+              "HTS 설치 종목 마스터: NXT_STOCK"
+            ]
+          }
+        }
+      ]
+    },
+    {
+      "id": "ETF",
+      "purpose": "ETF 종목 입력값",
+      "relativePath": "mst/etfcode.cod",
+      "recordCount": 1160,
+      "integrityStatus": "MATCH",
+      "samples": [
+        {
+          "code": "0000D0",
+          "name": "TIGER 엔비디아미국채커버드콜밸런스(합성)",
+          "market": "02",
+          "expectedOutcome": {
+            "type": "Success",
+            "messagePatterns": [],
+            "errorCodes": [],
+            "queryShouldComplete": true,
+            "source": "InstallationMaster",
+            "confidence": "High",
+            "evidence": [
+              "HTS 설치 종목 마스터: ETF"
+            ]
+          }
+        },
+        {
+          "code": "0000H0",
+          "name": "KODEX 인도Nifty미드캡100",
+          "market": "02",
+          "expectedOutcome": {
+            "type": "Success",
+            "messagePatterns": [],
+            "errorCodes": [],
+            "queryShouldComplete": true,
+            "source": "InstallationMaster",
+            "confidence": "High",
+            "evidence": [
+              "HTS 설치 종목 마스터: ETF"
+            ]
+          }
+        },
+        {
+          "code": "0000J0",
+          "name": "PLUS 한화그룹주",
+          "market": "01",
+          "expectedOutcome": {
+            "type": "Success",
+            "messagePatterns": [],
+            "errorCodes": [],
+            "queryShouldComplete": true,
+            "source": "InstallationMaster",
+            "confidence": "High",
+            "evidence": [
+              "HTS 설치 종목 마스터: ETF"
+            ]
+          }
+        },
+        {
+          "code": "0000Y0",
+          "name": "HK 26-12 회사채(AA-이상)액티브",
+          "market": "32",
+          "expectedOutcome": {
+            "type": "Success",
+            "messagePatterns": [],
+            "errorCodes": [],
+            "queryShouldComplete": true,
+            "source": "InstallationMaster",
+            "confidence": "High",
+            "evidence": [
+              "HTS 설치 종목 마스터: ETF"
+            ]
+          }
+        },
+        {
+          "code": "0000Z0",
+          "name": "RISE 바이오TOP10액티브",
+          "market": "02",
+          "expectedOutcome": {
+            "type": "Success",
+            "messagePatterns": [],
+            "errorCodes": [],
+            "queryShouldComplete": true,
+            "source": "InstallationMaster",
+            "confidence": "High",
+            "evidence": [
+              "HTS 설치 종목 마스터: ETF"
+            ]
+          }
+        }
+      ]
+    }
+  ],
+  "officialErrorCodes": [
+    {
+      "code": "00000",
+      "message": "정상적으로 처리되었습니다.",
+      "classification": "Normal",
+      "isFailure": false
+    },
+    {
+      "code": "90000",
+      "message": "정상적으로 처리되었습니다.",
+      "classification": "Normal",
+      "isFailure": false
+    },
+    {
+      "code": "90001",
+      "message": "등록되지 않은 종목코드입니다.",
+      "classification": "InputOrBusinessValidation",
+      "isFailure": false
+    },
+    {
+      "code": "90002",
+      "message": "등록되지 않은 업종코드입니다.",
+      "classification": "InputOrBusinessValidation",
+      "isFailure": false
+    },
+    {
+      "code": "90003",
+      "message": "등록되지 않은 그룹코드입니다.",
+      "classification": "InputOrBusinessValidation",
+      "isFailure": false
+    },
+    {
+      "code": "90004",
+      "message": "예약가능 시간이 아닙니다.(09:10~익영업일 07:30)",
+      "classification": "InputOrBusinessValidation",
+      "isFailure": false
+    },
+    {
+      "code": "90005",
+      "message": "없는 조회 코드입니다.",
+      "classification": "SystemFailure",
+      "isFailure": true
+    },
+    {
+      "code": "90006",
+      "message": "조회시간이 초과 되었습니다.",
+      "classification": "TransientFailure",
+      "isFailure": true
+    },
+    {
+      "code": "90007",
+      "message": "해당 파일이 없습니다.",
+      "classification": "SystemFailure",
+      "isFailure": true
+    },
+    {
+      "code": "90008",
+      "message": "해당 조회는 잠시 서비스 중지 중입니다.",
+      "classification": "TransientFailure",
+      "isFailure": true
+    },
+    {
+      "code": "90011",
+      "message": "해당 내용이 저장 되었습니다.",
+      "classification": "Normal",
+      "isFailure": false
+    },
+    {
+      "code": "90012",
+      "message": "해당 내용이 저장 되지 않았습니다.",
+      "classification": "SystemFailure",
+      "isFailure": true
+    },
+    {
+      "code": "90013",
+      "message": "해당 내용이 수정 되었습니다.",
+      "classification": "Normal",
+      "isFailure": false
+    },
+    {
+      "code": "90014",
+      "message": "해당 내용이 수정 되지 않았습니다.",
+      "classification": "SystemFailure",
+      "isFailure": true
+    },
+    {
+      "code": "90015",
+      "message": "해당 내용이 삭제 되었습니다.",
+      "classification": "Normal",
+      "isFailure": false
+    },
+    {
+      "code": "90016",
+      "message": "해당 내용이 삭제 되지 않았습니다.",
+      "classification": "SystemFailure",
+      "isFailure": true
+    },
+    {
+      "code": "90017",
+      "message": "입력값을 확인하시기 바랍니다.",
+      "classification": "InputOrBusinessValidation",
+      "isFailure": false
+    },
+    {
+      "code": "90018",
+      "message": "등록된 사용자가 아닙니다.",
+      "classification": "Authentication",
+      "isFailure": true
+    },
+    {
+      "code": "90019",
+      "message": "비밀번호가 잘못 되었습니다.",
+      "classification": "Authentication",
+      "isFailure": true
+    },
+    {
+      "code": "90020",
+      "message": "처리가 지연되고 있습니다. 잠시후 다시 전송하십시요.",
+      "classification": "TransientFailure",
+      "isFailure": true
+    },
+    {
+      "code": "90021",
+      "message": "이미 등록된 데이타입니다.",
+      "classification": "InputOrBusinessValidation",
+      "isFailure": false
+    },
+    {
+      "code": "90022",
+      "message": "주민등록번호가 잘못 되었습니다.",
+      "classification": "InputOrBusinessValidation",
+      "isFailure": false
+    },
+    {
+      "code": "90023",
+      "message": "잘못된 데이타입니다.",
+      "classification": "InputOrBusinessValidation",
+      "isFailure": false
+    },
+    {
+      "code": "90024",
+      "message": "해당 내용은 이미 삭제되었습니다.",
+      "classification": "InputOrBusinessValidation",
+      "isFailure": false
+    },
+    {
+      "code": "90025",
+      "message": "해당 내용은 삭제할 수 없습니다.",
+      "classification": "InputOrBusinessValidation",
+      "isFailure": false
+    },
+    {
+      "code": "90026",
+      "message": "데이타 건수가 많아  표시할수 없습니다",
+      "classification": "InputOrBusinessValidation",
+      "isFailure": false
+    },
+    {
+      "code": "90031",
+      "message": "고객지원센터(1544-8282)로 연락주시기 바랍니다.[90031]",
+      "classification": "InputOrBusinessValidation",
+      "isFailure": false
+    },
+    {
+      "code": "90032",
+      "message": "고객지원센터(1544-8282)로 연락주시기 바랍니다.[90032]",
+      "classification": "InputOrBusinessValidation",
+      "isFailure": false
+    },
+    {
+      "code": "90033",
+      "message": "고객지원센터(1544-8282)로 연락주시기 바랍니다.[90033]",
+      "classification": "InputOrBusinessValidation",
+      "isFailure": false
+    },
+    {
+      "code": "90034",
+      "message": "고객지원센터(1544-8282)로 연락주시기 바랍니다.[90034]",
+      "classification": "InputOrBusinessValidation",
+      "isFailure": false
+    },
+    {
+      "code": "90035",
+      "message": "고객지원센터(1544-8282)로 연락주시기 바랍니다.[90035]",
+      "classification": "InputOrBusinessValidation",
+      "isFailure": false
+    },
+    {
+      "code": "90036",
+      "message": "고객지원센터(1544-8282)로 연락주시기 바랍니다.[90036]",
+      "classification": "InputOrBusinessValidation",
+      "isFailure": false
+    },
+    {
+      "code": "90037",
+      "message": "고객지원센터(1544-8282)로 연락주시기 바랍니다.[90037]",
+      "classification": "InputOrBusinessValidation",
+      "isFailure": false
+    },
+    {
+      "code": "90038",
+      "message": "고객지원센터(1544-8282)로 연락주시기 바랍니다.[90038]",
+      "classification": "InputOrBusinessValidation",
+      "isFailure": false
+    },
+    {
+      "code": "90039",
+      "message": "고객지원센터(1544-8282)로 연락주시기 바랍니다.[90039]",
+      "classification": "InputOrBusinessValidation",
+      "isFailure": false
+    },
+    {
+      "code": "90040",
+      "message": "고객지원센터(1544-8282)로 연락주시기 바랍니다.[90040]",
+      "classification": "InputOrBusinessValidation",
+      "isFailure": false
+    },
+    {
+      "code": "90050",
+      "message": "동일종목,동일호가의 주문은 50건을 초과할수 없습니다.[90050]",
+      "classification": "InputOrBusinessValidation",
+      "isFailure": false
+    },
+    {
+      "code": "90051",
+      "message": "호가한도수량 초과 또는 호가가격단위 초과입니다.",
+      "classification": "InputOrBusinessValidation",
+      "isFailure": false
+    },
+    {
+      "code": "99999",
+      "message": "해당 자료가 없습니다.",
+      "classification": "NoData",
+      "isFailure": false
+    },
+    {
+      "code": "70001",
+      "message": "HTS상에 등록된 계좌가 아닙니다.[70001]",
+      "classification": "Authentication",
+      "isFailure": true
+    },
+    {
+      "code": "70002",
+      "message": "고객지원센터(1544-8282)로 연락주시기 바랍니다.[70002]",
+      "classification": "Authentication",
+      "isFailure": true
+    },
+    {
+      "code": "70003",
+      "message": "계좌비밀번호가 잘못되었습니다.[70005]",
+      "classification": "Authentication",
+      "isFailure": true
+    },
+    {
+      "code": "70004",
+      "message": "이미 등록된 자료 입니다.[70004]",
+      "classification": "InputOrBusinessValidation",
+      "isFailure": false
+    },
+    {
+      "code": "70005",
+      "message": "고객지원센터(1544-8282)로 연락주시기 바랍니다.[70005]",
+      "classification": "InputOrBusinessValidation",
+      "isFailure": false
+    },
+    {
+      "code": "70006",
+      "message": "등록된 자료가 없습니다.[70006]",
+      "classification": "InputOrBusinessValidation",
+      "isFailure": false
+    },
+    {
+      "code": "70007",
+      "message": "고객지원센터(1544-8282)로 연락주시기 바랍니다.[70007]",
+      "classification": "InputOrBusinessValidation",
+      "isFailure": false
+    },
+    {
+      "code": "70008",
+      "message": "고객지원센터(1544-8282)로 연락주시기 바랍니다.[70008]",
+      "classification": "InputOrBusinessValidation",
+      "isFailure": false
+    },
+    {
+      "code": "90906",
+      "message": "장개시전 데이터가 없습니다.",
+      "classification": "InputOrBusinessValidation",
+      "isFailure": false
+    },
+    {
+      "code": "90996",
+      "message": "시스템 작업으로 인하여 시세만 제공됩니다. (12/5 01시~12/7 01시)",
+      "classification": "InputOrBusinessValidation",
+      "isFailure": false
+    },
+    {
+      "code": "90997",
+      "message": "시스템 작업으로 인하여 처리가 불가합니다.",
+      "classification": "TransientFailure",
+      "isFailure": true
+    },
+    {
+      "code": "90998",
+      "message": "시스템 작업으로 인하여 시세만 제공됩니다.",
+      "classification": "InputOrBusinessValidation",
+      "isFailure": false
+    },
+    {
+      "code": "90999",
+      "message": "IT백업센타 전환훈련으로 인하여 시세만 제공됩니다.",
+      "classification": "InputOrBusinessValidation",
+      "isFailure": false
+    }
+  ],
+  "genericDataStrategies": {
+    "dateFormat": "yyyyMMdd",
+    "dateCandidates": [
+      "기준일",
+      "직전 영업일",
+      "월초",
+      "연초",
+      "미래일",
+      "시작일>종료일"
+    ],
+    "textBoundaryCandidates": [
+      "빈값",
+      "0",
+      "1",
+      "최대 길이 경계",
+      "형식 밖 값"
+    ],
+    "checkboxCandidates": [
+      "false",
+      "true"
+    ],
+    "finiteChoicePolicy": "콤보·라디오·탭은 발견 가능한 모든 항목을 각각 한 번 이상 선택한다.",
+    "combinationPolicy": "상태 수가 작으면 전체 조합, 폭증하면 단일요인+pairwise를 우선하고 누락 조합을 명시한다."
+  }
+}

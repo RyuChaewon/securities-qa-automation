@@ -1,0 +1,31 @@
+{
+  "schemaVersion": "1.0",
+  "description": "범용 대상 QA 파이프라인의 실행 파일 연결과 단계별 입출력 계약",
+  "solution": "HtsQaPoc.sln",
+  "cliProject": "src/HtsQa.Cli/HtsQa.Cli.csproj",
+  "flaUiProject": "src/HtsQa.FlaUi/HtsQa.FlaUi.csproj",
+  "entryPoints": {
+    "automaticPipeline": "scripts/run-auto-scenario-pipeline.ps1",
+    "targetRunner": "scripts/run-target-rule-suite.ps1",
+    "recordedRunner": "scripts/run-target-rule-suite-recorded.ps1",
+    "recorder": "scripts/record-desktop-frames.ps1",
+    "reportExporter": "scripts/export-rule-results-xlsx.ps1",
+    "tcReportExporter": "scripts/export-tc-results-xlsx.ps1",
+    "bindingPlanner": "scripts/plan-scenario-bindings.ps1",
+    "externalPipeline": "scripts/invoke-scenario-pipeline.ps1"
+  },
+  "sharedLibraries": [
+    "scripts/modules/pipeline-common.ps1",
+    "scripts/modules/rule-control-exploration.ps1",
+    "scripts/modules/report-sanitization.ps1"
+  ],
+  "stages": [
+    { "order": 1, "id": "build", "executor": "dotnet", "input": ["solution"], "output": ["Release binaries"] },
+    { "order": 2, "id": "map-model", "executor": "HtsQa.Cli:extract-map-models", "input": ["targetProfile.map", "screens"], "output": ["map-catalog.json"] },
+    { "order": 3, "id": "runtime-plan", "executor": "targetRunner:PlanOnly+FlaUI.UIA3", "input": ["dataset", "map-catalog.json"], "output": ["runtime-discovery/control-plan.json"] },
+    { "order": 4, "id": "scenario", "executor": "HtsQa.Cli:generate/validate/approve/compile", "input": ["dataset", "map-catalog.json", "control-plan.json"], "output": ["compiled-plan.json"] },
+    { "order": 5, "id": "binding", "executor": "HtsQa.Cli:materialize/build-physical", "input": ["compiled-plan.json", "control-plan.json"], "output": ["physical-plan.json"] },
+    { "order": 6, "id": "record-and-run", "executor": "recordedRunner+FlaUI.UIA3", "input": ["dataset", "compiled-plan.json", "physical-plan.json"], "output": ["full-run.mp4", "results/*.json"] },
+    { "order": 7, "id": "report", "executor": "reportExporter+tcReportExporter", "input": ["results/*.json", "screenshots/*"], "output": ["테스트결과-*.xlsx", "TC실행결과-*.xlsx"] }
+  ]
+}

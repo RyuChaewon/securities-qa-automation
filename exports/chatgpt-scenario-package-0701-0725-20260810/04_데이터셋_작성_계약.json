@@ -1,0 +1,152 @@
+{
+  "packageVersion": "1.0",
+  "targetScreens": [
+    {
+      "screenNumber": "0701",
+      "screenName": "CEO리포트"
+    },
+    {
+      "screenNumber": "0702",
+      "screenName": "종합자산 조회"
+    },
+    {
+      "screenNumber": "0705",
+      "screenName": "종합잔고 Plus"
+    },
+    {
+      "screenNumber": "0708",
+      "screenName": "주식실시간 잔고(신용합산)"
+    },
+    {
+      "screenNumber": "0710",
+      "screenName": "예수금조회"
+    },
+    {
+      "screenNumber": "0711",
+      "screenName": "거래내역조회"
+    },
+    {
+      "screenNumber": "0712",
+      "screenName": "매매정산내역"
+    },
+    {
+      "screenNumber": "0713",
+      "screenName": "당일매매손익조회"
+    },
+    {
+      "screenNumber": "0714",
+      "screenName": "기간별 실현손익"
+    },
+    {
+      "screenNumber": "0720",
+      "screenName": "신용잔고현황"
+    },
+    {
+      "screenNumber": "0721",
+      "screenName": "신용거래담보현황"
+    },
+    {
+      "screenNumber": "0722",
+      "screenName": "신용/대출이자 처리내역 조회"
+    },
+    {
+      "screenNumber": "0723",
+      "screenName": "신용/대출 한도금액 정보"
+    },
+    {
+      "screenNumber": "0725",
+      "screenName": "익일반대매매 추정내역"
+    }
+  ],
+  "runnerDatasetSchemaVersion": "1.2",
+  "outputWillBeMergedInto": "data/rule-tests/account-info-07.dataset.json",
+  "doNotGenerate": [
+    "accounts",
+    "accountNumber",
+    "owner",
+    "password",
+    "passwordSecret",
+    "절대좌표"
+  ],
+  "supportedControlKinds": [
+    "Auto",
+    "Text",
+    "Date",
+    "ComboBox",
+    "RadioButton",
+    "CheckBox",
+    "Tab",
+    "Button",
+    "ListBox",
+    "ListView",
+    "TreeView",
+    "Slider",
+    "Spin"
+  ],
+  "supportedValueMatches": [
+    "Value",
+    "DisplayText",
+    "Index",
+    "Checked"
+  ],
+  "expectedOutcomeTypes": [
+    "Unspecified",
+    "Success",
+    "ValidationAllowed",
+    "ValidationRequired",
+    "FailureRequired",
+    "NoDataAllowed",
+    "WarningAllowed",
+    "ObservationOnly"
+  ],
+  "expectedOutcomeSources": [
+    "Dataset",
+    "InstallationInputOption",
+    "InstallationMaster",
+    "MapValidation",
+    "MapBehavior",
+    "RuntimeChoice",
+    "GeneratedBoundary",
+    "ScreenExpectedPattern",
+    "Unspecified"
+  ],
+  "currentLimits": {
+    "maxExpandedCases": 10000,
+    "maxControlsPerScreen": 500,
+    "maxOptionsPerControl": 500,
+    "maxActionsPerScreen": 50000
+  },
+  "variableShape": {
+    "requiredFields": [
+      "name",
+      "targetRole",
+      "targetLogicalName",
+      "controlKind",
+      "valueMatch",
+      "values",
+      "appliesToScreens",
+      "required",
+      "triggerQueryAfterChange"
+    ],
+    "valueRequiredFields": [
+      "id",
+      "value",
+      "displayValue",
+      "expectedOutcome",
+      "rationale",
+      "sourceRefs"
+    ],
+    "locatorRule": "MAP logicalName만으로 현재 명시 변수 로케이터가 완성되지는 않는다. 화면 표시문자·클래스·런타임 결합 근거가 없으면 locatorRequests에 기록하고 좌표를 발명하지 않는다."
+  },
+  "generationRules": [
+    "화면마다 기본 조회 1건 이상을 생성한다.",
+    "모든 actionableControls는 최소 한 시나리오가 커버하거나 coverageGaps에 사유가 있어야 한다.",
+    "공식 선택지는 누락 없이 각 값별 테스트 데이터에 포함한다.",
+    "라디오·체크·콤보·탭은 가능한 모든 유한 상태를 포함한다.",
+    "MAP validationRules의 각 ruleId는 음성 테스트 또는 미생성 사유로 추적한다.",
+    "ValidationRequired에는 messagePatterns 또는 errorCodes를 반드시 넣는다.",
+    "정상 입력에서 입력 검증이 발생하면 FAIL 후보, 의도한 음성 입력에서 지정 검증이 발생하면 PASS다.",
+    "업무 결과 수치의 정답을 추측하지 않는다. 별도 오라클이 없으면 존재·무응답·오류 신호만 관찰한다.",
+    "definitionOrder를 실제 탭 순서로 단정하지 않는다. 실행 순서는 RuntimeTabOrder로 지정한다."
+  ]
+}

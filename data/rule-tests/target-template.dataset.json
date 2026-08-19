@@ -1,0 +1,54 @@
+{
+  "schemaVersion": "2.0",
+  "datasetId": "새-대상-화면군",
+  "targetProfile": {
+    "id": "new-target",
+    "displayName": "새 대상 화면군",
+    "runLabel": "new-target",
+    "screenIdPattern": "^[0-9]{4}$",
+    "window": {
+      "className": "대상 Win32 창 클래스",
+      "titlePrefix": "대상 창 제목 접두사"
+    },
+    "map": {
+      "installationRoot": "C:/TARGET",
+      "screenDirectory": "screen",
+      "filePattern": "ht{screenNumber}00.map"
+    }
+  },
+  "maxExpandedCases": 10000,
+  "executionPolicy": {
+    "mode": "explicitErrorOnly",
+    "stopOnFirstError": false,
+    "screenOpenTimeoutMs": 10000,
+    "actionTimeoutMs": 5000,
+    "errorPatterns": ["Error", "Exception", "Fail", "오류", "실패", "예외", "장애"]
+  },
+  "autoExploration": {
+    "enabled": true,
+    "includeButtons": true,
+    "includeUnlabeledButtons": true,
+    "triggerQueryAfterStateChange": true,
+    "maxControlsPerScreen": 500,
+    "maxOptionsPerControl": 500,
+    "maxActionsPerScreen": 50000,
+    "contentRegionFile": "data/realhts/content-regions.json",
+    "defaultTextValues": [],
+    "defaultDateValues": [],
+    "excludeTitlePatterns": ["^(B|X|Button1)$"],
+    "mapBaseline": {
+      "enabled": true,
+      "matchTolerancePx": 36
+    }
+  },
+  "accounts": [],
+  "defaultLocators": {
+    "query": [
+      { "controlType": "Button", "nameRegex": "^조회$|검색|Search|Query", "relativeRegion": "top" }
+    ]
+  },
+  "variables": [],
+  "screens": [
+    { "screenNumber": "0000", "screenName": "대상 화면명", "queryTrigger": "F12" }
+  ]
+}

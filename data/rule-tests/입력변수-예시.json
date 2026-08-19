@@ -1,0 +1,70 @@
+{
+  "설명": "대상 dataset.json의 variables와 screens[].locators에 복사해 사용하는 예시입니다.",
+  "variables": [
+    {
+      "name": "조회기간",
+      "targetRole": "condition:조회기간",
+      "controlKind": "ComboBox",
+      "valueMatch": "DisplayText",
+      "values": [
+        { "id": "today", "value": "당일", "displayValue": "당일" },
+        { "id": "week", "value": "1주일", "displayValue": "1주일" }
+      ],
+      "appliesToScreens": ["1001"],
+      "required": true,
+      "triggerQueryAfterChange": true
+    },
+    {
+      "name": "미체결포함",
+      "targetRole": "condition:미체결포함",
+      "controlKind": "CheckBox",
+      "valueMatch": "Checked",
+      "values": [
+        { "id": "off", "value": "false", "displayValue": "해제" },
+        { "id": "on", "value": "true", "displayValue": "선택" }
+      ],
+      "appliesToScreens": ["1001"],
+      "required": false,
+      "triggerQueryAfterChange": true
+    },
+    {
+      "name": "추가입력",
+      "targetRole": "condition:추가입력",
+      "controlKind": "Text",
+      "valueMatch": "Value",
+      "values": [
+        { "id": "normal", "value": "테스트값", "displayValue": "정상 입력" },
+        { "id": "empty", "value": "", "displayValue": "빈 값" }
+      ],
+      "appliesToScreens": ["1001"],
+      "required": false,
+      "triggerQueryAfterChange": true
+    }
+  ],
+  "screenLocatorExample": {
+    "screenNumber": "1001",
+    "locators": {
+      "condition:조회기간": [
+        { "controlType": "ComboBox", "relativeRegion": "top", "ordinal": 1 }
+      ],
+      "condition:미체결포함": [
+        { "controlType": "CheckBox", "nameRegex": "미체결" }
+      ],
+      "condition:추가입력": [
+        { "relativeX": 210, "relativeY": 84, "width": 120, "height": 22 }
+      ]
+    },
+    "expectedPopupPatterns": [
+      "조회가 완료되었습니다"
+    ]
+  },
+  "autoTextValueExample": {
+    "autoExploration": {
+      "defaultTextValues": [
+        { "id": "empty", "value": "", "displayValue": "빈 값" },
+        { "id": "zero", "value": "0", "displayValue": "숫자 0" },
+        { "id": "normal", "value": "테스트", "displayValue": "일반 문자열" }
+      ]
+    }
+  }
+}

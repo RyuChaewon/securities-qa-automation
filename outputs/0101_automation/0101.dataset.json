@@ -1,0 +1,104 @@
+{
+  "schemaVersion": "2.0",
+  "datasetId": "0101-TC-774f63d9f295",
+  "targetProfile": {
+    "id": "1q-hts-0101",
+    "displayName": "1Q HTS 0101 국내주식 매수주문",
+    "runLabel": "0101-tc",
+    "screenIdPattern": "^[0-9]{4}$",
+    "window": {
+      "className": "_HanaFiveProClass",
+      "titlePrefix": "1Q HTS"
+    },
+    "map": {
+      "installationRoot": "C:\\1QHTS",
+      "screenDirectory": "screen",
+      "filePattern": "",
+      "familyFiles": [
+        "ht010100.map",
+        "ht010101.map",
+        "ht010102.map",
+        "ht010103.map",
+        "ht010104.map",
+        "ht010105.map",
+        "ht010106.map",
+        "ht010107.map",
+        "ht010108.map",
+        "ht010109.map",
+        "ht01010h.map",
+        "ht010110.map",
+        "ht010111.map",
+        "ht010112.map",
+        "ht010113.map",
+        "ht010114.map",
+        "ht010115.map",
+        "ht010116.map",
+        "ht010199.map"
+      ],
+      "initiallyActiveMapScreenCodes": [
+        "HT010115",
+        "HT010103"
+      ]
+    }
+  },
+  "maxExpandedCases": 2000,
+  "executionPolicy": {
+    "mode": "explicitErrorOnly",
+    "stopOnFirstError": false,
+    "screenOpenTimeoutMs": 10000,
+    "actionTimeoutMs": 5000,
+    "allowTransactionalActions": true,
+    "requireApprovedPlanForTransactionalActions": true,
+    "allowObservedPrefilledTransactionalAccount": true,
+    "allowedTransactionalAccountIds": [
+      "0101-test-account"
+    ],
+    "allowedTransactionalScreens": [
+      "0101"
+    ]
+  },
+  "accounts": [
+    {
+      "id": "0101-test-account",
+      "accountNumber": "",
+      "owner": "테스트 계좌",
+      "inputMode": "Prefilled",
+      "enabled": true,
+      "metadata": {
+        "purpose": "0101 주문 테스트 전용 계좌",
+        "source": "0101_TC importer"
+      }
+    }
+  ],
+  "screens": [
+    {
+      "screenNumber": "0101",
+      "screenName": "국내주식 매수주문",
+      "enabled": true,
+      "queryTrigger": "F12",
+      "locators": {},
+      "fixedConditions": {},
+      "expectedPopupPatterns": []
+    }
+  ],
+  "variables": [],
+  "defaultLocators": {},
+  "autoExploration": {
+    "interactionStrategy": "CoordinateFocus",
+    "enabled": true,
+    "includeButtons": true,
+    "includeUnlabeledButtons": true,
+    "triggerQueryAfterStateChange": false,
+    "maxControlsPerScreen": 120,
+    "maxOptionsPerControl": 100,
+    "maxActionsPerScreen": 5000,
+    "contentRegionFile": "data/realhts/content-regions.json",
+    "defaultTextValues": [],
+    "defaultDateValues": [],
+    "excludeTitlePatterns": [],
+    "mapBaseline": {
+      "enabled": true,
+      "matchTolerancePx": 36
+    }
+  }
+}

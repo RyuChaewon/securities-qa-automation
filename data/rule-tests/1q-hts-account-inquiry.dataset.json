@@ -1,0 +1,167 @@
+{
+  "schemaVersion": "2.0",
+  "datasetId": "계좌정보-0701-0725",
+  "targetProfile": {
+    "id": "1q-hts-account-inquiry",
+    "displayName": "1Q HTS 계좌정보 조회 화면",
+    "runLabel": "1q-hts-account-inquiry",
+    "screenIdPattern": "^[0-9]{4}$",
+    "window": {
+      "className": "_HanaFiveProClass",
+      "titlePrefix": "1Q HTS"
+    },
+    "map": {
+      "installationRoot": "C:/1QHTS",
+      "screenDirectory": "screen",
+      "filePattern": "ht{screenNumber}00.map"
+    }
+  },
+  "maxExpandedCases": 10000,
+  "executionPolicy": {
+    "mode": "explicitErrorOnly",
+    "stopOnFirstError": false,
+    "screenOpenTimeoutMs": 10000,
+    "actionTimeoutMs": 1200,
+    "errorPatterns": [
+      "Error",
+      "Exception",
+      "Fail",
+      "Socket Error",
+      "SOCKET_ERROR",
+      "오류",
+      "에러",
+      "실패",
+      "예외",
+      "장애"
+    ]
+  },
+  "autoExploration": {
+    "enabled": true,
+    "includeButtons": true,
+    "includeUnlabeledButtons": true,
+    "triggerQueryAfterStateChange": true,
+    "maxControlsPerScreen": 500,
+    "maxOptionsPerControl": 500,
+    "maxActionsPerScreen": 50000,
+    "contentRegionFile": "data/realhts/content-regions.json",
+    "defaultTextValues": [
+      {
+        "id": "빈값",
+        "value": "",
+        "displayValue": "빈값",
+        "expectedOutcome": {
+          "type": "ValidationAllowed",
+          "messagePatterns": ["입력|확인(?:하|해)|선택|필수|없습니다|불가"]
+        }
+      },
+      {
+        "id": "영",
+        "value": "0",
+        "displayValue": "0",
+        "expectedOutcome": {
+          "type": "ValidationAllowed",
+          "messagePatterns": ["입력|확인(?:하|해)|종목코드오류|등록되지 않은|없습니다|불가|범위"]
+        }
+      },
+      {
+        "id": "일",
+        "value": "1",
+        "displayValue": "1",
+        "expectedOutcome": {
+          "type": "ValidationAllowed",
+          "messagePatterns": ["입력|확인(?:하|해)|종목코드오류|등록되지 않은|없습니다|불가|범위"]
+        }
+      },
+      {
+        "id": "최대경계",
+        "value": "99999999",
+        "displayValue": "99999999",
+        "expectedOutcome": {
+          "type": "ValidationAllowed",
+          "messagePatterns": ["종목코드오류|등록되지 않은 종목코드|초과|범위|확인(?:하|해)|불가|잘못"]
+        }
+      }
+    ],
+    "defaultDateValues": [
+      {
+        "id": "연초",
+        "value": "20260101",
+        "displayValue": "2026/01/01",
+        "expectedOutcome": {
+          "type": "ValidationAllowed",
+          "messagePatterns": ["일자|날짜|기간|당일 이후|시작.*종료|조회가 불가"]
+        }
+      },
+      {
+        "id": "기준일",
+        "value": "20260801",
+        "displayValue": "2026/08/01",
+        "expectedOutcome": {
+          "type": "ValidationAllowed",
+          "messagePatterns": ["일자|날짜|기간|당일 이후|시작.*종료|조회가 불가"]
+        }
+      },
+      {
+        "id": "연말",
+        "value": "20261231",
+        "displayValue": "2026/12/31",
+        "expectedOutcome": {
+          "type": "ValidationAllowed",
+          "messagePatterns": ["일자|날짜|기간|당일 이후|시작.*종료|조회가 불가"]
+        }
+      }
+    ],
+    "excludeTitlePatterns": [
+      "^(B|X|Button1)$"
+    ],
+    "mapBaseline": {
+      "enabled": true,
+      "matchTolerancePx": 36
+    }
+  },
+  "accounts": [
+    {
+      "id": "예제계좌-01",
+      "accountNumber": "12345678-901",
+      "owner": "테스트사용자",
+      "enabled": true,
+      "metadata": {
+        "purpose": "공개 예제용 가상 테스트 계좌"
+      },
+      "inputMode": "Prefilled"
+    }
+  ],
+  "defaultLocators": {
+    "account": [
+      { "controlType": "Edit", "nameRegex": "계좌|Account", "relativeRegion": "top" },
+      { "controlType": "ComboBox", "nameRegex": "계좌|Account", "relativeRegion": "top" },
+      { "className": "Edit", "controlType": "Edit", "relativeRegion": "top", "ordinal": 0 },
+      { "className": "ComboBox", "controlType": "ComboBox", "relativeRegion": "top", "ordinal": 0 }
+    ],
+    "password": [
+      { "controlType": "Edit", "nameRegex": "비밀번호|Password|PIN", "relativeRegion": "top" },
+      { "className": "Edit", "controlType": "Edit", "relativeRegion": "top", "ordinal": 1 }
+    ],
+    "query": [
+      { "controlType": "Button", "nameRegex": "^조회$|조회하기|Search|Query", "relativeRegion": "top" }
+    ]
+  },
+  "variables": [],
+  "screens": [
+    { "screenNumber": "0701", "screenName": "CEO리포트", "queryTrigger": "F12" },
+    { "screenNumber": "0702", "screenName": "종합자산조회", "queryTrigger": "F12" },
+    { "screenNumber": "0705", "screenName": "종합잔고 Plus", "queryTrigger": "F12" },
+    { "screenNumber": "0708", "screenName": "주식실시간잔고(신용합산)", "queryTrigger": "F12" },
+    { "screenNumber": "0710", "screenName": "예수금 조회", "queryTrigger": "F12" },
+    { "screenNumber": "0711", "screenName": "거래내역조회", "queryTrigger": "F12" },
+    { "screenNumber": "0712", "screenName": "매매정산내역", "queryTrigger": "F12" },
+    { "screenNumber": "0713", "screenName": "당일매매손익조회", "queryTrigger": "F12" },
+    { "screenNumber": "0714", "screenName": "기간별 실현손익", "queryTrigger": "F12" },
+    { "screenNumber": "0715", "screenName": "기간별투자수익률", "queryTrigger": "F12" },
+    { "screenNumber": "0720", "screenName": "신용잔고 현황", "queryTrigger": "F12" },
+    { "screenNumber": "0721", "screenName": "신용거래 담보현황", "queryTrigger": "F12" },
+    { "screenNumber": "0722", "screenName": "신용/대출이자 처리내역 조회", "queryTrigger": "F12" },
+    { "screenNumber": "0723", "screenName": "신용대출 한도금액정보", "queryTrigger": "F12" },
+    { "screenNumber": "0725", "screenName": "익일반대매매 추정내역", "queryTrigger": "F12" }
+  ]
+}

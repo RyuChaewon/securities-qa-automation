@@ -1,0 +1,54 @@
+{
+  "schemaVersion": "2.0",
+  "datasetId": "1q-hts-non07-static-smoke",
+  "targetProfile": {
+    "id": "1q-hts-05-inquiry-smoke",
+    "displayName": "1Q HTS 비-07 조회 화면 정적 회귀",
+    "runLabel": "1q-hts-non07-smoke",
+    "screenIdPattern": "^05[0-9]{2}$",
+    "window": {
+      "className": "_HanaFiveProClass",
+      "titlePrefix": "1Q HTS"
+    },
+    "map": {
+      "installationRoot": "C:/1QHTS",
+      "screenDirectory": "screen",
+      "filePattern": "ht{screenNumber}00.map"
+    }
+  },
+  "maxExpandedCases": 1000,
+  "executionPolicy": {
+    "mode": "explicitErrorOnly",
+    "stopOnFirstError": false,
+    "screenOpenTimeoutMs": 10000,
+    "actionTimeoutMs": 5000,
+    "errorPatterns": ["Error", "Exception", "Fail", "오류", "실패", "예외", "장애"]
+  },
+  "autoExploration": {
+    "enabled": true,
+    "includeButtons": true,
+    "includeUnlabeledButtons": true,
+    "triggerQueryAfterStateChange": true,
+    "maxControlsPerScreen": 500,
+    "maxOptionsPerControl": 500,
+    "maxActionsPerScreen": 50000,
+    "contentRegionFile": "data/realhts/content-regions.json",
+    "defaultTextValues": [],
+    "defaultDateValues": [],
+    "excludeTitlePatterns": ["^(B|X|Button1)$"],
+    "mapBaseline": {
+      "enabled": true,
+      "matchTolerancePx": 36
+    }
+  },
+  "accounts": [],
+  "defaultLocators": {
+    "query": [
+      { "controlType": "Button", "nameRegex": "^조회$|검색|Search|Query", "relativeRegion": "top" }
+    ]
+  },
+  "variables": [],
+  "screens": [
+    { "screenNumber": "0506", "screenName": "은행 연결계좌번호 조회", "queryTrigger": "F12" }
+  ]
+}

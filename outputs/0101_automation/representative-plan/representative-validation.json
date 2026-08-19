@@ -1,0 +1,157 @@
+{
+  "generatedAt": "2026-08-18T22:53:12.4611732+09:00",
+  "scope": "0101 representative command-and-tab validation",
+  "status": "PREFLIGHT_PASS_LIVE_BLOCKED",
+  "staticPlanId": "PLAN-523a3e7fba69",
+  "selection": {
+    "sourceTestCaseIds": [
+      "TC-0101-INP-0598",
+      "TC-0101-CTL-0067",
+      "TC-0101-CTL-0040",
+      "TC-0101-CTL-0048",
+      "TC-0101-CTL-0018",
+      "TC-0101-CTL-0047",
+      "TC-0101-CTL-0101"
+    ],
+    "selectedCaseCount": 11,
+    "orderTabCoverage": [
+      "매수",
+      "매도",
+      "정정/취소"
+    ],
+    "orderCommandCoverage": [
+      "BTN_Ord_Buy",
+      "BTN_Ord_Sell",
+      "BTN_Ord_Mod",
+      "BTN_Ord_Can"
+    ],
+    "lowerQueryCoverage": "HT010103.BTN_SEARCH"
+  },
+  "preflight": {
+    "planStatus": "READY_FOR_BINDING",
+    "approvalStatus": "Approved",
+    "allSelectedCasesInPlan": true,
+    "tabGuardRequired": true,
+    "actualHtsManipulated": false
+  },
+  "liveAttempt": {
+    "observedWindow": "1Q HTS",
+    "observedScreenSelector": "7979",
+    "observedWorkspace": "empty",
+    "result": "0101 child workspace was not present and owner-drawn screen selector did not expose a focusable accessibility target.",
+    "financialCommandClicked": false,
+    "nextGate": "Open 0101, then rerun tab selection and visibility assertions before any financial command."
+  },
+  "cases": [
+    {
+      "caseId": "SC-0029321dd3233a3d",
+      "scenarioId": "TC-0101-CTL-0018",
+      "sourceTestCaseId": "0101-CTL-0018",
+      "mapScreenCode": "HT010101",
+      "selectedOrderTab": "정정/취소",
+      "transactionalCommand": "BTN_Ord_Mod",
+      "staticPreflight": "PASS",
+      "liveExecution": "BLOCKED_SCREEN_NOT_OPEN"
+    },
+    {
+      "caseId": "SC-668bfe9b7e2385f2",
+      "scenarioId": "TC-0101-CTL-0040",
+      "sourceTestCaseId": "0101-CTL-0040",
+      "mapScreenCode": "HT010101",
+      "selectedOrderTab": "매수",
+      "transactionalCommand": "BTN_Ord_Buy",
+      "staticPreflight": "PASS",
+      "liveExecution": "BLOCKED_SCREEN_NOT_OPEN"
+    },
+    {
+      "caseId": "SC-33127e74a224bdf2",
+      "scenarioId": "TC-0101-CTL-0047",
+      "sourceTestCaseId": "0101-CTL-0047",
+      "mapScreenCode": "HT010101",
+      "selectedOrderTab": "정정/취소",
+      "transactionalCommand": "BTN_Ord_Can",
+      "staticPreflight": "PASS",
+      "liveExecution": "BLOCKED_SCREEN_NOT_OPEN"
+    },
+    {
+      "caseId": "SC-a15f996d471aff35",
+      "scenarioId": "TC-0101-CTL-0048",
+      "sourceTestCaseId": "0101-CTL-0048",
+      "mapScreenCode": "HT010101",
+      "selectedOrderTab": "매도",
+      "transactionalCommand": "BTN_Ord_Sell",
+      "staticPreflight": "PASS",
+      "liveExecution": "BLOCKED_SCREEN_NOT_OPEN"
+    },
+    {
+      "caseId": "SC-8e93d1057d0a4acf",
+      "scenarioId": "TC-0101-CTL-0101",
+      "sourceTestCaseId": "0101-CTL-0101",
+      "mapScreenCode": "HT010103",
+      "selectedOrderTab": "",
+      "transactionalCommand": "",
+      "staticPreflight": "PASS",
+      "liveExecution": "BLOCKED_SCREEN_NOT_OPEN"
+    },
+    {
+      "caseId": "SC-adfe4d57504b7927",
+      "scenarioId": "TC-0101-INP-0598",
+      "sourceTestCaseId": "0101-INP-0598",
+      "mapScreenCode": "HT010101",
+      "selectedOrderTab": "매수",
+      "transactionalCommand": "",
+      "staticPreflight": "PASS",
+      "liveExecution": "BLOCKED_SCREEN_NOT_OPEN"
+    },
+    {
+      "caseId": "SC-b580e2a250486ce3",
+      "scenarioId": "TC-0101-INP-0598",
+      "sourceTestCaseId": "0101-INP-0598",
+      "mapScreenCode": "HT010101",
+      "selectedOrderTab": "매도",
+      "transactionalCommand": "",
+      "staticPreflight": "PASS",
+      "liveExecution": "BLOCKED_SCREEN_NOT_OPEN"
+    },
+    {
+      "caseId": "SC-6b7cff328da0b669",
+      "scenarioId": "TC-0101-INP-0598",
+      "sourceTestCaseId": "0101-INP-0598",
+      "mapScreenCode": "HT010101",
+      "selectedOrderTab": "정정/취소",
+      "transactionalCommand": "",
+      "staticPreflight": "PASS",
+      "liveExecution": "BLOCKED_SCREEN_NOT_OPEN"
+    },
+    {
+      "caseId": "SC-1793ffc6d8fbadb5",
+      "scenarioId": "TC-0101-CTL-0067",
+      "sourceTestCaseId": "0101-CTL-0067",
+      "mapScreenCode": "HT010101",
+      "selectedOrderTab": "매수",
+      "transactionalCommand": "",
+      "staticPreflight": "PASS",
+      "liveExecution": "BLOCKED_SCREEN_NOT_OPEN"
+    },
+    {
+      "caseId": "SC-88c63a75ed3d69b0",
+      "scenarioId": "TC-0101-CTL-0067",
+      "sourceTestCaseId": "0101-CTL-0067",
+      "mapScreenCode": "HT010101",
+      "selectedOrderTab": "매도",
+      "transactionalCommand": "",
+      "staticPreflight": "PASS",
+      "liveExecution": "BLOCKED_SCREEN_NOT_OPEN"
+    },
+    {
+      "caseId": "SC-b8c14ad9d98c83dc",
+      "scenarioId": "TC-0101-CTL-0067",
+      "sourceTestCaseId": "0101-CTL-0067",
+      "mapScreenCode": "HT010101",
+      "selectedOrderTab": "정정/취소",
+      "transactionalCommand": "",
+      "staticPreflight": "PASS",
+      "liveExecution": "BLOCKED_SCREEN_NOT_OPEN"
+    }
+  ]
+}

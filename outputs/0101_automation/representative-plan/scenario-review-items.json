@@ -1,0 +1,210 @@
+[
+  {
+    "reviewId": "REV-0101-0f014d3c141d",
+    "severity": "Required",
+    "screenNumber": "0101",
+    "subject": "0101-CTL-0051:CAL_LoanDate",
+    "question": "\uAD6C\uCCB4 \uC2E4\uD589 \uC785\uB825\uAC12 \uB610\uB294 \uC0C1\uD0DC \uC21C\uD68C \uADDC\uCE59\uC744 \uC2B9\uC778\uD574 \uC8FC\uC138\uC694.",
+    "reason": "\uC785\uB825\uAC12 \u0027\uCD08\uAE30 \uC0C1\uD0DC\u0027\uC740 \uB2E8\uC77C \uC2E4\uD589\uAC12\uC73C\uB85C \uD655\uC815\uD560 \uC218 \uC5C6\uC2B5\uB2C8\uB2E4."
+  },
+  {
+    "reviewId": "REV-0101-15f707ac8d51",
+    "severity": "Required",
+    "screenNumber": "0101",
+    "subject": "0101-CTL-0073:CAL_1",
+    "question": "\uAD6C\uCCB4 \uC2E4\uD589 \uC785\uB825\uAC12 \uB610\uB294 \uC0C1\uD0DC \uC21C\uD68C \uADDC\uCE59\uC744 \uC2B9\uC778\uD574 \uC8FC\uC138\uC694.",
+    "reason": "\uC785\uB825\uAC12 \u0027\uCD08\uAE30 \uC0C1\uD0DC\u0027\uC740 \uB2E8\uC77C \uC2E4\uD589\uAC12\uC73C\uB85C \uD655\uC815\uD560 \uC218 \uC5C6\uC2B5\uB2C8\uB2E4."
+  },
+  {
+    "reviewId": "REV-0101-8cefaf6ade8e",
+    "severity": "Required",
+    "screenNumber": "0101",
+    "subject": "0101-CTL-0158:CAL_Date",
+    "question": "\uAD6C\uCCB4 \uC2E4\uD589 \uC785\uB825\uAC12 \uB610\uB294 \uC0C1\uD0DC \uC21C\uD68C \uADDC\uCE59\uC744 \uC2B9\uC778\uD574 \uC8FC\uC138\uC694.",
+    "reason": "\uC785\uB825\uAC12 \u0027\uCD08\uAE30 \uC0C1\uD0DC\u0027\uC740 \uB2E8\uC77C \uC2E4\uD589\uAC12\uC73C\uB85C \uD655\uC815\uD560 \uC218 \uC5C6\uC2B5\uB2C8\uB2E4."
+  },
+  {
+    "reviewId": "REV-0101-a12d1bd13746",
+    "severity": "Required",
+    "screenNumber": "0101",
+    "subject": "0101-CTL-0205:CAL_1",
+    "question": "\uAD6C\uCCB4 \uC2E4\uD589 \uC785\uB825\uAC12 \uB610\uB294 \uC0C1\uD0DC \uC21C\uD68C \uADDC\uCE59\uC744 \uC2B9\uC778\uD574 \uC8FC\uC138\uC694.",
+    "reason": "\uC785\uB825\uAC12 \u0027\uCD08\uAE30 \uC0C1\uD0DC\u0027\uC740 \uB2E8\uC77C \uC2E4\uD589\uAC12\uC73C\uB85C \uD655\uC815\uD560 \uC218 \uC5C6\uC2B5\uB2C8\uB2E4."
+  },
+  {
+    "reviewId": "REV-0101-1d8f107867c6",
+    "severity": "Required",
+    "screenNumber": "0101",
+    "subject": "0101-CTL-0279:CAL_LoanDate",
+    "question": "\uAD6C\uCCB4 \uC2E4\uD589 \uC785\uB825\uAC12 \uB610\uB294 \uC0C1\uD0DC \uC21C\uD68C \uADDC\uCE59\uC744 \uC2B9\uC778\uD574 \uC8FC\uC138\uC694.",
+    "reason": "\uC785\uB825\uAC12 \u0027\uCD08\uAE30 \uC0C1\uD0DC\u0027\uC740 \uB2E8\uC77C \uC2E4\uD589\uAC12\uC73C\uB85C \uD655\uC815\uD560 \uC218 \uC5C6\uC2B5\uB2C8\uB2E4."
+  },
+  {
+    "reviewId": "REV-0101-3ee0d65cfc2d",
+    "severity": "Required",
+    "screenNumber": "0101",
+    "subject": "0101-EVT-0412:CAL_Date",
+    "question": "\uAD6C\uCCB4 \uC2E4\uD589 \uC785\uB825\uAC12 \uB610\uB294 \uC0C1\uD0DC \uC21C\uD68C \uADDC\uCE59\uC744 \uC2B9\uC778\uD574 \uC8FC\uC138\uC694.",
+    "reason": "\uC785\uB825\uAC12 \u0027\uC120\uD0DD\uAC12 \uBCC0\uACBD\u0027\uC740 \uB2E8\uC77C \uC2E4\uD589\uAC12\uC73C\uB85C \uD655\uC815\uD560 \uC218 \uC5C6\uC2B5\uB2C8\uB2E4."
+  },
+  {
+    "reviewId": "REV-0101-cffdd9fbd3bd",
+    "severity": "Required",
+    "screenNumber": "0101",
+    "subject": "0101-INP-0637:CAL_LoanDate",
+    "question": "\uAD6C\uCCB4 \uC2E4\uD589 \uC785\uB825\uAC12 \uB610\uB294 \uC0C1\uD0DC \uC21C\uD68C \uADDC\uCE59\uC744 \uC2B9\uC778\uD574 \uC8FC\uC138\uC694.",
+    "reason": "\uC785\uB825\uAC12 \u0027\u003C\uC720\uD6A8 \uC601\uC5C5\uC77C yyyyMMdd\u003E\u0027\uC740 \uB2E8\uC77C \uC2E4\uD589\uAC12\uC73C\uB85C \uD655\uC815\uD560 \uC218 \uC5C6\uC2B5\uB2C8\uB2E4."
+  },
+  {
+    "reviewId": "REV-0101-82e0df30bb14",
+    "severity": "Required",
+    "screenNumber": "0101",
+    "subject": "0101-INP-0638:CAL_LoanDate",
+    "question": "\uAD6C\uCCB4 \uC2E4\uD589 \uC785\uB825\uAC12 \uB610\uB294 \uC0C1\uD0DC \uC21C\uD68C \uADDC\uCE59\uC744 \uC2B9\uC778\uD574 \uC8FC\uC138\uC694.",
+    "reason": "\uC785\uB825\uAC12 \u002720260230\u0027\uC740 \uB2E8\uC77C \uC2E4\uD589\uAC12\uC73C\uB85C \uD655\uC815\uD560 \uC218 \uC5C6\uC2B5\uB2C8\uB2E4."
+  },
+  {
+    "reviewId": "REV-0101-14c65644a875",
+    "severity": "Required",
+    "screenNumber": "0101",
+    "subject": "0101-INP-0639:CAL_LoanDate",
+    "question": "\uAD6C\uCCB4 \uC2E4\uD589 \uC785\uB825\uAC12 \uB610\uB294 \uC0C1\uD0DC \uC21C\uD68C \uADDC\uCE59\uC744 \uC2B9\uC778\uD574 \uC8FC\uC138\uC694.",
+    "reason": "\uC785\uB825\uAC12 \u0027\u003C\uCD5C\uC18C\uC77C/\uCD5C\uB300\uC77C/\uBC94\uC704\uC678 \uC77C\uC790\u003E\u0027\uC740 \uB2E8\uC77C \uC2E4\uD589\uAC12\uC73C\uB85C \uD655\uC815\uD560 \uC218 \uC5C6\uC2B5\uB2C8\uB2E4."
+  },
+  {
+    "reviewId": "REV-0101-bd9279e0cd2d",
+    "severity": "Required",
+    "screenNumber": "0101",
+    "subject": "0101-INP-0640:CAL_LoanDate",
+    "question": "\uAD6C\uCCB4 \uC2E4\uD589 \uC785\uB825\uAC12 \uB610\uB294 \uC0C1\uD0DC \uC21C\uD68C \uADDC\uCE59\uC744 \uC2B9\uC778\uD574 \uC8FC\uC138\uC694.",
+    "reason": "\uC785\uB825\uAC12 \u0027\uB2EC\uB825 \uC120\uD0DD \uD6C4 \uD0A4\uBCF4\uB4DC \uC9C1\uC811\uC785\uB825\u0027\uC740 \uB2E8\uC77C \uC2E4\uD589\uAC12\uC73C\uB85C \uD655\uC815\uD560 \uC218 \uC5C6\uC2B5\uB2C8\uB2E4."
+  },
+  {
+    "reviewId": "REV-0101-bf79a83b812f",
+    "severity": "Required",
+    "screenNumber": "0101",
+    "subject": "0101-INP-0651:CAL_1",
+    "question": "\uAD6C\uCCB4 \uC2E4\uD589 \uC785\uB825\uAC12 \uB610\uB294 \uC0C1\uD0DC \uC21C\uD68C \uADDC\uCE59\uC744 \uC2B9\uC778\uD574 \uC8FC\uC138\uC694.",
+    "reason": "\uC785\uB825\uAC12 \u0027\u003C\uC720\uD6A8 \uC601\uC5C5\uC77C yyyyMMdd\u003E\u0027\uC740 \uB2E8\uC77C \uC2E4\uD589\uAC12\uC73C\uB85C \uD655\uC815\uD560 \uC218 \uC5C6\uC2B5\uB2C8\uB2E4."
+  },
+  {
+    "reviewId": "REV-0101-46c0ed089a03",
+    "severity": "Required",
+    "screenNumber": "0101",
+    "subject": "0101-INP-0652:CAL_1",
+    "question": "\uAD6C\uCCB4 \uC2E4\uD589 \uC785\uB825\uAC12 \uB610\uB294 \uC0C1\uD0DC \uC21C\uD68C \uADDC\uCE59\uC744 \uC2B9\uC778\uD574 \uC8FC\uC138\uC694.",
+    "reason": "\uC785\uB825\uAC12 \u002720260230\u0027\uC740 \uB2E8\uC77C \uC2E4\uD589\uAC12\uC73C\uB85C \uD655\uC815\uD560 \uC218 \uC5C6\uC2B5\uB2C8\uB2E4."
+  },
+  {
+    "reviewId": "REV-0101-569b77e4fbcc",
+    "severity": "Required",
+    "screenNumber": "0101",
+    "subject": "0101-INP-0653:CAL_1",
+    "question": "\uAD6C\uCCB4 \uC2E4\uD589 \uC785\uB825\uAC12 \uB610\uB294 \uC0C1\uD0DC \uC21C\uD68C \uADDC\uCE59\uC744 \uC2B9\uC778\uD574 \uC8FC\uC138\uC694.",
+    "reason": "\uC785\uB825\uAC12 \u0027\u003C\uCD5C\uC18C\uC77C/\uCD5C\uB300\uC77C/\uBC94\uC704\uC678 \uC77C\uC790\u003E\u0027\uC740 \uB2E8\uC77C \uC2E4\uD589\uAC12\uC73C\uB85C \uD655\uC815\uD560 \uC218 \uC5C6\uC2B5\uB2C8\uB2E4."
+  },
+  {
+    "reviewId": "REV-0101-d16c62553353",
+    "severity": "Required",
+    "screenNumber": "0101",
+    "subject": "0101-INP-0654:CAL_1",
+    "question": "\uAD6C\uCCB4 \uC2E4\uD589 \uC785\uB825\uAC12 \uB610\uB294 \uC0C1\uD0DC \uC21C\uD68C \uADDC\uCE59\uC744 \uC2B9\uC778\uD574 \uC8FC\uC138\uC694.",
+    "reason": "\uC785\uB825\uAC12 \u0027\uB2EC\uB825 \uC120\uD0DD \uD6C4 \uD0A4\uBCF4\uB4DC \uC9C1\uC811\uC785\uB825\u0027\uC740 \uB2E8\uC77C \uC2E4\uD589\uAC12\uC73C\uB85C \uD655\uC815\uD560 \uC218 \uC5C6\uC2B5\uB2C8\uB2E4."
+  },
+  {
+    "reviewId": "REV-0101-2c0e9c44b21c",
+    "severity": "Required",
+    "screenNumber": "0101",
+    "subject": "0101-INP-0705:CAL_Date",
+    "question": "\uAD6C\uCCB4 \uC2E4\uD589 \uC785\uB825\uAC12 \uB610\uB294 \uC0C1\uD0DC \uC21C\uD68C \uADDC\uCE59\uC744 \uC2B9\uC778\uD574 \uC8FC\uC138\uC694.",
+    "reason": "\uC785\uB825\uAC12 \u0027\u003C\uC720\uD6A8 \uC601\uC5C5\uC77C yyyyMMdd\u003E\u0027\uC740 \uB2E8\uC77C \uC2E4\uD589\uAC12\uC73C\uB85C \uD655\uC815\uD560 \uC218 \uC5C6\uC2B5\uB2C8\uB2E4."
+  },
+  {
+    "reviewId": "REV-0101-19ef79b09504",
+    "severity": "Required",
+    "screenNumber": "0101",
+    "subject": "0101-INP-0706:CAL_Date",
+    "question": "\uAD6C\uCCB4 \uC2E4\uD589 \uC785\uB825\uAC12 \uB610\uB294 \uC0C1\uD0DC \uC21C\uD68C \uADDC\uCE59\uC744 \uC2B9\uC778\uD574 \uC8FC\uC138\uC694.",
+    "reason": "\uC785\uB825\uAC12 \u002720260230\u0027\uC740 \uB2E8\uC77C \uC2E4\uD589\uAC12\uC73C\uB85C \uD655\uC815\uD560 \uC218 \uC5C6\uC2B5\uB2C8\uB2E4."
+  },
+  {
+    "reviewId": "REV-0101-960aa6461cf9",
+    "severity": "Required",
+    "screenNumber": "0101",
+    "subject": "0101-INP-0707:CAL_Date",
+    "question": "\uAD6C\uCCB4 \uC2E4\uD589 \uC785\uB825\uAC12 \uB610\uB294 \uC0C1\uD0DC \uC21C\uD68C \uADDC\uCE59\uC744 \uC2B9\uC778\uD574 \uC8FC\uC138\uC694.",
+    "reason": "\uC785\uB825\uAC12 \u0027\u003C\uCD5C\uC18C\uC77C/\uCD5C\uB300\uC77C/\uBC94\uC704\uC678 \uC77C\uC790\u003E\u0027\uC740 \uB2E8\uC77C \uC2E4\uD589\uAC12\uC73C\uB85C \uD655\uC815\uD560 \uC218 \uC5C6\uC2B5\uB2C8\uB2E4."
+  },
+  {
+    "reviewId": "REV-0101-7d60d3526351",
+    "severity": "Required",
+    "screenNumber": "0101",
+    "subject": "0101-INP-0708:CAL_Date",
+    "question": "\uAD6C\uCCB4 \uC2E4\uD589 \uC785\uB825\uAC12 \uB610\uB294 \uC0C1\uD0DC \uC21C\uD68C \uADDC\uCE59\uC744 \uC2B9\uC778\uD574 \uC8FC\uC138\uC694.",
+    "reason": "\uC785\uB825\uAC12 \u0027\uB2EC\uB825 \uC120\uD0DD \uD6C4 \uD0A4\uBCF4\uB4DC \uC9C1\uC811\uC785\uB825\u0027\uC740 \uB2E8\uC77C \uC2E4\uD589\uAC12\uC73C\uB85C \uD655\uC815\uD560 \uC218 \uC5C6\uC2B5\uB2C8\uB2E4."
+  },
+  {
+    "reviewId": "REV-0101-23f7dea3a3b3",
+    "severity": "Required",
+    "screenNumber": "0101",
+    "subject": "0101-INP-0746:CAL_1",
+    "question": "\uAD6C\uCCB4 \uC2E4\uD589 \uC785\uB825\uAC12 \uB610\uB294 \uC0C1\uD0DC \uC21C\uD68C \uADDC\uCE59\uC744 \uC2B9\uC778\uD574 \uC8FC\uC138\uC694.",
+    "reason": "\uC785\uB825\uAC12 \u0027\u003C\uC720\uD6A8 \uC601\uC5C5\uC77C yyyyMMdd\u003E\u0027\uC740 \uB2E8\uC77C \uC2E4\uD589\uAC12\uC73C\uB85C \uD655\uC815\uD560 \uC218 \uC5C6\uC2B5\uB2C8\uB2E4."
+  },
+  {
+    "reviewId": "REV-0101-06f6c0000e7e",
+    "severity": "Required",
+    "screenNumber": "0101",
+    "subject": "0101-INP-0747:CAL_1",
+    "question": "\uAD6C\uCCB4 \uC2E4\uD589 \uC785\uB825\uAC12 \uB610\uB294 \uC0C1\uD0DC \uC21C\uD68C \uADDC\uCE59\uC744 \uC2B9\uC778\uD574 \uC8FC\uC138\uC694.",
+    "reason": "\uC785\uB825\uAC12 \u002720260230\u0027\uC740 \uB2E8\uC77C \uC2E4\uD589\uAC12\uC73C\uB85C \uD655\uC815\uD560 \uC218 \uC5C6\uC2B5\uB2C8\uB2E4."
+  },
+  {
+    "reviewId": "REV-0101-fce7fae52d3f",
+    "severity": "Required",
+    "screenNumber": "0101",
+    "subject": "0101-INP-0748:CAL_1",
+    "question": "\uAD6C\uCCB4 \uC2E4\uD589 \uC785\uB825\uAC12 \uB610\uB294 \uC0C1\uD0DC \uC21C\uD68C \uADDC\uCE59\uC744 \uC2B9\uC778\uD574 \uC8FC\uC138\uC694.",
+    "reason": "\uC785\uB825\uAC12 \u0027\u003C\uCD5C\uC18C\uC77C/\uCD5C\uB300\uC77C/\uBC94\uC704\uC678 \uC77C\uC790\u003E\u0027\uC740 \uB2E8\uC77C \uC2E4\uD589\uAC12\uC73C\uB85C \uD655\uC815\uD560 \uC218 \uC5C6\uC2B5\uB2C8\uB2E4."
+  },
+  {
+    "reviewId": "REV-0101-a385bd382a5e",
+    "severity": "Required",
+    "screenNumber": "0101",
+    "subject": "0101-INP-0749:CAL_1",
+    "question": "\uAD6C\uCCB4 \uC2E4\uD589 \uC785\uB825\uAC12 \uB610\uB294 \uC0C1\uD0DC \uC21C\uD68C \uADDC\uCE59\uC744 \uC2B9\uC778\uD574 \uC8FC\uC138\uC694.",
+    "reason": "\uC785\uB825\uAC12 \u0027\uB2EC\uB825 \uC120\uD0DD \uD6C4 \uD0A4\uBCF4\uB4DC \uC9C1\uC811\uC785\uB825\u0027\uC740 \uB2E8\uC77C \uC2E4\uD589\uAC12\uC73C\uB85C \uD655\uC815\uD560 \uC218 \uC5C6\uC2B5\uB2C8\uB2E4."
+  },
+  {
+    "reviewId": "REV-0101-1ce991343ba6",
+    "severity": "Required",
+    "screenNumber": "0101",
+    "subject": "0101-INP-0804:CAL_LoanDate",
+    "question": "\uAD6C\uCCB4 \uC2E4\uD589 \uC785\uB825\uAC12 \uB610\uB294 \uC0C1\uD0DC \uC21C\uD68C \uADDC\uCE59\uC744 \uC2B9\uC778\uD574 \uC8FC\uC138\uC694.",
+    "reason": "\uC785\uB825\uAC12 \u0027\u003C\uC720\uD6A8 \uC601\uC5C5\uC77C yyyyMMdd\u003E\u0027\uC740 \uB2E8\uC77C \uC2E4\uD589\uAC12\uC73C\uB85C \uD655\uC815\uD560 \uC218 \uC5C6\uC2B5\uB2C8\uB2E4."
+  },
+  {
+    "reviewId": "REV-0101-5efd323bf07d",
+    "severity": "Required",
+    "screenNumber": "0101",
+    "subject": "0101-INP-0805:CAL_LoanDate",
+    "question": "\uAD6C\uCCB4 \uC2E4\uD589 \uC785\uB825\uAC12 \uB610\uB294 \uC0C1\uD0DC \uC21C\uD68C \uADDC\uCE59\uC744 \uC2B9\uC778\uD574 \uC8FC\uC138\uC694.",
+    "reason": "\uC785\uB825\uAC12 \u002720260230\u0027\uC740 \uB2E8\uC77C \uC2E4\uD589\uAC12\uC73C\uB85C \uD655\uC815\uD560 \uC218 \uC5C6\uC2B5\uB2C8\uB2E4."
+  },
+  {
+    "reviewId": "REV-0101-57eceaf9594b",
+    "severity": "Required",
+    "screenNumber": "0101",
+    "subject": "0101-INP-0806:CAL_LoanDate",
+    "question": "\uAD6C\uCCB4 \uC2E4\uD589 \uC785\uB825\uAC12 \uB610\uB294 \uC0C1\uD0DC \uC21C\uD68C \uADDC\uCE59\uC744 \uC2B9\uC778\uD574 \uC8FC\uC138\uC694.",
+    "reason": "\uC785\uB825\uAC12 \u0027\u003C\uCD5C\uC18C\uC77C/\uCD5C\uB300\uC77C/\uBC94\uC704\uC678 \uC77C\uC790\u003E\u0027\uC740 \uB2E8\uC77C \uC2E4\uD589\uAC12\uC73C\uB85C \uD655\uC815\uD560 \uC218 \uC5C6\uC2B5\uB2C8\uB2E4."
+  },
+  {
+    "reviewId": "REV-0101-8cc72e791a38",
+    "severity": "Required",
+    "screenNumber": "0101",
+    "subject": "0101-INP-0807:CAL_LoanDate",
+    "question": "\uAD6C\uCCB4 \uC2E4\uD589 \uC785\uB825\uAC12 \uB610\uB294 \uC0C1\uD0DC \uC21C\uD68C \uADDC\uCE59\uC744 \uC2B9\uC778\uD574 \uC8FC\uC138\uC694.",
+    "reason": "\uC785\uB825\uAC12 \u0027\uB2EC\uB825 \uC120\uD0DD \uD6C4 \uD0A4\uBCF4\uB4DC \uC9C1\uC811\uC785\uB825\u0027\uC740 \uB2E8\uC77C \uC2E4\uD589\uAC12\uC73C\uB85C \uD655\uC815\uD560 \uC218 \uC5C6\uC2B5\uB2C8\uB2E4."
+  }
+]

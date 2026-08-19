@@ -1,0 +1,732 @@
+{
+  "packageVersion": "1.0",
+  "sourceInstallationFingerprint": "674dff5dc207d0b98d12e4725d17d99fdeff797218a2413141796c91dfbbb3fc",
+  "generationSummary": {
+    "referenceDate": "20260810",
+    "combinationStrategy": "Mixed",
+    "assumptions": [
+      "예시이므로 한 화면의 기본 조회만 축약해 표시했다."
+    ]
+  },
+  "screens": [
+    {
+      "screenNumber": "0701",
+      "screenName": "CEO리포트",
+      "scenarios": [
+        {
+          "scenarioId": "TS-0701-BASIC_QUERY",
+          "title": "기본값 조회",
+          "objective": "화면 기본 계좌값으로 조회가 실행되고 시스템 실패 신호가 없는지 확인한다.",
+          "priority": "P0",
+          "category": "기본조회",
+          "executionOrder": "RuntimeTabOrder",
+          "preconditions": [
+            "1Q HTS 로그인 완료",
+            "테스트 계좌 기본값 표시"
+          ],
+          "steps": [
+            {
+              "sequence": 1,
+              "action": "Focus",
+              "controlLogicalName": null,
+              "valueRef": null,
+              "expectedObservation": "대상 화면이 표시된다."
+            },
+            {
+              "sequence": 2,
+              "action": "Query",
+              "controlLogicalName": "BTN_2",
+              "valueRef": null,
+              "expectedObservation": "조회 동작이 실행되고 화면이 응답 상태를 유지한다."
+            },
+            {
+              "sequence": 3,
+              "action": "Observe",
+              "controlLogicalName": null,
+              "valueRef": null,
+              "expectedObservation": "시스템·통신·프로그램 실패 팝업과 신규 실패 로그가 없다."
+            }
+          ],
+          "coveredControls": [
+            "BTN_2"
+          ],
+          "coveredValidationRuleIds": [],
+          "expectedResult": "제품 실패 신호가 없고 조회 실행 증거가 있으면 PASS 후보이며, 업무 수치 정합성은 판정하지 않는다.",
+          "automationStatus": "Ready"
+        }
+      ],
+      "coverageGaps": [
+        "예시 파일이므로 기본 조회 외 컨트롤과 검증 규칙은 생략했다."
+      ]
+    },
+    {
+      "screenNumber": "0702",
+      "screenName": "종합자산 조회",
+      "scenarios": [
+        {
+          "scenarioId": "TS-0702-BASIC_QUERY",
+          "title": "기본값 조회",
+          "objective": "화면 기본 계좌값으로 조회가 실행되고 시스템 실패 신호가 없는지 확인한다.",
+          "priority": "P0",
+          "category": "기본조회",
+          "executionOrder": "RuntimeTabOrder",
+          "preconditions": [
+            "1Q HTS 로그인 완료",
+            "테스트 계좌 기본값 표시"
+          ],
+          "steps": [
+            {
+              "sequence": 1,
+              "action": "Focus",
+              "controlLogicalName": null,
+              "valueRef": null,
+              "expectedObservation": "대상 화면이 표시된다."
+            },
+            {
+              "sequence": 2,
+              "action": "Query",
+              "controlLogicalName": "BTN_2",
+              "valueRef": null,
+              "expectedObservation": "조회 동작이 실행되고 화면이 응답 상태를 유지한다."
+            },
+            {
+              "sequence": 3,
+              "action": "Observe",
+              "controlLogicalName": null,
+              "valueRef": null,
+              "expectedObservation": "시스템·통신·프로그램 실패 팝업과 신규 실패 로그가 없다."
+            }
+          ],
+          "coveredControls": [
+            "BTN_2"
+          ],
+          "coveredValidationRuleIds": [],
+          "expectedResult": "제품 실패 신호가 없고 조회 실행 증거가 있으면 PASS 후보이며, 업무 수치 정합성은 판정하지 않는다.",
+          "automationStatus": "Ready"
+        }
+      ],
+      "coverageGaps": [
+        "예시 파일이므로 기본 조회 외 컨트롤과 검증 규칙은 생략했다."
+      ]
+    },
+    {
+      "screenNumber": "0705",
+      "screenName": "종합잔고 Plus",
+      "scenarios": [
+        {
+          "scenarioId": "TS-0705-BASIC_QUERY",
+          "title": "기본값 조회",
+          "objective": "화면 기본 계좌값으로 조회가 실행되고 시스템 실패 신호가 없는지 확인한다.",
+          "priority": "P0",
+          "category": "기본조회",
+          "executionOrder": "RuntimeTabOrder",
+          "preconditions": [
+            "1Q HTS 로그인 완료",
+            "테스트 계좌 기본값 표시"
+          ],
+          "steps": [
+            {
+              "sequence": 1,
+              "action": "Focus",
+              "controlLogicalName": null,
+              "valueRef": null,
+              "expectedObservation": "대상 화면이 표시된다."
+            },
+            {
+              "sequence": 2,
+              "action": "Query",
+              "controlLogicalName": null,
+              "valueRef": null,
+              "expectedObservation": "조회 동작이 실행되고 화면이 응답 상태를 유지한다."
+            },
+            {
+              "sequence": 3,
+              "action": "Observe",
+              "controlLogicalName": null,
+              "valueRef": null,
+              "expectedObservation": "시스템·통신·프로그램 실패 팝업과 신규 실패 로그가 없다."
+            }
+          ],
+          "coveredControls": [],
+          "coveredValidationRuleIds": [],
+          "expectedResult": "제품 실패 신호가 없고 조회 실행 증거가 있으면 PASS 후보이며, 업무 수치 정합성은 판정하지 않는다.",
+          "automationStatus": "NeedsLocator"
+        }
+      ],
+      "coverageGaps": [
+        "예시 파일이므로 기본 조회 외 컨트롤과 검증 규칙은 생략했다."
+      ]
+    },
+    {
+      "screenNumber": "0708",
+      "screenName": "주식실시간 잔고(신용합산)",
+      "scenarios": [
+        {
+          "scenarioId": "TS-0708-BASIC_QUERY",
+          "title": "기본값 조회",
+          "objective": "화면 기본 계좌값으로 조회가 실행되고 시스템 실패 신호가 없는지 확인한다.",
+          "priority": "P0",
+          "category": "기본조회",
+          "executionOrder": "RuntimeTabOrder",
+          "preconditions": [
+            "1Q HTS 로그인 완료",
+            "테스트 계좌 기본값 표시"
+          ],
+          "steps": [
+            {
+              "sequence": 1,
+              "action": "Focus",
+              "controlLogicalName": null,
+              "valueRef": null,
+              "expectedObservation": "대상 화면이 표시된다."
+            },
+            {
+              "sequence": 2,
+              "action": "Query",
+              "controlLogicalName": "BTN_SEARCH",
+              "valueRef": null,
+              "expectedObservation": "조회 동작이 실행되고 화면이 응답 상태를 유지한다."
+            },
+            {
+              "sequence": 3,
+              "action": "Observe",
+              "controlLogicalName": null,
+              "valueRef": null,
+              "expectedObservation": "시스템·통신·프로그램 실패 팝업과 신규 실패 로그가 없다."
+            }
+          ],
+          "coveredControls": [
+            "BTN_SEARCH"
+          ],
+          "coveredValidationRuleIds": [],
+          "expectedResult": "제품 실패 신호가 없고 조회 실행 증거가 있으면 PASS 후보이며, 업무 수치 정합성은 판정하지 않는다.",
+          "automationStatus": "Ready"
+        }
+      ],
+      "coverageGaps": [
+        "예시 파일이므로 기본 조회 외 컨트롤과 검증 규칙은 생략했다."
+      ]
+    },
+    {
+      "screenNumber": "0710",
+      "screenName": "예수금조회",
+      "scenarios": [
+        {
+          "scenarioId": "TS-0710-BASIC_QUERY",
+          "title": "기본값 조회",
+          "objective": "화면 기본 계좌값으로 조회가 실행되고 시스템 실패 신호가 없는지 확인한다.",
+          "priority": "P0",
+          "category": "기본조회",
+          "executionOrder": "RuntimeTabOrder",
+          "preconditions": [
+            "1Q HTS 로그인 완료",
+            "테스트 계좌 기본값 표시"
+          ],
+          "steps": [
+            {
+              "sequence": 1,
+              "action": "Focus",
+              "controlLogicalName": null,
+              "valueRef": null,
+              "expectedObservation": "대상 화면이 표시된다."
+            },
+            {
+              "sequence": 2,
+              "action": "Query",
+              "controlLogicalName": "BTN_Comm",
+              "valueRef": null,
+              "expectedObservation": "조회 동작이 실행되고 화면이 응답 상태를 유지한다."
+            },
+            {
+              "sequence": 3,
+              "action": "Observe",
+              "controlLogicalName": null,
+              "valueRef": null,
+              "expectedObservation": "시스템·통신·프로그램 실패 팝업과 신규 실패 로그가 없다."
+            }
+          ],
+          "coveredControls": [
+            "BTN_Comm"
+          ],
+          "coveredValidationRuleIds": [],
+          "expectedResult": "제품 실패 신호가 없고 조회 실행 증거가 있으면 PASS 후보이며, 업무 수치 정합성은 판정하지 않는다.",
+          "automationStatus": "Ready"
+        }
+      ],
+      "coverageGaps": [
+        "예시 파일이므로 기본 조회 외 컨트롤과 검증 규칙은 생략했다."
+      ]
+    },
+    {
+      "screenNumber": "0711",
+      "screenName": "거래내역조회",
+      "scenarios": [
+        {
+          "scenarioId": "TS-0711-BASIC_QUERY",
+          "title": "기본값 조회",
+          "objective": "화면 기본 계좌값으로 조회가 실행되고 시스템 실패 신호가 없는지 확인한다.",
+          "priority": "P0",
+          "category": "기본조회",
+          "executionOrder": "RuntimeTabOrder",
+          "preconditions": [
+            "1Q HTS 로그인 완료",
+            "테스트 계좌 기본값 표시"
+          ],
+          "steps": [
+            {
+              "sequence": 1,
+              "action": "Focus",
+              "controlLogicalName": null,
+              "valueRef": null,
+              "expectedObservation": "대상 화면이 표시된다."
+            },
+            {
+              "sequence": 2,
+              "action": "Query",
+              "controlLogicalName": "BTN_Comm",
+              "valueRef": null,
+              "expectedObservation": "조회 동작이 실행되고 화면이 응답 상태를 유지한다."
+            },
+            {
+              "sequence": 3,
+              "action": "Observe",
+              "controlLogicalName": null,
+              "valueRef": null,
+              "expectedObservation": "시스템·통신·프로그램 실패 팝업과 신규 실패 로그가 없다."
+            }
+          ],
+          "coveredControls": [
+            "BTN_Comm"
+          ],
+          "coveredValidationRuleIds": [],
+          "expectedResult": "제품 실패 신호가 없고 조회 실행 증거가 있으면 PASS 후보이며, 업무 수치 정합성은 판정하지 않는다.",
+          "automationStatus": "Ready"
+        }
+      ],
+      "coverageGaps": [
+        "예시 파일이므로 기본 조회 외 컨트롤과 검증 규칙은 생략했다."
+      ]
+    },
+    {
+      "screenNumber": "0712",
+      "screenName": "매매정산내역",
+      "scenarios": [
+        {
+          "scenarioId": "TS-0712-BASIC_QUERY",
+          "title": "기본값 조회",
+          "objective": "화면 기본 계좌값으로 조회가 실행되고 시스템 실패 신호가 없는지 확인한다.",
+          "priority": "P0",
+          "category": "기본조회",
+          "executionOrder": "RuntimeTabOrder",
+          "preconditions": [
+            "1Q HTS 로그인 완료",
+            "테스트 계좌 기본값 표시"
+          ],
+          "steps": [
+            {
+              "sequence": 1,
+              "action": "Focus",
+              "controlLogicalName": null,
+              "valueRef": null,
+              "expectedObservation": "대상 화면이 표시된다."
+            },
+            {
+              "sequence": 2,
+              "action": "Query",
+              "controlLogicalName": "BTN_Comm",
+              "valueRef": null,
+              "expectedObservation": "조회 동작이 실행되고 화면이 응답 상태를 유지한다."
+            },
+            {
+              "sequence": 3,
+              "action": "Observe",
+              "controlLogicalName": null,
+              "valueRef": null,
+              "expectedObservation": "시스템·통신·프로그램 실패 팝업과 신규 실패 로그가 없다."
+            }
+          ],
+          "coveredControls": [
+            "BTN_Comm"
+          ],
+          "coveredValidationRuleIds": [],
+          "expectedResult": "제품 실패 신호가 없고 조회 실행 증거가 있으면 PASS 후보이며, 업무 수치 정합성은 판정하지 않는다.",
+          "automationStatus": "Ready"
+        }
+      ],
+      "coverageGaps": [
+        "예시 파일이므로 기본 조회 외 컨트롤과 검증 규칙은 생략했다."
+      ]
+    },
+    {
+      "screenNumber": "0713",
+      "screenName": "당일매매손익조회",
+      "scenarios": [
+        {
+          "scenarioId": "TS-0713-BASIC_QUERY",
+          "title": "기본값 조회",
+          "objective": "화면 기본 계좌값으로 조회가 실행되고 시스템 실패 신호가 없는지 확인한다.",
+          "priority": "P0",
+          "category": "기본조회",
+          "executionOrder": "RuntimeTabOrder",
+          "preconditions": [
+            "1Q HTS 로그인 완료",
+            "테스트 계좌 기본값 표시"
+          ],
+          "steps": [
+            {
+              "sequence": 1,
+              "action": "Focus",
+              "controlLogicalName": null,
+              "valueRef": null,
+              "expectedObservation": "대상 화면이 표시된다."
+            },
+            {
+              "sequence": 2,
+              "action": "Query",
+              "controlLogicalName": "BTN_Comm",
+              "valueRef": null,
+              "expectedObservation": "조회 동작이 실행되고 화면이 응답 상태를 유지한다."
+            },
+            {
+              "sequence": 3,
+              "action": "Observe",
+              "controlLogicalName": null,
+              "valueRef": null,
+              "expectedObservation": "시스템·통신·프로그램 실패 팝업과 신규 실패 로그가 없다."
+            }
+          ],
+          "coveredControls": [
+            "BTN_Comm"
+          ],
+          "coveredValidationRuleIds": [],
+          "expectedResult": "제품 실패 신호가 없고 조회 실행 증거가 있으면 PASS 후보이며, 업무 수치 정합성은 판정하지 않는다.",
+          "automationStatus": "Ready"
+        }
+      ],
+      "coverageGaps": [
+        "예시 파일이므로 기본 조회 외 컨트롤과 검증 규칙은 생략했다."
+      ]
+    },
+    {
+      "screenNumber": "0714",
+      "screenName": "기간별 실현손익",
+      "scenarios": [
+        {
+          "scenarioId": "TS-0714-BASIC_QUERY",
+          "title": "기본값 조회",
+          "objective": "화면 기본 계좌값으로 조회가 실행되고 시스템 실패 신호가 없는지 확인한다.",
+          "priority": "P0",
+          "category": "기본조회",
+          "executionOrder": "RuntimeTabOrder",
+          "preconditions": [
+            "1Q HTS 로그인 완료",
+            "테스트 계좌 기본값 표시"
+          ],
+          "steps": [
+            {
+              "sequence": 1,
+              "action": "Focus",
+              "controlLogicalName": null,
+              "valueRef": null,
+              "expectedObservation": "대상 화면이 표시된다."
+            },
+            {
+              "sequence": 2,
+              "action": "Query",
+              "controlLogicalName": "BTN_Comm",
+              "valueRef": null,
+              "expectedObservation": "조회 동작이 실행되고 화면이 응답 상태를 유지한다."
+            },
+            {
+              "sequence": 3,
+              "action": "Observe",
+              "controlLogicalName": null,
+              "valueRef": null,
+              "expectedObservation": "시스템·통신·프로그램 실패 팝업과 신규 실패 로그가 없다."
+            }
+          ],
+          "coveredControls": [
+            "BTN_Comm"
+          ],
+          "coveredValidationRuleIds": [],
+          "expectedResult": "제품 실패 신호가 없고 조회 실행 증거가 있으면 PASS 후보이며, 업무 수치 정합성은 판정하지 않는다.",
+          "automationStatus": "Ready"
+        }
+      ],
+      "coverageGaps": [
+        "예시 파일이므로 기본 조회 외 컨트롤과 검증 규칙은 생략했다."
+      ]
+    },
+    {
+      "screenNumber": "0720",
+      "screenName": "신용잔고현황",
+      "scenarios": [
+        {
+          "scenarioId": "TS-0720-BASIC_QUERY",
+          "title": "기본값 조회",
+          "objective": "화면 기본 계좌값으로 조회가 실행되고 시스템 실패 신호가 없는지 확인한다.",
+          "priority": "P0",
+          "category": "기본조회",
+          "executionOrder": "RuntimeTabOrder",
+          "preconditions": [
+            "1Q HTS 로그인 완료",
+            "테스트 계좌 기본값 표시"
+          ],
+          "steps": [
+            {
+              "sequence": 1,
+              "action": "Focus",
+              "controlLogicalName": null,
+              "valueRef": null,
+              "expectedObservation": "대상 화면이 표시된다."
+            },
+            {
+              "sequence": 2,
+              "action": "Query",
+              "controlLogicalName": "BTN_Comm",
+              "valueRef": null,
+              "expectedObservation": "조회 동작이 실행되고 화면이 응답 상태를 유지한다."
+            },
+            {
+              "sequence": 3,
+              "action": "Observe",
+              "controlLogicalName": null,
+              "valueRef": null,
+              "expectedObservation": "시스템·통신·프로그램 실패 팝업과 신규 실패 로그가 없다."
+            }
+          ],
+          "coveredControls": [
+            "BTN_Comm"
+          ],
+          "coveredValidationRuleIds": [],
+          "expectedResult": "제품 실패 신호가 없고 조회 실행 증거가 있으면 PASS 후보이며, 업무 수치 정합성은 판정하지 않는다.",
+          "automationStatus": "Ready"
+        }
+      ],
+      "coverageGaps": [
+        "예시 파일이므로 기본 조회 외 컨트롤과 검증 규칙은 생략했다."
+      ]
+    },
+    {
+      "screenNumber": "0721",
+      "screenName": "신용거래담보현황",
+      "scenarios": [
+        {
+          "scenarioId": "TS-0721-BASIC_QUERY",
+          "title": "기본값 조회",
+          "objective": "화면 기본 계좌값으로 조회가 실행되고 시스템 실패 신호가 없는지 확인한다.",
+          "priority": "P0",
+          "category": "기본조회",
+          "executionOrder": "RuntimeTabOrder",
+          "preconditions": [
+            "1Q HTS 로그인 완료",
+            "테스트 계좌 기본값 표시"
+          ],
+          "steps": [
+            {
+              "sequence": 1,
+              "action": "Focus",
+              "controlLogicalName": null,
+              "valueRef": null,
+              "expectedObservation": "대상 화면이 표시된다."
+            },
+            {
+              "sequence": 2,
+              "action": "Query",
+              "controlLogicalName": "BTN_Comm",
+              "valueRef": null,
+              "expectedObservation": "조회 동작이 실행되고 화면이 응답 상태를 유지한다."
+            },
+            {
+              "sequence": 3,
+              "action": "Observe",
+              "controlLogicalName": null,
+              "valueRef": null,
+              "expectedObservation": "시스템·통신·프로그램 실패 팝업과 신규 실패 로그가 없다."
+            }
+          ],
+          "coveredControls": [
+            "BTN_Comm"
+          ],
+          "coveredValidationRuleIds": [],
+          "expectedResult": "제품 실패 신호가 없고 조회 실행 증거가 있으면 PASS 후보이며, 업무 수치 정합성은 판정하지 않는다.",
+          "automationStatus": "Ready"
+        }
+      ],
+      "coverageGaps": [
+        "예시 파일이므로 기본 조회 외 컨트롤과 검증 규칙은 생략했다."
+      ]
+    },
+    {
+      "screenNumber": "0722",
+      "screenName": "신용/대출이자 처리내역 조회",
+      "scenarios": [
+        {
+          "scenarioId": "TS-0722-BASIC_QUERY",
+          "title": "기본값 조회",
+          "objective": "화면 기본 계좌값으로 조회가 실행되고 시스템 실패 신호가 없는지 확인한다.",
+          "priority": "P0",
+          "category": "기본조회",
+          "executionOrder": "RuntimeTabOrder",
+          "preconditions": [
+            "1Q HTS 로그인 완료",
+            "테스트 계좌 기본값 표시"
+          ],
+          "steps": [
+            {
+              "sequence": 1,
+              "action": "Focus",
+              "controlLogicalName": null,
+              "valueRef": null,
+              "expectedObservation": "대상 화면이 표시된다."
+            },
+            {
+              "sequence": 2,
+              "action": "Query",
+              "controlLogicalName": "BTN_Comm",
+              "valueRef": null,
+              "expectedObservation": "조회 동작이 실행되고 화면이 응답 상태를 유지한다."
+            },
+            {
+              "sequence": 3,
+              "action": "Observe",
+              "controlLogicalName": null,
+              "valueRef": null,
+              "expectedObservation": "시스템·통신·프로그램 실패 팝업과 신규 실패 로그가 없다."
+            }
+          ],
+          "coveredControls": [
+            "BTN_Comm"
+          ],
+          "coveredValidationRuleIds": [],
+          "expectedResult": "제품 실패 신호가 없고 조회 실행 증거가 있으면 PASS 후보이며, 업무 수치 정합성은 판정하지 않는다.",
+          "automationStatus": "Ready"
+        }
+      ],
+      "coverageGaps": [
+        "예시 파일이므로 기본 조회 외 컨트롤과 검증 규칙은 생략했다."
+      ]
+    },
+    {
+      "screenNumber": "0723",
+      "screenName": "신용/대출 한도금액 정보",
+      "scenarios": [
+        {
+          "scenarioId": "TS-0723-BASIC_QUERY",
+          "title": "기본값 조회",
+          "objective": "화면 기본 계좌값으로 조회가 실행되고 시스템 실패 신호가 없는지 확인한다.",
+          "priority": "P0",
+          "category": "기본조회",
+          "executionOrder": "RuntimeTabOrder",
+          "preconditions": [
+            "1Q HTS 로그인 완료",
+            "테스트 계좌 기본값 표시"
+          ],
+          "steps": [
+            {
+              "sequence": 1,
+              "action": "Focus",
+              "controlLogicalName": null,
+              "valueRef": null,
+              "expectedObservation": "대상 화면이 표시된다."
+            },
+            {
+              "sequence": 2,
+              "action": "Query",
+              "controlLogicalName": "BTN_Comm",
+              "valueRef": null,
+              "expectedObservation": "조회 동작이 실행되고 화면이 응답 상태를 유지한다."
+            },
+            {
+              "sequence": 3,
+              "action": "Observe",
+              "controlLogicalName": null,
+              "valueRef": null,
+              "expectedObservation": "시스템·통신·프로그램 실패 팝업과 신규 실패 로그가 없다."
+            }
+          ],
+          "coveredControls": [
+            "BTN_Comm"
+          ],
+          "coveredValidationRuleIds": [],
+          "expectedResult": "제품 실패 신호가 없고 조회 실행 증거가 있으면 PASS 후보이며, 업무 수치 정합성은 판정하지 않는다.",
+          "automationStatus": "Ready"
+        }
+      ],
+      "coverageGaps": [
+        "예시 파일이므로 기본 조회 외 컨트롤과 검증 규칙은 생략했다."
+      ]
+    },
+    {
+      "screenNumber": "0725",
+      "screenName": "익일반대매매 추정내역",
+      "scenarios": [
+        {
+          "scenarioId": "TS-0725-BASIC_QUERY",
+          "title": "기본값 조회",
+          "objective": "화면 기본 계좌값으로 조회가 실행되고 시스템 실패 신호가 없는지 확인한다.",
+          "priority": "P0",
+          "category": "기본조회",
+          "executionOrder": "RuntimeTabOrder",
+          "preconditions": [
+            "1Q HTS 로그인 완료",
+            "테스트 계좌 기본값 표시"
+          ],
+          "steps": [
+            {
+              "sequence": 1,
+              "action": "Focus",
+              "controlLogicalName": null,
+              "valueRef": null,
+              "expectedObservation": "대상 화면이 표시된다."
+            },
+            {
+              "sequence": 2,
+              "action": "Query",
+              "controlLogicalName": "BTN_Comm",
+              "valueRef": null,
+              "expectedObservation": "조회 동작이 실행되고 화면이 응답 상태를 유지한다."
+            },
+            {
+              "sequence": 3,
+              "action": "Observe",
+              "controlLogicalName": null,
+              "valueRef": null,
+              "expectedObservation": "시스템·통신·프로그램 실패 팝업과 신규 실패 로그가 없다."
+            }
+          ],
+          "coveredControls": [
+            "BTN_Comm"
+          ],
+          "coveredValidationRuleIds": [],
+          "expectedResult": "제품 실패 신호가 없고 조회 실행 증거가 있으면 PASS 후보이며, 업무 수치 정합성은 판정하지 않는다.",
+          "automationStatus": "Ready"
+        }
+      ],
+      "coverageGaps": [
+        "예시 파일이므로 기본 조회 외 컨트롤과 검증 규칙은 생략했다."
+      ]
+    }
+  ],
+  "datasetPatch": {
+    "variables": [],
+    "locatorRequests": [
+      {
+        "screenNumber": "0705",
+        "targetRole": "query",
+        "logicalName": "UNKNOWN_QUERY",
+        "reason": "MAP 조회 컨트롤을 찾지 못했다.",
+        "recommendedEvidence": "런타임 탭 순회와 버튼 표시문자"
+      }
+    ]
+  },
+  "reviewItems": [
+    {
+      "severity": "Informational",
+      "screenNumber": null,
+      "subject": "예시 범위",
+      "question": "실제 생성 시 14개 화면의 모든 컨트롤과 검증 규칙을 커버했는가?",
+      "reason": "이 파일은 스키마를 만족하는 최소 형식 예시이며 완성 시나리오가 아니다."
+    }
+  ]
+}

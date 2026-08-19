@@ -1,0 +1,87 @@
+{
+  "packageVersion": "1.0",
+  "generatedAt": "2026-08-10T10:41:44.600Z",
+  "referenceDate": "20260810",
+  "sourceInstallationFingerprint": "674dff5dc207d0b98d12e4725d17d99fdeff797218a2413141796c91dfbbb3fc",
+  "targetScreens": [
+    "0701",
+    "0702",
+    "0705",
+    "0708",
+    "0710",
+    "0711",
+    "0712",
+    "0713",
+    "0714",
+    "0720",
+    "0721",
+    "0722",
+    "0723",
+    "0725"
+  ],
+  "counts": {
+    "screens": 14,
+    "actionableControls": 146,
+    "validationRules": 34,
+    "officialInputDictionaries": 2,
+    "officialInputValues": 13,
+    "masterSamples": 15,
+    "officialErrorCodes": 52,
+    "runtimeObservedScreens": 14
+  },
+  "privacy": {
+    "accountValuesIncluded": false,
+    "ownerNamesIncluded": false,
+    "passwordsIncluded": false,
+    "logsIncluded": false,
+    "screenshotsIncluded": false,
+    "coordinatesIncluded": false
+  },
+  "files": [
+    {
+      "name": "00_사용안내.md",
+      "sizeBytes": 2078,
+      "sha256": "c7b0faa43debfe79c6ad5915e91e0d9d14a9d7f25f6e7d606d0eab6070133c53"
+    },
+    {
+      "name": "01_ChatGPT_요청문.md",
+      "sizeBytes": 3679,
+      "sha256": "cacdd961189b359e6bc2c043386a6df8f7ed87956327399f888fe9eeeaecea66"
+    },
+    {
+      "name": "02_화면_시나리오_컨텍스트.json",
+      "sizeBytes": 290125,
+      "sha256": "4d4c9ab35a4c0c1cc6841548e56f53ddcf6c71d9e7f49525896e8bb8f06a1587"
+    },
+    {
+      "name": "03_공통_테스트데이터_사전.json",
+      "sizeBytes": 63575,
+      "sha256": "ab0c7648f9cc092c7f676dfc49b6cf45c7e5373ff1279daa1b74b39f34001905"
+    },
+    {
+      "name": "04_데이터셋_작성_계약.json",
+      "sizeBytes": 4098,
+      "sha256": "53a1ce6c7bce5c23e984ed77a393aefad800df0977756b489092a2a075fe4bde"
+    },
+    {
+      "name": "05_생성결과.schema.json",
+      "sizeBytes": 16258,
+      "sha256": "6fd780f49bfc445e06de4585a1bf10b21d39abaf2ae72b0382a618c9dea8b4d1"
+    },
+    {
+      "name": "06_생성결과_예시.json",
+      "sizeBytes": 27253,
+      "sha256": "aaeea64c52d08442af6d4408a12f3fe675aa21c5717894dd56d0567c5f15d5af"
+    },
+    {
+      "name": "07_오류_판정_정책.md",
+      "sizeBytes": 8019,
+      "sha256": "cff402cb9e12d2982f54f8af986655379969ba1935b706c15387503f50f1a949"
+    },
+    {
+      "name": "08_생성결과_검증.mjs",
+      "sizeBytes": 8593,
+      "sha256": "3074dc0ca5a853908a351a499f56f54722eb7efbd9f6b56f346e845007883ee6"
+    }
+  ]
+}

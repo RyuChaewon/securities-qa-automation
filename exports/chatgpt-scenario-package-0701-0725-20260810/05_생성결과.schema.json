@@ -1,0 +1,752 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://local.example/1qhts/generated-scenarios.schema.json",
+  "title": "1Q HTS 0701~0725 ChatGPT 생성 테스트 시나리오",
+  "type": "object",
+  "additionalProperties": false,
+  "required": [
+    "packageVersion",
+    "sourceInstallationFingerprint",
+    "generationSummary",
+    "screens",
+    "datasetPatch",
+    "reviewItems"
+  ],
+  "properties": {
+    "packageVersion": {
+      "const": "1.0"
+    },
+    "sourceInstallationFingerprint": {
+      "const": "674dff5dc207d0b98d12e4725d17d99fdeff797218a2413141796c91dfbbb3fc"
+    },
+    "generationSummary": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "referenceDate",
+        "combinationStrategy",
+        "assumptions"
+      ],
+      "properties": {
+        "referenceDate": {
+          "type": "string",
+          "pattern": "^[0-9]{8}$"
+        },
+        "combinationStrategy": {
+          "enum": [
+            "Full",
+            "SingleFactor",
+            "Pairwise",
+            "Mixed"
+          ]
+        },
+        "assumptions": {
+          "type": "array",
+          "items": {
+            "type": "string"
+          }
+        }
+      }
+    },
+    "screens": {
+      "type": "array",
+      "minItems": 14,
+      "maxItems": 14,
+      "items": {
+        "$ref": "#/$defs/screenPlan"
+      },
+      "allOf": [
+        {
+          "contains": {
+            "type": "object",
+            "required": [
+              "screenNumber"
+            ],
+            "properties": {
+              "screenNumber": {
+                "const": "0701"
+              }
+            }
+          },
+          "minContains": 1,
+          "maxContains": 1
+        },
+        {
+          "contains": {
+            "type": "object",
+            "required": [
+              "screenNumber"
+            ],
+            "properties": {
+              "screenNumber": {
+                "const": "0702"
+              }
+            }
+          },
+          "minContains": 1,
+          "maxContains": 1
+        },
+        {
+          "contains": {
+            "type": "object",
+            "required": [
+              "screenNumber"
+            ],
+            "properties": {
+              "screenNumber": {
+                "const": "0705"
+              }
+            }
+          },
+          "minContains": 1,
+          "maxContains": 1
+        },
+        {
+          "contains": {
+            "type": "object",
+            "required": [
+              "screenNumber"
+            ],
+            "properties": {
+              "screenNumber": {
+                "const": "0708"
+              }
+            }
+          },
+          "minContains": 1,
+          "maxContains": 1
+        },
+        {
+          "contains": {
+            "type": "object",
+            "required": [
+              "screenNumber"
+            ],
+            "properties": {
+              "screenNumber": {
+                "const": "0710"
+              }
+            }
+          },
+          "minContains": 1,
+          "maxContains": 1
+        },
+        {
+          "contains": {
+            "type": "object",
+            "required": [
+              "screenNumber"
+            ],
+            "properties": {
+              "screenNumber": {
+                "const": "0711"
+              }
+            }
+          },
+          "minContains": 1,
+          "maxContains": 1
+        },
+        {
+          "contains": {
+            "type": "object",
+            "required": [
+              "screenNumber"
+            ],
+            "properties": {
+              "screenNumber": {
+                "const": "0712"
+              }
+            }
+          },
+          "minContains": 1,
+          "maxContains": 1
+        },
+        {
+          "contains": {
+            "type": "object",
+            "required": [
+              "screenNumber"
+            ],
+            "properties": {
+              "screenNumber": {
+                "const": "0713"
+              }
+            }
+          },
+          "minContains": 1,
+          "maxContains": 1
+        },
+        {
+          "contains": {
+            "type": "object",
+            "required": [
+              "screenNumber"
+            ],
+            "properties": {
+              "screenNumber": {
+                "const": "0714"
+              }
+            }
+          },
+          "minContains": 1,
+          "maxContains": 1
+        },
+        {
+          "contains": {
+            "type": "object",
+            "required": [
+              "screenNumber"
+            ],
+            "properties": {
+              "screenNumber": {
+                "const": "0720"
+              }
+            }
+          },
+          "minContains": 1,
+          "maxContains": 1
+        },
+        {
+          "contains": {
+            "type": "object",
+            "required": [
+              "screenNumber"
+            ],
+            "properties": {
+              "screenNumber": {
+                "const": "0721"
+              }
+            }
+          },
+          "minContains": 1,
+          "maxContains": 1
+        },
+        {
+          "contains": {
+            "type": "object",
+            "required": [
+              "screenNumber"
+            ],
+            "properties": {
+              "screenNumber": {
+                "const": "0722"
+              }
+            }
+          },
+          "minContains": 1,
+          "maxContains": 1
+        },
+        {
+          "contains": {
+            "type": "object",
+            "required": [
+              "screenNumber"
+            ],
+            "properties": {
+              "screenNumber": {
+                "const": "0723"
+              }
+            }
+          },
+          "minContains": 1,
+          "maxContains": 1
+        },
+        {
+          "contains": {
+            "type": "object",
+            "required": [
+              "screenNumber"
+            ],
+            "properties": {
+              "screenNumber": {
+                "const": "0725"
+              }
+            }
+          },
+          "minContains": 1,
+          "maxContains": 1
+        }
+      ]
+    },
+    "datasetPatch": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "variables",
+        "locatorRequests"
+      ],
+      "properties": {
+        "variables": {
+          "type": "array",
+          "items": {
+            "$ref": "#/$defs/variable"
+          }
+        },
+        "locatorRequests": {
+          "type": "array",
+          "items": {
+            "$ref": "#/$defs/locatorRequest"
+          }
+        }
+      }
+    },
+    "reviewItems": {
+      "type": "array",
+      "items": {
+        "$ref": "#/$defs/reviewItem"
+      }
+    }
+  },
+  "$defs": {
+    "expectedOutcome": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "type",
+        "messagePatterns",
+        "errorCodes",
+        "queryShouldComplete",
+        "source",
+        "confidence",
+        "evidence"
+      ],
+      "properties": {
+        "type": {
+          "enum": [
+            "Unspecified",
+            "Success",
+            "ValidationAllowed",
+            "ValidationRequired",
+            "FailureRequired",
+            "NoDataAllowed",
+            "WarningAllowed",
+            "ObservationOnly"
+          ]
+        },
+        "messagePatterns": {
+          "type": "array",
+          "items": {
+            "type": "string"
+          }
+        },
+        "errorCodes": {
+          "type": "array",
+          "items": {
+            "type": "string"
+          }
+        },
+        "queryShouldComplete": {
+          "type": [
+            "boolean",
+            "null"
+          ]
+        },
+        "source": {
+          "enum": [
+            "Dataset",
+            "InstallationInputOption",
+            "InstallationMaster",
+            "MapValidation",
+            "MapBehavior",
+            "RuntimeChoice",
+            "GeneratedBoundary",
+            "ScreenExpectedPattern",
+            "Unspecified"
+          ]
+        },
+        "confidence": {
+          "enum": [
+            "High",
+            "Medium",
+            "Low",
+            "Unspecified"
+          ]
+        },
+        "evidence": {
+          "type": "array",
+          "items": {
+            "type": "string"
+          }
+        }
+      }
+    },
+    "testValue": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "id",
+        "value",
+        "displayValue",
+        "expectedOutcome",
+        "rationale",
+        "sourceRefs"
+      ],
+      "properties": {
+        "id": {
+          "type": "string",
+          "minLength": 1
+        },
+        "value": {
+          "type": "string"
+        },
+        "displayValue": {
+          "type": "string"
+        },
+        "expectedOutcome": {
+          "$ref": "#/$defs/expectedOutcome"
+        },
+        "rationale": {
+          "type": "string",
+          "minLength": 1
+        },
+        "sourceRefs": {
+          "type": "array",
+          "minItems": 1,
+          "items": {
+            "type": "string"
+          }
+        }
+      }
+    },
+    "variable": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "name",
+        "targetRole",
+        "targetLogicalName",
+        "controlKind",
+        "valueMatch",
+        "values",
+        "appliesToScreens",
+        "required",
+        "triggerQueryAfterChange"
+      ],
+      "properties": {
+        "name": {
+          "type": "string",
+          "minLength": 1
+        },
+        "targetRole": {
+          "type": "string",
+          "minLength": 1
+        },
+        "targetLogicalName": {
+          "type": "string",
+          "minLength": 1
+        },
+        "controlKind": {
+          "enum": [
+            "Auto",
+            "Text",
+            "Date",
+            "ComboBox",
+            "RadioButton",
+            "CheckBox",
+            "Tab",
+            "Button",
+            "ListBox",
+            "ListView",
+            "TreeView",
+            "Slider",
+            "Spin"
+          ]
+        },
+        "valueMatch": {
+          "enum": [
+            "Value",
+            "DisplayText",
+            "Index",
+            "Checked"
+          ]
+        },
+        "values": {
+          "type": "array",
+          "minItems": 1,
+          "items": {
+            "$ref": "#/$defs/testValue"
+          }
+        },
+        "appliesToScreens": {
+          "type": "array",
+          "minItems": 1,
+          "items": {
+            "enum": [
+              "0701",
+              "0702",
+              "0705",
+              "0708",
+              "0710",
+              "0711",
+              "0712",
+              "0713",
+              "0714",
+              "0720",
+              "0721",
+              "0722",
+              "0723",
+              "0725"
+            ]
+          }
+        },
+        "required": {
+          "type": "boolean"
+        },
+        "triggerQueryAfterChange": {
+          "type": "boolean"
+        }
+      }
+    },
+    "step": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "sequence",
+        "action",
+        "controlLogicalName",
+        "valueRef",
+        "expectedObservation"
+      ],
+      "properties": {
+        "sequence": {
+          "type": "integer",
+          "minimum": 1
+        },
+        "action": {
+          "enum": [
+            "Focus",
+            "Input",
+            "Select",
+            "Toggle",
+            "Click",
+            "Query",
+            "Observe",
+            "Dismiss",
+            "Restore"
+          ]
+        },
+        "controlLogicalName": {
+          "type": [
+            "string",
+            "null"
+          ]
+        },
+        "valueRef": {
+          "type": [
+            "string",
+            "null"
+          ]
+        },
+        "expectedObservation": {
+          "type": "string"
+        }
+      }
+    },
+    "scenario": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "scenarioId",
+        "title",
+        "objective",
+        "priority",
+        "category",
+        "executionOrder",
+        "preconditions",
+        "steps",
+        "coveredControls",
+        "coveredValidationRuleIds",
+        "expectedResult",
+        "automationStatus"
+      ],
+      "properties": {
+        "scenarioId": {
+          "type": "string",
+          "pattern": "^TS-07[0-9]{2}-[A-Z0-9_-]+$"
+        },
+        "title": {
+          "type": "string",
+          "minLength": 1
+        },
+        "objective": {
+          "type": "string",
+          "minLength": 1
+        },
+        "priority": {
+          "enum": [
+            "P0",
+            "P1",
+            "P2",
+            "P3"
+          ]
+        },
+        "category": {
+          "enum": [
+            "기본조회",
+            "입력검증",
+            "경계값",
+            "선택지전수",
+            "상태조합",
+            "기간조합",
+            "조회결과관찰",
+            "내보내기",
+            "페이지이동",
+            "연계화면",
+            "복구"
+          ]
+        },
+        "executionOrder": {
+          "const": "RuntimeTabOrder"
+        },
+        "preconditions": {
+          "type": "array",
+          "items": {
+            "type": "string"
+          }
+        },
+        "steps": {
+          "type": "array",
+          "minItems": 1,
+          "items": {
+            "$ref": "#/$defs/step"
+          }
+        },
+        "coveredControls": {
+          "type": "array",
+          "items": {
+            "type": "string"
+          }
+        },
+        "coveredValidationRuleIds": {
+          "type": "array",
+          "items": {
+            "type": "string"
+          }
+        },
+        "expectedResult": {
+          "type": "string",
+          "minLength": 1
+        },
+        "automationStatus": {
+          "enum": [
+            "Ready",
+            "NeedsLocator",
+            "NeedsBusinessData",
+            "ManualReview"
+          ]
+        }
+      }
+    },
+    "screenPlan": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "screenNumber",
+        "screenName",
+        "scenarios",
+        "coverageGaps"
+      ],
+      "properties": {
+        "screenNumber": {
+          "enum": [
+            "0701",
+            "0702",
+            "0705",
+            "0708",
+            "0710",
+            "0711",
+            "0712",
+            "0713",
+            "0714",
+            "0720",
+            "0721",
+            "0722",
+            "0723",
+            "0725"
+          ]
+        },
+        "screenName": {
+          "type": "string",
+          "minLength": 1
+        },
+        "scenarios": {
+          "type": "array",
+          "minItems": 1,
+          "items": {
+            "$ref": "#/$defs/scenario"
+          }
+        },
+        "coverageGaps": {
+          "type": "array",
+          "items": {
+            "type": "string"
+          }
+        }
+      }
+    },
+    "locatorRequest": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "screenNumber",
+        "targetRole",
+        "logicalName",
+        "reason",
+        "recommendedEvidence"
+      ],
+      "properties": {
+        "screenNumber": {
+          "type": "string",
+          "pattern": "^07[0-9]{2}$"
+        },
+        "targetRole": {
+          "type": "string"
+        },
+        "logicalName": {
+          "type": "string"
+        },
+        "reason": {
+          "type": "string"
+        },
+        "recommendedEvidence": {
+          "type": "string"
+        }
+      }
+    },
+    "reviewItem": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "severity",
+        "screenNumber",
+        "subject",
+        "question",
+        "reason"
+      ],
+      "properties": {
+        "severity": {
+          "enum": [
+            "Required",
+            "Recommended",
+            "Informational"
+          ]
+        },
+        "screenNumber": {
+          "type": [
+            "string",
+            "null"
+          ]
+        },
+        "subject": {
+          "type": "string"
+        },
+        "question": {
+          "type": "string"
+        },
+        "reason": {
+          "type": "string"
+        }
+      }
+    }
+  }
+}
