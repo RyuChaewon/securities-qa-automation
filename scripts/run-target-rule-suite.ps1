@@ -37,6 +37,7 @@ $root = Split-Path -Parent $PSScriptRoot
 . (Join-Path $PSScriptRoot "modules\hts-binding.ps1")
 . (Join-Path $PSScriptRoot "modules\hts-action.ps1")
 . (Join-Path $PSScriptRoot "modules\hts-observation.ps1")
+. (Join-Path $PSScriptRoot "modules\hts-safety.ps1")
 
 # 공통 manifest와 대상 컨텍스트를 한 번만 읽고 이하 모든 단계가 같은 파일·창·화면 범위를 사용하게 한다.
 $pipelineManifest = Get-RulePipelineManifest $root
@@ -158,8 +159,8 @@ if ($scenarioMode) {
 }
 $script:executionTracePath = Join-Path $ReportDir "execution-trace.ndjson"
 if (Test-Path -LiteralPath $script:executionTracePath) { Remove-Item -LiteralPath $script:executionTracePath -Force }
-$script:inputBoundaryAuditPath = Join-Path $ReportDir "input-boundary-audit.ndjson"
-if (Test-Path -LiteralPath $script:inputBoundaryAuditPath) { Remove-Item -LiteralPath $script:inputBoundaryAuditPath -Force }
+$inputBoundaryAuditPath = Join-Path $ReportDir "input-boundary-audit.ndjson"
+if (Test-Path -LiteralPath $inputBoundaryAuditPath) { Remove-Item -LiteralPath $inputBoundaryAuditPath -Force }
 
 $resultEvaluationTestPackPath = $resolvedTestPackPath
 $resultEvaluationWorkingDirectory = Join-Path $ReportDir 'result-evaluation'
@@ -341,11 +342,6 @@ $WM_GETTEXTLENGTH = 0x000E
 $WM_CLOSE = 0x0010
 $WM_MDIACTIVATE = 0x0222
 $VK_MENU = 0x12
-$script:activeHtsMainHwnd = [Int64]0
-$script:activeHtsPid = 0
-$script:activeInputSurfaceHwnd = [Int64]0
-$script:activeInputSurfaceKind = 'None'
-$script:activeInputSurfaceLabel = ''
 $automationMetrics = New-HtsDiscoveryMetrics
 $script:lastTextAutomationEngine = '미실행'
 
@@ -408,6 +404,33 @@ function Add-OracleObservation($List,$Observation,[string]$Stage,[string]$Contro
     Add-HtsOracleObservation -Context $observationContext -List $List -Observation $Observation -Stage $Stage -ControlId $ControlId -OptionId $OptionId
 }
 function Get-MapOracleErrorRegex([regex]$BaseRegex,$MapOracle) { Get-HtsObservationErrorRegex -Context $observationContext -BaseRegex $BaseRegex -MapOracle $MapOracle }
+$safetyDependencies = [pscustomobject]@{
+    IsWindow = { param([Int64]$Hwnd) [TargetRuleNative]::IsWindow([IntPtr]$Hwnd) }
+    GetWindowInfo = { param([Int64]$Hwnd) Get-WindowInfo ([IntPtr]$Hwnd) }
+    IsChild = { param([Int64]$Parent,[Int64]$Child) [TargetRuleNative]::IsChild([IntPtr]$Parent,[IntPtr]$Child) }
+    GetWindowProcessId = { param([Int64]$Hwnd) [uint32]$windowProcessId=0;[void][TargetRuleNative]::GetWindowThreadProcessId([IntPtr]$Hwnd,[ref]$windowProcessId);[int]$windowProcessId }
+    GetScreenNumber = { param($Window) Get-HtsScreenNumber $Window }
+    GetContentPolicy = { param([string]$ScreenNumber) Get-RuleContentPolicy $ScreenNumber }
+    TestContentControl = { param($Window,$Screen,$Policy) Test-RuleContentControl $Window $Screen $Policy }
+    GetKeyboardFocusHwnd = { $info=New-Object TargetRuleNative+GUITHREADINFO;$info.cbSize=[Runtime.InteropServices.Marshal]::SizeOf([type][TargetRuleNative+GUITHREADINFO]);[void][TargetRuleNative]::GetGUIThreadInfo(0,[ref]$info);[Int64]$info.hwndFocus.ToInt64() }
+    WindowFromPoint = { param([int]$X,[int]$Y) $point=New-Object TargetRuleNative+POINT;$point.X=$X;$point.Y=$Y;[Int64]([TargetRuleNative]::WindowFromPoint($point)).ToInt64() }
+    GetNow = { Get-Date }
+    AppendAuditRecord = {
+        param([string]$Path,$Record)
+        $line=($Record|ConvertTo-Json -Compress -Depth 5)+[Environment]::NewLine
+        for($attempt=1;$attempt-le5;$attempt++){$stream=$null;try{$stream=[IO.FileStream]::new($Path,[IO.FileMode]::OpenOrCreate,[IO.FileAccess]::Write,[IO.FileShare]::ReadWrite);[void]$stream.Seek(0,[IO.SeekOrigin]::End);$bytes=[Text.UTF8Encoding]::new($false).GetBytes($line);$stream.Write($bytes,0,$bytes.Length);$stream.Flush();return}catch [IO.IOException]{if($attempt-eq5){throw};Start-Sleep -Milliseconds (20*$attempt)}finally{if($stream){$stream.Dispose()}}}
+    }
+}
+$safetyContext = New-HtsSafetyContext -AuditPath $inputBoundaryAuditPath -Dependencies $safetyDependencies
+function Test-HtsPointInRect([int]$X,[int]$Y,$Rect){Test-HtsSafetyPointInRect $X $Y $Rect}
+function Clear-HtsInputSurface { Clear-HtsSafetyInputSurface -Context $safetyContext }
+function Set-HtsInputSurface($Window,[string]$Kind,[string]$Label=''){Set-HtsSafetyInputSurface -Context $safetyContext -Window $Window -Kind $Kind -Label $Label}
+function Get-HtsActiveInputSurface { Get-HtsSafetyActiveInputSurface -Context $safetyContext }
+function Assert-HtsClickScope($Window,[int]$X,[int]$Y){Assert-HtsSafetyClickScope -Context $safetyContext -Window $Window -X $X -Y $Y}
+function Assert-HtsKeyboardScope { Assert-HtsSafetyKeyboardScope -Context $safetyContext }
+function Write-HtsInputBoundaryAudit([string]$InputType,[string]$Status,[int]$X=-1,[int]$Y=-1,[string]$Detail=''){Write-HtsSafetyInputBoundaryAudit -Context $safetyContext -InputType $InputType -Status $Status -X $X -Y $Y -Detail $Detail}
+function Assert-HtsPhysicalPointOwner([int]$LogicalX,[int]$LogicalY,[int]$PhysicalX,[int]$PhysicalY){Assert-HtsSafetyPointOwner -Context $safetyContext -LogicalX $LogicalX -LogicalY $LogicalY -PhysicalX $PhysicalX -PhysicalY $PhysicalY}
+function Assert-HtsPhysicalCursorTarget($ClickWindow,$PhysicalPoint){Assert-HtsSafetyCursorTarget -Context $safetyContext -ClickWindow $ClickWindow -PhysicalPoint $PhysicalPoint}
 
 # 기존 rule-control과 navigation 호출 계약을 보존하는 얇은 Action 어댑터다.
 function Invoke-FlaUiControlAction(
@@ -459,137 +482,6 @@ function Get-WindowInfo([IntPtr]$Hwnd) {
         rect = [pscustomobject]@{
             left = $rect.Left; top = $rect.Top; right = $rect.Right; bottom = $rect.Bottom
             width = $rect.Right - $rect.Left; height = $rect.Bottom - $rect.Top
-        }
-    }
-}
-
-# 클릭 좌표가 허용된 사각형 안에 포함되는지 경계값까지 포함해 검사한다.
-function Test-HtsPointInRect([int]$X, [int]$Y, $Rect) {
-    $Rect -and $X -ge [int]$Rect.left -and $X -lt [int]$Rect.right -and $Y -ge [int]$Rect.top -and $Y -lt [int]$Rect.bottom
-}
-
-# 화면 전환 중 이전 콘텐츠 HWND가 재사용되지 않도록 활성 입력 경계를 초기화한다.
-function Clear-HtsInputSurface {
-    $script:activeInputSurfaceHwnd=[Int64]0
-    $script:activeInputSurfaceKind='None'
-    $script:activeInputSurfaceLabel=''
-}
-
-# 이후 마우스·키보드 입력이 허용될 현재 메인 또는 콘텐츠 HWND를 등록한다.
-function Set-HtsInputSurface($Window, [string]$Kind, [string]$Label = '') {
-    if(-not $Window -or [Int64]$Window.hwnd -eq 0 -or -not [TargetRuleNative]::IsWindow([IntPtr][Int64]$Window.hwnd)){
-        throw 'INPUT_SCOPE_BLOCKED: 활성 입력 표면이 유효하지 않습니다.'
-    }
-    $current=Get-WindowInfo ([IntPtr][Int64]$Window.hwnd)
-    $mainHwnd=[IntPtr][Int64]$script:activeHtsMainHwnd
-    if(-not [TargetRuleNative]::IsWindow($mainHwnd) -or [int]$current.pid -ne [int]$script:activeHtsPid){
-        throw 'INPUT_SCOPE_BLOCKED: 입력 표면이 현재 HTS 프로세스에 속하지 않습니다.'
-    }
-    $main=Get-WindowInfo $mainHwnd
-    if($Kind -eq 'Main' -and [Int64]$current.hwnd -ne [Int64]$main.hwnd){
-        throw 'INPUT_SCOPE_BLOCKED: 메인 입력 단계의 표면이 HTS 메인창이 아닙니다.'
-    }
-    if($Kind -eq 'Content' -and -not [TargetRuleNative]::IsChild($mainHwnd,[IntPtr][Int64]$current.hwnd)){
-        throw 'INPUT_SCOPE_BLOCKED: 콘텐츠 표면이 HTS 메인창의 자식 창이 아닙니다.'
-    }
-    $centerX=[int](($current.rect.left+$current.rect.right)/2)
-    $centerY=[int](($current.rect.top+$current.rect.bottom)/2)
-    if(-not (Test-HtsPointInRect $centerX $centerY $main.rect)){
-        throw 'INPUT_SCOPE_BLOCKED: 입력 표면이 HTS 메인창 경계 밖에 있습니다.'
-    }
-    $script:activeInputSurfaceHwnd=[Int64]$current.hwnd
-    $script:activeInputSurfaceKind=$Kind
-    $script:activeInputSurfaceLabel=$Label
-}
-
-# 등록된 입력 경계가 아직 유효한 HWND인지 확인하고 최신 좌표로 다시 읽는다.
-function Get-HtsActiveInputSurface {
-    if($script:activeInputSurfaceHwnd -eq 0 -or -not [TargetRuleNative]::IsWindow([IntPtr][Int64]$script:activeInputSurfaceHwnd)){
-        throw 'INPUT_SCOPE_BLOCKED: 활성 입력 표면이 없거나 사라졌습니다.'
-    }
-    Get-WindowInfo ([IntPtr][Int64]$script:activeInputSurfaceHwnd)
-}
-
-# 클릭 대상·PID·부모 관계·좌표가 현재 대상 콘텐츠 경계 안인지 모두 확인한다.
-function Assert-HtsClickScope($Window, [int]$X, [int]$Y) {
-    $main=Get-WindowInfo ([IntPtr][Int64]$script:activeHtsMainHwnd)
-    $surface=Get-HtsActiveInputSurface
-    if(-not (Test-HtsPointInRect $X $Y $main.rect)){
-        throw "INPUT_SCOPE_BLOCKED: 클릭 좌표 ($X,$Y)가 HTS 메인창 밖에 있습니다."
-    }
-    if(-not (Test-HtsPointInRect $X $Y $surface.rect)){
-        throw "INPUT_SCOPE_BLOCKED: 클릭 좌표 ($X,$Y)가 현재 대상 창 '$($script:activeInputSurfaceLabel)' 밖에 있습니다."
-    }
-    if($script:activeInputSurfaceKind -eq 'Content'){
-        $screenNumber=Get-HtsScreenNumber $surface
-        $policy=Get-RuleContentPolicy $screenNumber
-        $probe=if($Window){$Window}else{[pscustomobject]@{rect=[pscustomobject]@{left=$X-1;right=$X+1;top=$Y-1;bottom=$Y+1;width=2;height=2};className='';rawTitle=''}}
-        if(-not (Test-RuleContentControl $probe $surface $policy)){
-            throw "INPUT_SCOPE_BLOCKED: 클릭 좌표 ($X,$Y)가 [$screenNumber] 콘텐츠 안전 영역 밖에 있습니다."
-        }
-    }
-    $targetHwnd=if($Window -and $Window.PSObject.Properties.Name -contains 'hwnd'){[Int64]$Window.hwnd}else{[Int64]0}
-    if($targetHwnd -ne 0){
-        if(-not [TargetRuleNative]::IsWindow([IntPtr]$targetHwnd)){
-            throw 'INPUT_SCOPE_BLOCKED: 클릭 대상 HWND가 더 이상 유효하지 않습니다.'
-        }
-        [uint32]$targetPid=0
-        [void][TargetRuleNative]::GetWindowThreadProcessId([IntPtr]$targetHwnd,[ref]$targetPid)
-        if([int]$targetPid -ne [int]$script:activeHtsPid){
-            throw 'INPUT_SCOPE_BLOCKED: 클릭 대상이 HTS 프로세스에 속하지 않습니다.'
-        }
-        $surfaceHwnd=[IntPtr][Int64]$surface.hwnd
-        if([Int64]$targetHwnd -ne [Int64]$surface.hwnd -and -not [TargetRuleNative]::IsChild($surfaceHwnd,[IntPtr]$targetHwnd)){
-            throw 'INPUT_SCOPE_BLOCKED: 클릭 대상이 현재 대상 창의 자손이 아닙니다.'
-        }
-    }
-}
-
-# 현재 키보드 포커스가 등록된 입력 표면 또는 그 자식에 있을 때만 키 입력을 허용한다.
-function Assert-HtsKeyboardScope {
-    $surface=Get-HtsActiveInputSurface
-    $info=New-Object TargetRuleNative+GUITHREADINFO
-    $info.cbSize=[Runtime.InteropServices.Marshal]::SizeOf([type][TargetRuleNative+GUITHREADINFO])
-    [void][TargetRuleNative]::GetGUIThreadInfo(0,[ref]$info)
-    $focus=[Int64]$info.hwndFocus.ToInt64()
-    if($focus -eq 0){throw 'INPUT_SCOPE_BLOCKED: HTS 내부 키보드 포커스를 찾지 못했습니다.'}
-    if($focus -ne [Int64]$surface.hwnd -and -not [TargetRuleNative]::IsChild([IntPtr][Int64]$surface.hwnd,[IntPtr]$focus)){
-        throw "INPUT_SCOPE_BLOCKED: 키보드 포커스가 현재 대상 창 '$($script:activeInputSurfaceLabel)' 밖에 있습니다."
-    }
-    if($script:activeInputSurfaceKind -eq 'Content' -and $focus -ne [Int64]$surface.hwnd){
-        $focusWindow=Get-WindowInfo ([IntPtr]$focus)
-        $screenNumber=Get-HtsScreenNumber $surface
-        if(-not (Test-RuleContentControl $focusWindow $surface (Get-RuleContentPolicy $screenNumber))){
-            throw "INPUT_SCOPE_BLOCKED: 키보드 포커스가 [$screenNumber] 콘텐츠 안전 영역 밖에 있습니다."
-        }
-    }
-}
-
-# 모든 허용·차단 입력을 NDJSON으로 남겨 외부 클릭 여부를 실행 후 감사할 수 있게 한다.
-function Write-HtsInputBoundaryAudit([string]$InputType, [string]$Status, [int]$X = -1, [int]$Y = -1, [string]$Detail = '') {
-    $mainRect=$null
-    $surfaceRect=$null
-    try{if($script:activeHtsMainHwnd -ne 0 -and [TargetRuleNative]::IsWindow([IntPtr][Int64]$script:activeHtsMainHwnd)){$mainRect=(Get-WindowInfo ([IntPtr][Int64]$script:activeHtsMainHwnd)).rect}}catch{}
-    try{if($script:activeInputSurfaceHwnd -ne 0 -and [TargetRuleNative]::IsWindow([IntPtr][Int64]$script:activeInputSurfaceHwnd)){$surfaceRect=(Get-WindowInfo ([IntPtr][Int64]$script:activeInputSurfaceHwnd)).rect}}catch{}
-    $line=([pscustomobject]@{
-        timestamp=(Get-Date).ToString('o');inputType=$InputType;status=$Status;x=$X;y=$Y
-        mainHwnd=[Int64]$script:activeHtsMainHwnd;mainRect=$mainRect;surfaceHwnd=[Int64]$script:activeInputSurfaceHwnd
-        surfaceKind=[string]$script:activeInputSurfaceKind;surfaceLabel=[string]$script:activeInputSurfaceLabel;surfaceRect=$surfaceRect;detail=$Detail
-    } | ConvertTo-Json -Compress -Depth 5)+[Environment]::NewLine
-    for($attempt=1;$attempt-le5;$attempt++){
-        $stream=$null
-        try{
-            $stream=[IO.FileStream]::new($script:inputBoundaryAuditPath,[IO.FileMode]::OpenOrCreate,[IO.FileAccess]::Write,[IO.FileShare]::ReadWrite)
-            [void]$stream.Seek(0,[IO.SeekOrigin]::End)
-            $bytes=[Text.UTF8Encoding]::new($false).GetBytes($line)
-            $stream.Write($bytes,0,$bytes.Length)
-            $stream.Flush()
-            return
-        }catch [IO.IOException]{
-            if($attempt-eq5){throw}
-            Start-Sleep -Milliseconds (20*$attempt)
-        }finally{
-            if($stream){$stream.Dispose()}
         }
     }
 }
@@ -680,20 +572,19 @@ function Set-HtsScreenNumber($ScreenEdit, [string]$ScreenNumber) {
 
 # 입력 직전 대상 프로세스를 전경으로 복구하고 다른 프로세스가 활성 상태면 입력을 차단한다.
 function Assert-HtsForeground {
-    if($script:activeHtsMainHwnd -eq 0 -or $script:activeHtsPid -eq 0){return}
-    $mainHwnd=[IntPtr][Int64]$script:activeHtsMainHwnd
+    if($safetyContext.MainHwnd -eq 0 -or $safetyContext.MainPid -eq 0){return}
+    $mainHwnd=[IntPtr][Int64]$safetyContext.MainHwnd
     if(-not [TargetRuleNative]::IsWindow($mainHwnd)){
         $replacement=$null
         try{$replacement=Wait-HtsMainWindow -Context $sessionContext -TimeoutMs 15000}catch{}
         if(-not $replacement){throw 'HTS_FOREGROUND_GUARD: HTS 메인 창이 사라졌고 새 메인 창도 찾지 못했습니다.'}
-        $script:activeHtsMainHwnd=[Int64]$replacement.hwnd
-        $script:activeHtsPid=[int]$replacement.pid
-        $mainHwnd=[IntPtr][Int64]$script:activeHtsMainHwnd
+        Set-HtsSafetySession -Context $safetyContext -Main $replacement
+        $mainHwnd=[IntPtr][Int64]$safetyContext.MainHwnd
     }
     $foreground=[TargetRuleNative]::GetForegroundWindow()
     [uint32]$foregroundPid=0
     $foregroundThread=if($foreground -ne [IntPtr]::Zero){[TargetRuleNative]::GetWindowThreadProcessId($foreground,[ref]$foregroundPid)}else{0}
-    if([int]$foregroundPid -eq [int]$script:activeHtsPid){return}
+    if([int]$foregroundPid -eq [int]$safetyContext.MainPid){return}
 
     [uint32]$targetPid=0
     $targetThread=[TargetRuleNative]::GetWindowThreadProcessId($mainHwnd,[ref]$targetPid)
@@ -714,7 +605,7 @@ function Assert-HtsForeground {
     $foreground=[TargetRuleNative]::GetForegroundWindow()
     $foregroundPid=0
     if($foreground -ne [IntPtr]::Zero){[void][TargetRuleNative]::GetWindowThreadProcessId($foreground,[ref]$foregroundPid)}
-    if([int]$foregroundPid -ne [int]$script:activeHtsPid){
+    if([int]$foregroundPid -ne [int]$safetyContext.MainPid){
         [TargetRuleNative]::keybd_event([byte]$VK_MENU,0,0,[UIntPtr]::Zero)
         [TargetRuleNative]::keybd_event([byte]$VK_MENU,0,$KEYEVENTF_KEYUP,[UIntPtr]::Zero)
         [void][TargetRuleNative]::SetForegroundWindow($mainHwnd)
@@ -723,7 +614,7 @@ function Assert-HtsForeground {
         $foregroundPid=0
         if($foreground -ne [IntPtr]::Zero){[void][TargetRuleNative]::GetWindowThreadProcessId($foreground,[ref]$foregroundPid)}
     }
-    if([int]$foregroundPid -ne [int]$script:activeHtsPid){
+    if([int]$foregroundPid -ne [int]$safetyContext.MainPid){
         $positionFlags=[uint32]($SWP_NOSIZE -bor $SWP_NOMOVE)
         [void][TargetRuleNative]::SetWindowPos($mainHwnd,$HWND_TOPMOST,0,0,0,0,$positionFlags)
         [void][TargetRuleNative]::BringWindowToTop($mainHwnd)
@@ -734,44 +625,18 @@ function Assert-HtsForeground {
         $foregroundPid=0
         if($foreground -ne [IntPtr]::Zero){[void][TargetRuleNative]::GetWindowThreadProcessId($foreground,[ref]$foregroundPid)}
     }
-    if([int]$foregroundPid -ne [int]$script:activeHtsPid){
+    if([int]$foregroundPid -ne [int]$safetyContext.MainPid){
         [TargetRuleNative]::SwitchToThisWindow($mainHwnd,$true)
         Start-Sleep -Milliseconds 150
         $foreground=[TargetRuleNative]::GetForegroundWindow()
         $foregroundPid=0
         if($foreground -ne [IntPtr]::Zero){[void][TargetRuleNative]::GetWindowThreadProcessId($foreground,[ref]$foregroundPid)}
     }
-    if([int]$foregroundPid -ne [int]$script:activeHtsPid){throw 'HTS_FOREGROUND_GUARD: HTS를 전경으로 확정하지 못해 입력을 차단했습니다.'}
+    if([int]$foregroundPid -ne [int]$safetyContext.MainPid){throw 'HTS_FOREGROUND_GUARD: HTS를 전경으로 확정하지 못해 입력을 차단했습니다.'}
 }
 
 # WindowFromPoint는 호출 프로세스의 DPI 좌표계를 사용하므로 논리 좌표로 최상단 HTS 창을 확인한다.
-function Assert-HtsPhysicalPointOwner([int]$LogicalX, [int]$LogicalY, [int]$PhysicalX, [int]$PhysicalY) {
-    $point=New-Object TargetRuleNative+POINT
-    $point.X=$LogicalX
-    $point.Y=$LogicalY
-    $hitHwnd=[TargetRuleNative]::WindowFromPoint($point)
-    [uint32]$hitPid=0
-    if($hitHwnd -ne [IntPtr]::Zero){[void][TargetRuleNative]::GetWindowThreadProcessId($hitHwnd,[ref]$hitPid)}
-    if([int]$hitPid -ne [int]$script:activeHtsPid){
-        throw "HTS_POINT_OWNER_GUARD: 논리 좌표 ($LogicalX,$LogicalY), 물리 좌표 ($PhysicalX,$PhysicalY)의 최상단 창이 HTS 프로세스가 아닙니다. ownerPid=$hitPid"
-    }
-}
-
 # Per-Monitor DPI 문맥에서 실제 커서 위치가 고정된 대상 HWND 위인지 마지막으로 확인한다.
-function Assert-HtsPhysicalCursorTarget($ClickWindow, $PhysicalPoint) {
-    $hitHwnd=[TargetRuleNative]::WindowFromPoint($PhysicalPoint)
-    [uint32]$hitPid=0
-    if($hitHwnd -ne [IntPtr]::Zero){[void][TargetRuleNative]::GetWindowThreadProcessId($hitHwnd,[ref]$hitPid)}
-    if([int]$hitPid -ne [int]$script:activeHtsPid){
-        throw "HTS_PHYSICAL_CURSOR_OWNER_GUARD: 실제 커서 위치 ($([int]$PhysicalPoint.X),$([int]$PhysicalPoint.Y))의 최상단 창이 HTS 프로세스가 아닙니다. ownerPid=$hitPid"
-    }
-    $targetHwnd=if($ClickWindow -and $ClickWindow.PSObject.Properties.Name -contains 'hwnd'){[IntPtr][Int64]$ClickWindow.hwnd}else{[IntPtr]::Zero}
-    if($targetHwnd -ne [IntPtr]::Zero -and $hitHwnd -ne $targetHwnd -and -not [TargetRuleNative]::IsChild($targetHwnd,$hitHwnd)){
-        throw "HTS_PHYSICAL_CURSOR_TARGET_GUARD: 실제 커서 위치가 고정 대상 HWND와 다릅니다. targetHwnd=$([Int64]$targetHwnd), hitHwnd=$([Int64]$hitHwnd)"
-    }
-    [pscustomobject]@{hitHwnd=[Int64]$hitHwnd;targetHwnd=[Int64]$targetHwnd;ownerPid=[int]$hitPid}
-}
-
 # 전경·포커스 경계를 검증한 뒤 단일 가상 키의 누름과 해제를 전송한다.
 function Send-Key([byte]$Key) {
     $foregroundReady=$false
@@ -799,7 +664,7 @@ function Focus-HtsInputWindow($Window) {
     Assert-HtsForeground
     [uint32]$targetPid = 0
     $targetThread = [TargetRuleNative]::GetWindowThreadProcessId($targetHwnd, [ref]$targetPid)
-    if ([int]$targetPid -ne [int]$script:activeHtsPid) { throw 'INPUT_SCOPE_BLOCKED: 포커스 대상이 HTS 프로세스에 속하지 않습니다.' }
+    if ([int]$targetPid -ne [int]$safetyContext.MainPid) { throw 'INPUT_SCOPE_BLOCKED: 포커스 대상이 HTS 프로세스에 속하지 않습니다.' }
     $currentThread = [TargetRuleNative]::GetCurrentThreadId()
     $attached = $false
     try {
@@ -841,7 +706,7 @@ function Click-Center($Window, [switch]$DoubleClick) {
     $physicalPoint = New-Object TargetRuleNative+POINT
     $physicalPoint.X = $x
     $physicalPoint.Y = $y
-    $mainHwnd = [IntPtr][Int64]$script:activeHtsMainHwnd
+    $mainHwnd = [IntPtr][Int64]$safetyContext.MainHwnd
     $converted = $mainHwnd -ne [IntPtr]::Zero -and [TargetRuleNative]::LogicalToPhysicalPointForPerMonitorDPI($mainHwnd,[ref]$physicalPoint)
     if (-not $converted) {
         $dpi = if ($mainHwnd -ne [IntPtr]::Zero) { [int][TargetRuleNative]::GetDpiForWindow($mainHwnd) } else { 96 }
@@ -1167,9 +1032,9 @@ function Submit-HtsTransactionalDialog($Dialog, $PlanItem) {
         return [pscustomobject]@{success=$false;errorCode='TRANSACTION_CONFIRM_BUTTON_NOT_FOUND';output='거래 확인창에서 명시적 승인 버튼을 찾지 못했습니다.'}
     }
 
-    $savedHwnd=[Int64]$script:activeInputSurfaceHwnd
-    $savedKind=[string]$script:activeInputSurfaceKind
-    $savedLabel=[string]$script:activeInputSurfaceLabel
+    $savedHwnd=[Int64]$safetyContext.ActiveInputSurfaceHwnd
+    $savedKind=[string]$safetyContext.ActiveInputSurfaceKind
+    $savedLabel=[string]$safetyContext.ActiveInputSurfaceLabel
     try {
         Set-HtsInputSurface $Dialog.window 'Dialog' "HTS 거래 확인창: $($Dialog.title)"
         [void][TargetRuleNative]::ShowWindow([IntPtr][Int64]$Dialog.window.hwnd, 9)
@@ -1263,9 +1128,9 @@ function Dismiss-HtsDialogs($Main, [string]$Secret = "") {
     $dismissed = 0
     foreach ($dialog in @(Get-HtsDialogs $Main $Secret)) {
         if (Test-HtsConnectionDialog $dialog) { continue }
-        $savedHwnd=[Int64]$script:activeInputSurfaceHwnd
-        $savedKind=[string]$script:activeInputSurfaceKind
-        $savedLabel=[string]$script:activeInputSurfaceLabel
+        $savedHwnd=[Int64]$safetyContext.ActiveInputSurfaceHwnd
+        $savedKind=[string]$safetyContext.ActiveInputSurfaceKind
+        $savedLabel=[string]$safetyContext.ActiveInputSurfaceLabel
         try {
             Set-HtsInputSurface $dialog.window 'Dialog' "HTS 대화상자: $($dialog.title)"
             [void][TargetRuleNative]::ShowWindow([IntPtr][Int64]$dialog.window.hwnd, 9)
@@ -1617,7 +1482,7 @@ $navigationDependencies = [pscustomobject]@{
     CloseWindow = { param($Window) [void][TargetRuleNative]::SendMessage([IntPtr][Int64]$Window.hwnd, $WM_CLOSE, [IntPtr]::Zero, [IntPtr]::Zero) }
     ClearInputSurfaceForWindow = {
         param($Window)
-        if ([Int64]$script:activeInputSurfaceHwnd -eq [Int64]$Window.hwnd) { Clear-HtsInputSurface }
+        if ([Int64]$safetyContext.ActiveInputSurfaceHwnd -eq [Int64]$Window.hwnd) { Clear-HtsInputSurface }
     }
 }
 $navigationContext = New-HtsNavigationContext `
@@ -1638,8 +1503,7 @@ $screenEdit = $null
 try {
     [void](Start-FlaUiBridge -Context $sessionContext)
     $main = Find-HtsMainWindow -Context $sessionContext
-    $script:activeHtsMainHwnd=[Int64]$main.hwnd
-    $script:activeHtsPid=[int]$main.pid
+    Set-HtsSafetySession -Context $safetyContext -Main $main
     [void][TargetRuleNative]::ShowWindow([IntPtr][Int64]$main.hwnd, 9)
     [void][TargetRuleNative]::SetForegroundWindow([IntPtr][Int64]$main.hwnd)
     Set-HtsInputSurface $main 'Main' 'HTS 메인 사전점검'
@@ -1761,8 +1625,7 @@ for ($caseIndex = 0; $caseIndex -lt $cases.Count; $caseIndex++) {
     try {
         $previousPid = if ($main) { [int]$main.pid } else { 0 }
         $main = Wait-HtsMainWindow -Context $sessionContext
-        $script:activeHtsMainHwnd=[Int64]$main.hwnd
-        $script:activeHtsPid=[int]$main.pid
+        Set-HtsSafetySession -Context $safetyContext -Main $main
         if ($previousPid -ne 0 -and $main.pid -ne $previousPid) {
             Add-Action $actions "recoverMainWindow" "PASS" "hfrun" "재접속 후 새 HTS 메인 창을 찾아 실행을 계속했습니다."
         }
@@ -2866,7 +2729,7 @@ $controlPlanRows = @($resultArray | ForEach-Object {
 })
 # 화면이 한 개여도 소비자 스키마의 RuntimeControlPlanRow[] 계약이 유지되도록 파이프라인 직렬화를 피한다.
 ConvertTo-Json -InputObject $controlPlanRows -Depth 12 | Set-Content -LiteralPath (Join-Path $ReportDir "control-plan.json") -Encoding UTF8
-$inputAuditRows=if(Test-Path -LiteralPath $script:inputBoundaryAuditPath){@([IO.File]::ReadAllLines($script:inputBoundaryAuditPath,[Text.Encoding]::UTF8) | Where-Object {$_} | ForEach-Object {$_ | ConvertFrom-Json})}else{@()}
+$inputAuditRows=if(Test-Path -LiteralPath $safetyContext.AuditPath){@([IO.File]::ReadAllLines($safetyContext.AuditPath,[Text.Encoding]::UTF8) | Where-Object {$_} | ForEach-Object {$_ | ConvertFrom-Json})}else{@()}
 $runEvaluationDocument=[pscustomobject]@{schemaVersion='1.0';testPackId=[string]$testPack.testPackId;aggregateId=$runId;cases=@();completedResults=@($resultArray | ForEach-Object {$_.testResult})}
 $runEvaluationOutput=Invoke-RuleResultEvaluation -CliProject $cliProject -TestPackPath $resultEvaluationTestPackPath -EvaluationDocument $runEvaluationDocument -WorkingDirectory $resultEvaluationWorkingDirectory -InvocationId 'run-summary'
 $runEvaluationOutput | ConvertTo-Json -Depth 12 | Set-Content -LiteralPath (Join-Path $ReportDir 'test-results.json') -Encoding UTF8

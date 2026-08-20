@@ -179,7 +179,7 @@ AST 기준 공유 상태 접근 함수 수:
 | `hts-binding.ps1` | 역할 locator, claimed HWND, 승인 physical binding 연결 | 완료 |
 | `hts-action.ps1` | UIA3 selector·입력·클릭·선택과 검증된 fallback 결과 | 완료 |
 | `hts-observation.ps1` | 원시 메시지·대화상자·오류코드·기대 증거 정규화 | 완료 |
-| safety | 승인·allowlist·입력 경계 | 다음 단계 |
+| `hts-safety.ps1` | 프로세스·창·콘텐츠 입력 경계, 소유권과 감사 증거 | 완료 |
 | orchestration | 위 모듈의 순서와 결과 조립 | 모든 추출이 끝난 뒤 최종 축소 |
 
 이번 단계의 Session/Navigation 모듈은 명시적 context와 dependency 객체를 받고 결과를 반환한다. 판정, TestResult 생성, 리포트 파일 생성은 포함하지 않는다. 기존 함수명은 주 실행기의 얇은 호환 어댑터가 유지하여 실행 의미를 고정한다.
@@ -224,6 +224,12 @@ AST 기준 공유 상태 접근 함수 수:
 - `hts-observation.ps1`이 MAP 메시지, 설치 오류코드, 시스템·입력 검증 문구를 원시 event type과 증거 객체로 정규화한다.
 - 케이스별 required expectation, signal group, sequence 상태는 명시적 Observation context에 보존되며 기존 `$script:` 공유 상태를 제거했다.
 - 모듈은 평가 입력용 Observation만 만들고 ResultEvaluator 호출, 최종 테스트 상태 선택 또는 리포트 파일 쓰기를 수행하지 않는다.
+
+### Safety 단계
+
+- `hts-safety.ps1`이 HTS PID·메인 HWND, 활성 콘텐츠 표면, 클릭·키보드·물리 커서 소유권 경계를 명시적 context로 관리한다.
+- 기존 `$script:` 입력 표면과 audit path 공유 상태를 제거했으며, 허용·차단 조건과 오류 코드는 그대로 유지했다.
+- Action과 Navigation은 Safety 어댑터를 통해서만 입력 경계를 등록·검증하며, Safety 모듈은 업무 동작이나 테스트 판정을 수행하지 않는다.
 
 검증 결과:
 
