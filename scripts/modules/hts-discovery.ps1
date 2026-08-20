@@ -1,4 +1,4 @@
-<#
+﻿<#
 .SYNOPSIS FlaUI/UIA3와 MAP 기반 탐색을 명시적 실행 컨텍스트 뒤에 격리한다.
 .DESCRIPTION 탐색은 원시 컨트롤 snapshot만 반환하며 UI 조작, 결과 판정 또는 리포트 작성을 수행하지 않는다.
 #>

@@ -1,4 +1,4 @@
-<# .SYNOPSIS Regression tests for explicit HTS discovery context and raw UIA snapshots. #>
+﻿<# .SYNOPSIS Regression tests for explicit HTS discovery context and raw UIA snapshots. #>
 $ErrorActionPreference = 'Stop'
 $root = Split-Path -Parent (Split-Path -Parent $PSScriptRoot)
 . (Join-Path $root 'scripts\modules\hts-discovery.ps1')

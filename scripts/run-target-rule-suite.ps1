@@ -34,6 +34,7 @@ $root = Split-Path -Parent $PSScriptRoot
 . (Join-Path $PSScriptRoot "modules\hts-session.ps1")
 . (Join-Path $PSScriptRoot "modules\hts-navigation.ps1")
 . (Join-Path $PSScriptRoot "modules\hts-discovery.ps1")
+. (Join-Path $PSScriptRoot "modules\hts-binding.ps1")
 
 # 공통 manifest와 대상 컨텍스트를 한 번만 읽고 이하 모든 단계가 같은 파일·창·화면 범위를 사용하게 한다.
 $pipelineManifest = Get-RulePipelineManifest $root
@@ -430,6 +431,11 @@ $discoveryDependencies = [pscustomobject]@{
     GetRuleDiscoveredControls = { param($Screen, [string]$ScreenNumber, [hashtable]$ClaimedHwnds) @(Get-RuleDiscoveredControls $Screen $ScreenNumber $ClaimedHwnds) }
 }
 $discoveryContext = New-HtsDiscoveryContext -SessionContext $sessionContext -Dependencies $discoveryDependencies -Metrics $automationMetrics
+$bindingDependencies = [pscustomobject]@{
+    GetChildWindows = { param([Int64]$Hwnd) @(Get-ChildWindows $Hwnd) }
+    TestControlExecutionEligible = { param($Control) Test-RuleControlExecutionEligible $Control }
+}
+$bindingContext = New-HtsBindingContext -DiscoveryContext $discoveryContext -Dependencies $bindingDependencies
 
 # 기존 탐색 구현의 호출 계약을 유지하되 실제 UIA3 탐색과 계측은 Discovery 모듈에 위임한다.
 function Get-FlaUiActionableControls($Screen) {
@@ -1425,24 +1431,6 @@ function Add-UnnumberedTransitionObservation($List, $Main, [string]$CaseId, [str
 }
 
 # 계좌·비밀번호처럼 명시 로케이터가 점유한 HWND를 자동 탐색 대상에서 제외한다.
-function Get-ClaimedControlHwndMap($Screen, $Case, $Dataset) {
-    $claimedHwnds=@{}
-    foreach($role in @('account','password')){
-        $strategies=if($Case.screen.locators -and $Case.screen.locators.PSObject.Properties.Name -contains $role){$Case.screen.locators.$role}else{$Dataset.defaultLocators.$role}
-        $claimed=Resolve-RoleControl $Screen $role $strategies
-        if($claimed -and [Int64]$claimed.hwnd -ne 0){$claimedHwnds[[Int64]$claimed.hwnd]=$true}
-    }
-    foreach($name in @($Case.variables.Keys)){
-        $dimensionRows=@($Dataset.variables | Where-Object { $_.name -eq $name } | Select-Object -First 1)
-        $dimension=if($dimensionRows.Count -gt 0){$dimensionRows[0]}else{[pscustomobject]@{targetRole="condition:$name"}}
-        $role=if($dimension.targetRole){[string]$dimension.targetRole}else{"condition:$name"}
-        $strategies=if($Case.screen.locators -and $Case.screen.locators.PSObject.Properties.Name -contains $role){$Case.screen.locators.$role}else{$null}
-        $claimed=Resolve-RoleControl $Screen $role $strategies
-        if($claimed -and [Int64]$claimed.hwnd -ne 0){$claimedHwnds[[Int64]$claimed.hwnd]=$true}
-    }
-    $claimedHwnds
-}
-
 # 재접속·프로그램 종료 선택을 포함한 연결 장애 팝업은 자동 닫기 대상에서 제외한다.
 function Test-HtsConnectionDialog($Dialog) {
     $buttonText = @($Dialog.buttons | ForEach-Object {
@@ -1458,37 +1446,6 @@ function Test-HtsConnectionDialog($Dialog) {
 function Get-HtsConnectionDialogs($Main, [string]$Secret = '') {
     if (-not $Main) { return @() }
     @(Get-HtsDialogs $Main $Secret | Where-Object { Test-HtsConnectionDialog $_ })
-}
-
-function Set-ScenarioPhysicalBinding($PlanItem, $ScenarioCase, $PhysicalPlan) {
-    if (-not $PhysicalPlan -or [string]$PlanItem.scenarioAction -in @('Restore','AssertPopup','AssertNoTransmission')) { return $PlanItem }
-    $logicalName = if ([string]$PlanItem.controlLogicalName) { [string]$PlanItem.controlLogicalName } elseif ([string]$PlanItem.control.name) { [string]$PlanItem.control.name } else { [string]$PlanItem.control.mapModelId }
-    $mapCode = [string]$PlanItem.mapScreenCode
-    $state = [string]$PlanItem.stateContext
-    $matches = @($PhysicalPlan.resolvedBindings | Where-Object {
-        [string]$_.scenarioId -eq [string]$ScenarioCase.scenarioId -and
-        [string]$_.logicalName -eq $logicalName -and
-        (-not $mapCode -or [string]$_.mapScreenCode -eq $mapCode) -and
-        $(if($state){[string]$_.requiredStateContext -eq $state}else{[string]::IsNullOrWhiteSpace([string]$_.requiredStateContext)})
-    })
-    if ($matches.Count -ne 1) {
-        $PlanItem.status = 'PENDING'
-        $PlanItem.errorCode = 'PHYSICAL_BINDING_DRIFT'
-        $PlanItem.control | Add-Member -NotePropertyName pendingReason -NotePropertyValue "물리계획의 유일한 고정 바인딩을 찾지 못했습니다. logicalName=$logicalName, map=$mapCode, state=$state, matches=$($matches.Count)" -Force
-        return $PlanItem
-    }
-    $fixed = $matches[0]
-    $PlanItem | Add-Member -NotePropertyName physicalBinding -NotePropertyValue $fixed -Force
-    $controlIdMatches = [string]$PlanItem.control.controlId -eq [string]$fixed.controlId
-    $locatorMatches = [string]$PlanItem.control.locatorSignature -eq [string]$fixed.locatorSignature
-    $executionEligible = Test-RuleControlExecutionEligible $PlanItem.control
-    $matchesIdentity = $controlIdMatches -and $locatorMatches -and $executionEligible
-    if (-not $matchesIdentity) {
-        $PlanItem.status = 'PENDING'
-        $PlanItem.errorCode = 'PHYSICAL_BINDING_DRIFT'
-        $PlanItem.control | Add-Member -NotePropertyName pendingReason -NotePropertyValue "현재 후보가 물리계획의 고정 identity와 다릅니다. expected=$([string]$fixed.controlId), actual=$([string]$PlanItem.control.controlId), controlIdMatches=$controlIdMatches, locatorMatches=$locatorMatches, executionEligible=$executionEligible, automationEngine=$([string]$PlanItem.control.automationEngine)" -Force
-    }
-    $PlanItem
 }
 
 # 현재 대상 프로세스 팝업의 취소 계열 버튼 또는 WM_CLOSE를 사용해 다음 동작을 복구한다.
@@ -1573,80 +1530,6 @@ function Add-PopupObservations($List, $Dialogs, $Main, [string]$CaseId, [string]
 }
 
 # 로케이터 후보가 화면의 top/middle/bottom 상대 영역에 들어오는지 판단한다.
-function Test-InRegion($Candidate, $Screen, [string]$Region) {
-    if (-not $Region -or $Region -eq "all") { return $true }
-    $centerY = ($Candidate.rect.top + $Candidate.rect.bottom) / 2
-    $height = [Math]::Max(1, $Screen.rect.height)
-    $ratio = ($centerY - $Screen.rect.top) / $height
-    switch ($Region.ToLowerInvariant()) {
-        "top" { return $ratio -le 0.45 }
-        "middle" { return $ratio -gt 0.25 -and $ratio -lt 0.75 }
-        "bottom" { return $ratio -ge 0.55 }
-        default { return $true }
-    }
-}
-
-# AutomationId·이름·클래스·종류·순번·상대 영역을 순서대로 적용해 역할 컨트롤을 찾는다.
-function Resolve-RoleControl($Screen, [string]$Role, $Strategies) {
-    if (-not $Strategies) { return $null }
-    $children = @(Get-ChildWindows ([Int64]$Screen.hwnd) | Where-Object { $_.visible -and $_.enabled -and $_.rect.width -gt 4 -and $_.rect.height -gt 4 })
-    foreach ($strategy in @($Strategies)) {
-        if ($null -ne $strategy.relativeX -and $null -ne $strategy.relativeY) {
-            $width = if ($strategy.width) { [int]$strategy.width } else { 24 }
-            $height = if ($strategy.height) { [int]$strategy.height } else { 20 }
-            $centerX = [int]$Screen.rect.left + [int]$strategy.relativeX
-            $centerY = [int]$Screen.rect.top + [int]$strategy.relativeY
-            return [pscustomobject]@{
-                hwnd=0; parent=[Int64]$Screen.hwnd; pid=$Screen.pid; visible=$true; enabled=$true; hung=$false
-                className="ConfiguredVisualHotspot"; rawTitle=$Role; style=0
-                rect=[pscustomobject]@{left=$centerX-[int]($width/2);top=$centerY-[int]($height/2);right=$centerX+[int]($width/2);bottom=$centerY+[int]($height/2);width=$width;height=$height}
-            }
-        }
-        $isHeuristic = $null -ne $strategy.ordinal -and [string]::IsNullOrWhiteSpace([string]$strategy.nameRegex) -and
-            [string]::IsNullOrWhiteSpace([string]$strategy.className) -and [string]::IsNullOrWhiteSpace([string]$strategy.controlType)
-        if ($isHeuristic) { continue }
-        $matches = @($children | Where-Object {
-            $classMatch = -not $strategy.className -or $_.className -eq [string]$strategy.className
-            $typeMatch = -not $strategy.controlType -or
-                ([string]$strategy.controlType -eq "Button" -and $_.className -like "*Button*") -or
-                $_.className -eq [string]$strategy.controlType
-            $nameMatch = -not $strategy.nameRegex -or $_.rawTitle -match [string]$strategy.nameRegex
-            $regionMatch = Test-InRegion $_ $Screen ([string]$strategy.relativeRegion)
-            $passwordStyleMatch = $Role -ne "password" -or (($_.style -band 0x20) -ne 0) -or ($_.rawTitle -match "비밀번호|Password|PIN")
-            $classMatch -and $typeMatch -and $nameMatch -and $regionMatch -and $passwordStyleMatch
-        } | Sort-Object { $_.rect.top }, { $_.rect.left })
-        if ($matches.Count -eq 1) { return $matches[0] }
-        if ($matches.Count -gt 1 -and $null -ne $strategy.ordinal -and [int]$strategy.ordinal -lt $matches.Count) { return $matches[[int]$strategy.ordinal] }
-    }
-    return $null
-}
-
-# 명시 로케이터와 자동 탐색 결과에서 반드시 실행할 조회 컨트롤 후보를 합친다.
-function Get-RequiredQueryControls($Screen, $Strategies) {
-    $rows = New-Object Collections.Generic.List[object]
-    $seen = @{}
-    $resolved = Resolve-RoleControl $Screen "query" $Strategies
-    if ($resolved) {
-        $key=if([Int64]$resolved.hwnd-ne0){"hwnd:$([Int64]$resolved.hwnd)"}else{"point:$([int](($resolved.rect.left+$resolved.rect.right)/2)):$([int](($resolved.rect.top+$resolved.rect.bottom)/2))"}
-        $seen[$key]=$true; $rows.Add($resolved)
-    }
-    foreach ($candidate in @(Get-ChildWindows ([Int64]$Screen.hwnd) | Where-Object {
-        $_.visible -and $_.enabled -and $_.rect.width -gt 12 -and $_.rect.height -gt 10 -and
-        $_.rawTitle -match '^(조회|전체조회|조회하기|검색|Search|Query)$' -and
-        ($_.className -like '*Button*' -or $_.className -like 'AfxWnd*')
-    } | Sort-Object enumerationIndex)) {
-        $key="hwnd:$([Int64]$candidate.hwnd)"
-        if (-not $seen.ContainsKey($key)) { $seen[$key]=$true; $rows.Add($candidate) }
-    }
-    foreach ($candidate in @(Get-FlaUiActionableControls $Screen | Where-Object { $_.rawTitle -match '^(조회|전체조회|조회하기|검색|Search|Query)$' })) {
-        $centerX=[int](($candidate.rect.left+$candidate.rect.right)/2)
-        $centerY=[int](($candidate.rect.top+$candidate.rect.bottom)/2)
-        $key="point:$centerX`:$centerY"
-        if (-not $seen.ContainsKey($key)) { $seen[$key]=$true; $rows.Add($candidate) }
-    }
-    $rows.ToArray()
-}
-
 # 결함 증거는 HTS 메인 창의 물리 경계로 제한한다. 팝업 증거는 화면 복사를 사용해 별도 소유 창까지 포함한다.
 function Capture-HtsScreenshot($Main, [string]$Path, [bool]$IncludeVisibleOwnedWindows = $false) {
     $mainHwnd=[IntPtr][Int64]$Main.hwnd
@@ -2166,7 +2049,7 @@ for ($caseIndex = 0; $caseIndex -lt $cases.Count; $caseIndex++) {
                 Add-Action $actions "usePrefilledInputs" "PASS" "prefilled inputs" "현재 화면에 기본 입력된 값을 변경하지 않고 사용했습니다."
             } else {
                 $accountStrategies = if ($case.screen.locators -and $case.screen.locators.account) { $case.screen.locators.account } else { $dataset.defaultLocators.account }
-                $accountControl = Resolve-RoleControl $screen "account" $accountStrategies
+                $accountControl = Resolve-HtsRoleControl -Context $bindingContext -Screen $screen -Role 'account' -Strategies $accountStrategies
                 if ($accountControl -and [Int64]$accountControl.hwnd -ne 0) { $claimedHwnds[[Int64]$accountControl.hwnd] = $true }
                 if ($accountControl -and (Set-AutomationText $accountControl ([string]$case.account.accountNumber))) {
                     Add-Action $actions "setAccount" "PASS" "account" "계좌번호를 입력했으며 결과에는 마스킹했습니다."
@@ -2176,7 +2059,7 @@ for ($caseIndex = 0; $caseIndex -lt $cases.Count; $caseIndex++) {
                 }
 
                 $passwordStrategies = if ($case.screen.locators -and $case.screen.locators.password) { $case.screen.locators.password } else { $dataset.defaultLocators.password }
-                $passwordControl = Resolve-RoleControl $screen "password" $passwordStrategies
+                $passwordControl = Resolve-HtsRoleControl -Context $bindingContext -Screen $screen -Role 'password' -Strategies $passwordStrategies
                 if ($passwordControl -and [Int64]$passwordControl.hwnd -ne 0) { $claimedHwnds[[Int64]$passwordControl.hwnd] = $true }
                 if (-not $secret) {
                     Add-Action $actions "setPassword" "PENDING" "password" "비밀번호 환경 변수가 설정되지 않았습니다." "SECRET_NOT_SET"
@@ -2201,7 +2084,7 @@ for ($caseIndex = 0; $caseIndex -lt $cases.Count; $caseIndex++) {
                 $role = if ($dimension.targetRole) { [string]$dimension.targetRole } else { "condition:$name" }
                 $strategies = $null
                 if ($case.screen.locators -and $case.screen.locators.PSObject.Properties.Name -contains $role) { $strategies = $case.screen.locators.$role }
-                $control = Resolve-RoleControl $screen $role $strategies
+                $control = Resolve-HtsRoleControl -Context $bindingContext -Screen $screen -Role $role -Strategies $strategies
                 if ($control -and [Int64]$control.hwnd -ne 0) { $claimedHwnds[[Int64]$control.hwnd] = $true }
                 $kind = if ($dimension.controlKind) { [string]$dimension.controlKind } else { "Auto" }
                 $valueMatch = if ($dimension.valueMatch) { [string]$dimension.valueMatch } else { "Value" }
@@ -2287,7 +2170,7 @@ for ($caseIndex = 0; $caseIndex -lt $cases.Count; $caseIndex++) {
                 if ($scenarioMode) {
                     $initialPlans = @(Get-RuleScenarioPlanItems -Controls $initialControls -ScenarioCase $case.scenarioCase)
                     foreach ($planRow in $initialPlans) {
-                        if ($physicalPlan) { $planRow = Set-ScenarioPhysicalBinding $planRow $case.scenarioCase $physicalPlan }
+                        if ($physicalPlan) { $planRow = Set-HtsScenarioPhysicalBinding -Context $bindingContext -PlanItem $planRow -ScenarioCase $case.scenarioCase -PhysicalPlan $physicalPlan }
                         [void]$queue.Add($planRow)
                         $scheduledPlanIds[[string]$planRow.planItemId] = $true
                     }
@@ -2324,7 +2207,7 @@ for ($caseIndex = 0; $caseIndex -lt $cases.Count; $caseIndex++) {
                         }
                         $replacement = @(Get-RuleScenarioPlanItems -Controls $scenarioRefresh -ScenarioCase $case.scenarioCase | Where-Object scenarioStepId -eq ([string]$planItem.scenarioStepId) | Select-Object -First 1)
                         if ($replacement.Count -gt 0) {
-                            if ($physicalPlan) { $replacement[0] = Set-ScenarioPhysicalBinding $replacement[0] $case.scenarioCase $physicalPlan }
+                            if ($physicalPlan) { $replacement[0] = Set-HtsScenarioPhysicalBinding -Context $bindingContext -PlanItem $replacement[0] -ScenarioCase $case.scenarioCase -PhysicalPlan $physicalPlan }
                             if ([string]$replacement[0].status -eq 'READY') { $mapReboundControls++ }
                             $planItem = $replacement[0]
                             $queue[$planIndex] = $planItem
@@ -2602,7 +2485,7 @@ for ($caseIndex = 0; $caseIndex -lt $cases.Count; $caseIndex++) {
                             Add-Action $actions 'reopenScreen' 'FAIL' $requestedScreenNumber '연계 화면 없이 대상 화면이 사라져 다시 열었습니다.' 'SCREEN_CLOSED_UNEXPECTEDLY'
                         }
                     }
-                    if($screenReopened -and $screenAlive){$claimedHwnds=Get-ClaimedControlHwndMap $screen $case $dataset}
+                    if($screenReopened -and $screenAlive){$claimedHwnds=Get-HtsClaimedControlHwndMap -Context $bindingContext -Screen $screen -Case $case -Dataset $dataset}
 
                     $triggerQueryForPlanItem = if ($scenarioMode) { [bool]$planItem.triggerQueryAfterChange } else { [bool]$dataset.autoExploration.triggerQueryAfterStateChange }
                     if ($invoke.success -and $invoke.queryEligible -and -not $navigationHandled -and $screenAlive -and $triggerQueryForPlanItem) {
@@ -2774,7 +2657,7 @@ for ($caseIndex = 0; $caseIndex -lt $cases.Count; $caseIndex++) {
                     $screen=Find-ScreenWindow $main $requestedScreenNumber
                 }
                 $queryStrategies = if ($case.screen.locators -and $case.screen.locators.query) { $case.screen.locators.query } else { $dataset.defaultLocators.query }
-                $queryControls = if(Test-HtsRequestedScreen $screen $requestedScreenNumber){@(Get-RequiredQueryControls $screen $queryStrategies)}else{@()}
+                $queryControls = if(Test-HtsRequestedScreen $screen $requestedScreenNumber){@(Get-HtsRequiredQueryControls -Context $bindingContext -Screen $screen -Strategies $queryStrategies)}else{@()}
                 if($tabOrderQueryControl -and (Test-HtsRequestedScreen $screen $requestedScreenNumber)){
                     $liveTabQuery=Resolve-RuleLiveControl $navigationContext $screen $tabOrderQueryControl
                     if($liveTabQuery){$queryControls=@($liveTabQuery)+@($queryControls)}
