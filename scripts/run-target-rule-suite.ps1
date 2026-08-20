@@ -36,6 +36,7 @@ $root = Split-Path -Parent $PSScriptRoot
 . (Join-Path $PSScriptRoot "modules\hts-discovery.ps1")
 . (Join-Path $PSScriptRoot "modules\hts-binding.ps1")
 . (Join-Path $PSScriptRoot "modules\hts-action.ps1")
+. (Join-Path $PSScriptRoot "modules\hts-observation.ps1")
 
 # 공통 manifest와 대상 컨텍스트를 한 번만 읽고 이하 모든 단계가 같은 파일·창·화면 범위를 사용하게 한다.
 $pipelineManifest = Get-RulePipelineManifest $root
@@ -162,7 +163,6 @@ if (Test-Path -LiteralPath $script:inputBoundaryAuditPath) { Remove-Item -Litera
 
 $resultEvaluationTestPackPath = $resolvedTestPackPath
 $resultEvaluationWorkingDirectory = Join-Path $ReportDir 'result-evaluation'
-$script:resultEvaluationSequence = 0
 
 $mapCatalog = $null
 $mapInitializationIssue = ""
@@ -383,6 +383,31 @@ $actionDependencies = [pscustomobject]@{
     InvokeRuleDatasetVariable = { param($Window,[string]$Kind,[string]$Value,[string]$ValueMatch,[int]$MaxOptions) Invoke-RuleDatasetVariable $Window $Kind $Value $ValueMatch $MaxOptions }
 }
 $actionContext = New-HtsActionContext -SessionContext $sessionContext -Metrics $automationMetrics -Dependencies $actionDependencies
+$observationDependencies = [pscustomobject]@{
+    CreateSignalEvaluationCase = {
+        param([string]$CaseId,[string]$EventType,[string]$Text,[string]$SourceCode,[string]$Source,$ExpectedOutcome)
+        New-RuleSignalEvaluationCase -CaseId $CaseId -EventType $EventType -Text $Text -SourceCode $SourceCode -Source $Source -ExpectedOutcome $ExpectedOutcome
+    }
+    GetNow = { Get-Date }
+}
+$observationContext = New-HtsObservationContext -MapCatalog $mapCatalog -Dependencies $observationDependencies
+
+# 기존 실행 루프 호출 계약을 유지하면서 메시지 정규화와 case-local 관찰 상태는 Observation 모듈에 위임한다.
+function Get-MapOracleMessageMatch([string]$Text,$MapOracle) { Get-HtsMapOracleMessageMatch -Text $Text -MapOracle $MapOracle }
+function Get-InstallationErrorCodeMatch([string]$Text) { Get-HtsInstallationErrorCodeMatch -Context $observationContext -Text $Text }
+function Get-RuleExpectedOutcome($Option,$FallbackPatterns=@()) { Get-HtsExpectedOutcome -Option $Option -FallbackPatterns $FallbackPatterns }
+function Test-SystemFailureSignal([string]$Text) { Test-HtsSystemFailureSignal -Text $Text }
+function Test-InputValidationSignal([string]$Text) { Test-HtsInputValidationSignal -Text $Text }
+function Get-HtsSignalObservation([string]$Text,$MapOracle,$ExpectedOutcome,[regex]$ErrorRegex,[string]$FallbackClassification='') {
+    New-HtsSignalObservation -Context $observationContext -Text $Text -MapOracle $MapOracle -ExpectedOutcome $ExpectedOutcome -ErrorRegex $ErrorRegex -FallbackClassification $FallbackClassification
+}
+function Get-HtsDialogObservation($Dialog,$MapOracle,$ExpectedOutcome,[regex]$ErrorRegex) {
+    New-HtsDialogObservation -Context $observationContext -Dialog $Dialog -MapOracle $MapOracle -ExpectedOutcome $ExpectedOutcome -ErrorRegex $ErrorRegex
+}
+function Add-OracleObservation($List,$Observation,[string]$Stage,[string]$ControlId='',[string]$OptionId='') {
+    Add-HtsOracleObservation -Context $observationContext -List $List -Observation $Observation -Stage $Stage -ControlId $ControlId -OptionId $OptionId
+}
+function Get-MapOracleErrorRegex([regex]$BaseRegex,$MapOracle) { Get-HtsObservationErrorRegex -Context $observationContext -BaseRegex $BaseRegex -MapOracle $MapOracle }
 
 # 기존 rule-control과 navigation 호출 계약을 보존하는 얇은 Action 어댑터다.
 function Invoke-FlaUiControlAction(
@@ -1080,60 +1105,6 @@ function Get-HtsDialogs($Main, [string]$Secret = "") {
     }
 }
 
-# 오류 오라클: MAP 원문, 공식 오류코드, 값별 기대 계약과 시스템 실패 우선순위를 결합한다.
-function Get-MapOracleMessageMatch([string]$Text, $MapOracle) {
-    if (-not $MapOracle -or [string]::IsNullOrWhiteSpace($Text)) { return $null }
-    $rank = @{ Error=0; InputValidation=1; Warning=2; Info=3 }
-    $matches = @($MapOracle.messageBoxes | Where-Object {
-        $message = [string]$_.message
-        $title = [string]$_.title
-        ($message -and $Text.IndexOf($message, [StringComparison]::OrdinalIgnoreCase) -ge 0) -or
-        ($title -and $Text.IndexOf($title, [StringComparison]::OrdinalIgnoreCase) -ge 0)
-    } | Sort-Object @{Expression={if($rank.ContainsKey([string]$_.classification)){$rank[[string]$_.classification]}else{9}}}, ruleId)
-    if ($matches.Count -gt 0) { return $matches[0] }
-    return $null
-}
-
-# 설치 카탈로그의 공식 오류코드·문구가 관찰 문자열에 포함됐는지 찾는다.
-function Get-InstallationErrorCodeMatch([string]$Text) {
-    if (-not $mapCatalog -or -not $mapCatalog.errorCodes -or [string]::IsNullOrWhiteSpace($Text)) { return $null }
-    $matches = @($mapCatalog.errorCodes | Where-Object {
-        $code = [string]$_.code
-        $message = [string]$_.message
-        ($code -and $Text -match "(?<![0-9])$([regex]::Escape($code))(?![0-9])") -or
-        ($message.Length -ge 6 -and $Text.IndexOf($message, [StringComparison]::OrdinalIgnoreCase) -ge 0)
-    } | Sort-Object @{Expression={if([bool]$_.isFailure){0}else{1}}}, code)
-    if ($matches.Count -gt 0) { return $matches[0] }
-    $null
-}
-
-# 선택지의 명시 기대 계약을 정규화하고 화면 수준 패턴은 최후 근거로만 보충한다.
-function Get-RuleExpectedOutcome($Option, $FallbackPatterns = @()) {
-    $source = if ($Option -and $Option.expectedOutcome) { $Option.expectedOutcome } else { $null }
-    $type = if ($source -and $source.type) { [string]$source.type } elseif(@($FallbackPatterns).Count -gt 0) { 'ValidationAllowed' } else { 'Unspecified' }
-    $expectationSource = if($source -and $source.source -and [string]$source.source -ne 'Unspecified') {[string]$source.source} elseif($source -and $type -ne 'Unspecified') {'Dataset'} elseif(@($FallbackPatterns).Count -gt 0) {'ScreenExpectedPattern'} else {'Unspecified'}
-    $confidence = if($source -and $source.confidence -and [string]$source.confidence -ne 'Unspecified') {[string]$source.confidence} elseif($source -and $type -ne 'Unspecified') {'High'} elseif(@($FallbackPatterns).Count -gt 0) {'Medium'} else {'Unspecified'}
-    $patterns = New-Object Collections.Generic.List[string]
-    foreach($pattern in @($FallbackPatterns) + @($(if($source){$source.messagePatterns}else{@()}))){
-        if(-not [string]::IsNullOrWhiteSpace([string]$pattern) -and -not $patterns.Contains([string]$pattern)){$patterns.Add([string]$pattern)}
-    }
-    $evidence = New-Object Collections.Generic.List[string]
-    foreach($item in @($(if($source){$source.evidence}else{@()}))){
-        if(-not [string]::IsNullOrWhiteSpace([string]$item) -and -not $evidence.Contains([string]$item)){$evidence.Add([string]$item)}
-    }
-    if(@($FallbackPatterns).Count -gt 0 -and $evidence.Count -eq 0){$evidence.Add('화면 데이터셋 expectedPopupPatterns')}
-    [pscustomobject]@{
-        type=$type
-        source=$expectationSource
-        confidence=$confidence
-        evidence=$evidence.ToArray()
-        messagePatterns=$patterns.ToArray()
-        errorCodes=@($(if($source){$source.errorCodes}else{@()}))
-        queryShouldComplete=$(if($source){$source.queryShouldComplete}else{$null})
-        expectationId=$(if($Option){[string]$Option.id}else{'screen-default'})
-    }
-}
-
 # 컨트롤 실행 사실을 원시 Observation으로 넘기고 현재 케이스의 Core 평가 입력에 함께 보존한다.
 function Invoke-HtsRawObservationEvaluation(
     [string]$ObservationKind,
@@ -1143,12 +1114,12 @@ function Invoke-HtsRawObservationEvaluation(
     [bool]$Executed = $true,
     [bool]$EvidencePresent = $true,
     [string]$Prefix = 'control') {
-    $script:resultEvaluationSequence++
+    $evaluationSequence = Get-HtsNextObservationSequence -Context $observationContext
     $evaluation = Invoke-RuleSignalEvaluation `
         -CliProject $cliProject `
         -TestPackPath $resultEvaluationTestPackPath `
         -WorkingDirectory $resultEvaluationWorkingDirectory `
-        -CaseId ("{0}-{1:D6}" -f $Prefix, $script:resultEvaluationSequence) `
+        -CaseId ("{0}-{1:D6}" -f $Prefix, $evaluationSequence) `
         -EventType $ObservationKind `
         -Text $Text `
         -SourceCode $SourceCode `
@@ -1156,18 +1127,8 @@ function Invoke-HtsRawObservationEvaluation(
         -Executed $Executed `
         -EvidencePresent $EvidencePresent `
         -ExpectedOutcome $ExpectedOutcome
-    if ($script:currentResultEvaluationCases) { $script:currentResultEvaluationCases.Add($evaluation.evaluationCase) }
+    if ($observationContext.CurrentResultEvaluationCases) { $observationContext.CurrentResultEvaluationCases.Add($evaluation.evaluationCase) }
     $evaluation
-}
-
-# 입력 검증으로 허용할 수 없는 시스템·통신·인증·프로그램 실패 문구를 우선 감지한다.
-function Test-SystemFailureSignal([string]$Text) {
-    $Text -match '시스템\s*오류|처리\s*오류가?\s*발생|서버\s*(오류|장애|접속)|통신\s*(오류|장애|실패)|소켓|Socket|Exception|예외|프로그램\s*(오류|종료)|강제\s*종료|응답\s*(없음|하지)|세션\s*만료|자동\s*로그아웃'
-}
-
-# 잘못된 사용자 입력에 대한 정상 거절 문구를 시스템·제품 결함과 분리한다.
-function Test-InputValidationSignal([string]$Text) {
-    $Text -match '종목\s*코드\s*오류|계좌번호를?\s*확인|비밀번호를?\s*확인|하나를\s*선택해\s*주세요|입력해\s*주세요|선택해\s*주세요|조회가\s*불가|시작일자가\s*종료일자보다'
 }
 
 # 승인된 거래 실행에서만 주문 확인창을 식별한다. 입력 검증·시스템 오류와
@@ -1233,118 +1194,9 @@ function Submit-HtsTransactionalDialog($Dialog, $PlanItem) {
 }
 
 # 하나의 팝업·로그 신호를 판정하지 않고 원시 Observation 계약으로 분류한다.
-function Get-HtsSignalObservation([string]$Text, $MapOracle, $ExpectedOutcome, [regex]$ErrorRegex, [string]$FallbackClassification = '') {
-    $installedMatch = Get-InstallationErrorCodeMatch $Text
-    $mapMatch = Get-MapOracleMessageMatch $Text $MapOracle
-    $source = '공통 규칙'
-    $code = ''
-    $eventType = 'Info'
-
-    if($installedMatch){
-        $source='HTS 오류코드';$code=[string]$installedMatch.code
-        switch([string]$installedMatch.classification){
-            'Authentication' {$eventType='ProductFailure'}
-            'TransientFailure' {$eventType='ProductFailure'}
-            'SystemFailure' {$eventType='ProductFailure'}
-            'NoData' {$eventType='NoData'}
-            'Normal' {$eventType='Success'}
-            default {$eventType='InputValidation'}
-        }
-    }elseif($mapMatch){
-        $source='MAP';$code=[string]$mapMatch.ruleId
-        switch([string]$mapMatch.classification){
-            'Error' {$eventType='ProductFailure'}
-            'InputValidation' {$eventType='InputValidation'}
-            'Warning' {$eventType='Warning'}
-            default {$eventType='Info'}
-        }
-    }elseif(Test-SystemFailureSignal $Text){
-        $eventType='ProductFailure'
-    }elseif(Test-InputValidationSignal $Text){
-        $eventType='InputValidation'
-    }elseif($FallbackClassification -eq '경고'){
-        $eventType='Warning'
-    }elseif($FallbackClassification -eq '정보'){
-        $eventType='Info'
-    }elseif(($ErrorRegex -and $Text -match $ErrorRegex) -or $FallbackClassification -eq '오류'){
-        $eventType='GenericError'
-    }
-
-    $type=if($ExpectedOutcome){[string]$ExpectedOutcome.type}else{'Unspecified'}
-    $script:resultEvaluationSequence++
-    $evaluationCase = New-RuleSignalEvaluationCase `
-        -CaseId ("signal-{0:D6}" -f $script:resultEvaluationSequence) `
-        -EventType $eventType `
-        -Text $Text `
-        -SourceCode $code `
-        -Source $source `
-        -ExpectedOutcome $ExpectedOutcome
-
-    [pscustomobject]@{
-        eventType=$eventType;disposition='Observed';expectedOutcomeType=$type
-        expectedOutcomeSource=$(if($ExpectedOutcome){[string]$ExpectedOutcome.source}else{'Unspecified'})
-        expectedOutcomeConfidence=$(if($ExpectedOutcome){[string]$ExpectedOutcome.confidence}else{'Unspecified'})
-        expectedOutcomeEvidence=@($(if($ExpectedOutcome){$ExpectedOutcome.evidence}else{@()}))
-        expectationId=$(if($ExpectedOutcome){[string]$ExpectedOutcome.expectationId}else{''})
-        source=$source;code=$code;text=$Text;evaluationCase=$evaluationCase
-    }
-}
-
 # 대화상자의 제목·본문·버튼을 합쳐 공통 Observation 분류기로 전달한다.
-function Get-HtsDialogObservation($Dialog, $MapOracle, $ExpectedOutcome, [regex]$ErrorRegex) {
-    Get-HtsSignalObservation ([string]$Dialog.text) $MapOracle $ExpectedOutcome $ErrorRegex ([string]$Dialog.classification)
-}
-
 # 원시 Observation을 감사 이벤트와 기대 계약별 평가 그룹에 함께 누적한다.
-function Add-OracleObservation($List, $Observation, [string]$Stage, [string]$ControlId = '', [string]$OptionId = '') {
-    if(-not $Observation){return}
-    $key="$Stage|$ControlId|$OptionId|$([string]$Observation.eventType)|$([string]$Observation.text)"
-    if(@($List | Where-Object eventKey -eq $key).Count -gt 0){return}
-    $List.Add([pscustomobject]@{
-        eventKey=$key;stage=$Stage;controlId=$ControlId;optionId=$OptionId;eventType=[string]$Observation.eventType
-        disposition='Observed';expectedOutcomeType=[string]$Observation.expectedOutcomeType
-        expectedOutcomeSource=[string]$Observation.expectedOutcomeSource;expectedOutcomeConfidence=[string]$Observation.expectedOutcomeConfidence
-        expectedOutcomeEvidence=@($Observation.expectedOutcomeEvidence)
-        expectationId=[string]$Observation.expectationId;source=[string]$Observation.source;sourceCode=[string]$Observation.code
-        message=[string]$Observation.text
-        detectedAt=(Get-Date).ToString('o')
-    })
-    if ($Observation.evaluationCase) {
-        $requiredRows=if($script:currentRequiredExpectations){@($script:currentRequiredExpectations.ToArray())}else{@()}
-        foreach($required in $requiredRows){
-            $sameControl = -not $ControlId -or [string]$required.controlId -eq $ControlId
-            $sameOption = -not $OptionId -or [string]$required.optionId -eq $OptionId
-            if($sameControl -and $sameOption -and $required.observations){$required.observations.Add(@($Observation.evaluationCase.observations)[0])}
-        }
-        if([string]$Observation.expectedOutcomeType -notin @('ValidationRequired','FailureRequired')){
-            $groupKey="$ControlId|$OptionId|$([string]$Observation.expectedOutcomeType)|$([string]$Observation.expectationId)"
-            if(-not $script:currentSignalEvaluationGroups.ContainsKey($groupKey)){
-                $script:currentSignalEvaluationGroups[$groupKey]=[pscustomobject]@{stage=$Stage;controlId=$ControlId;optionId=$OptionId;observation=$Observation;expectedResult=$Observation.evaluationCase.expectedResult;observations=(New-Object Collections.Generic.List[object])}
-            }
-            $script:currentSignalEvaluationGroups[$groupKey].observations.Add(@($Observation.evaluationCase.observations)[0])
-        }
-    }
-}
-
 # 공통 오류 패턴과 현재 화면 MAP 메시지를 결합한 관찰용 정규식을 만든다.
-function Get-MapOracleErrorRegex([regex]$BaseRegex, $MapOracle) {
-    $patterns = New-Object Collections.Generic.List[string]
-    $patterns.Add($BaseRegex.ToString())
-    if ($MapOracle) {
-        foreach ($message in @($MapOracle.messageBoxes | Where-Object isExplicitError)) {
-            if ($message.message) { $patterns.Add([regex]::Escape([string]$message.message)) }
-            if ($message.title) { $patterns.Add([regex]::Escape([string]$message.title)) }
-        }
-    }
-    if ($mapCatalog -and $mapCatalog.errorCodes) {
-        foreach ($entry in @($mapCatalog.errorCodes | Where-Object isFailure)) {
-            if ($entry.code) { $patterns.Add("(?<![0-9])$([regex]::Escape([string]$entry.code))(?![0-9])") }
-            if ([string]$entry.message -and ([string]$entry.message).Length -ge 6) { $patterns.Add([regex]::Escape([string]$entry.message)) }
-        }
-    }
-    [regex]::new(($patterns -join '|'), [Text.RegularExpressions.RegexOptions]::IgnoreCase)
-}
-
 # 연계 화면의 제목·본문·버튼·스크린샷과 MAP 예상 여부를 결과에 기록한다.
 function Add-LinkedScreenObservations($List, $LinkedScreens, $Main, [string]$CaseId, [string]$RequestedScreenNumber, [string]$ReportBase, [string]$Secret = "", $ExpectedTargets = @()) {
     $index=$List.Count
@@ -1870,12 +1722,12 @@ for ($caseIndex = 0; $caseIndex -lt $cases.Count; $caseIndex++) {
     $controlTests = New-Object Collections.Generic.List[object]
     $popupObservations = New-Object Collections.Generic.List[object]
     $oracleEvents = New-Object Collections.Generic.List[object]
-    $script:currentResultEvaluationCases = New-Object Collections.Generic.List[object]
-    $script:currentSignalEvaluationGroups = @{}
+    $currentResultEvaluationCases = New-Object Collections.Generic.List[object]
+    $currentSignalEvaluationGroups = @{}
     $flaUiActionAttemptsBeforeCase = [int]$automationMetrics.FlaUiActionAttempts
     $executedExpectationPatterns = New-Object Collections.Generic.List[string]
     $requiredExpectations = New-Object Collections.Generic.List[object]
-    $script:currentRequiredExpectations = $requiredExpectations
+    [void](Reset-HtsObservationCaseContext -Context $observationContext -ResultEvaluationCases $currentResultEvaluationCases -SignalEvaluationGroups $currentSignalEvaluationGroups -RequiredExpectations $requiredExpectations)
     $queryRequiredExpectations = New-Object Collections.Generic.List[object]
     $claimedHwnds = @{}
     $tabOrderQueryControl = $null
@@ -2604,7 +2456,7 @@ for ($caseIndex = 0; $caseIndex -lt $cases.Count; $caseIndex++) {
                 } elseif ($mapBehavior -and @($mapBehavior.stateControllerControls).Count -gt 0) {
                     Add-Action $actions 'rediscoverMapControls' 'PASS' ([string]$case.screen.screenNumber) '상태 변경마다 MAP 컨트롤을 다시 탐색했으며 추가 활성화된 컨트롤은 없었습니다.'
                 }
-                $controlEvaluationDocument=[pscustomobject]@{schemaVersion='1.0';testPackId=[string]$testPack.testPackId;aggregateId="$($case.caseId)-controls";cases=@($script:currentResultEvaluationCases.ToArray())}
+                $controlEvaluationDocument=[pscustomobject]@{schemaVersion='1.0';testPackId=[string]$testPack.testPackId;aggregateId="$($case.caseId)-controls";cases=@($observationContext.CurrentResultEvaluationCases.ToArray())}
                 $controlEvaluationOutput=Invoke-RuleResultEvaluation -CliProject $cliProject -TestPackPath $resultEvaluationTestPackPath -EvaluationDocument $controlEvaluationDocument -WorkingDirectory $resultEvaluationWorkingDirectory -InvocationId 'case-controls'
                 Add-Action $actions "executeControlOptions" ([string]$controlEvaluationOutput.overallResult.status) "content controls" "컨트롤 선택지 $($controlTests.Count)개를 계획 또는 실행했습니다. $([string]$controlEvaluationOutput.overallResult.reason)"
             }
@@ -2778,13 +2630,12 @@ for ($caseIndex = 0; $caseIndex -lt $cases.Count; $caseIndex++) {
         }
         $signalGroupEvaluationCases=New-Object Collections.Generic.List[object]
         $signalGroupsByCaseId=@{}
-        foreach($signalGroupKey in @($script:currentSignalEvaluationGroups.Keys | Sort-Object)){
-            $signalGroup=$script:currentSignalEvaluationGroups[$signalGroupKey]
-            $script:resultEvaluationSequence++
-            $signalGroupCaseId="signal-group-{0:D6}" -f $script:resultEvaluationSequence
+        foreach($signalGroupKey in @($observationContext.CurrentSignalEvaluationGroups.Keys | Sort-Object)){
+            $signalGroup=$observationContext.CurrentSignalEvaluationGroups[$signalGroupKey]
+            $signalGroupCaseId="signal-group-{0:D6}" -f (Get-HtsNextObservationSequence -Context $observationContext)
             $signalGroupCase=[pscustomobject]@{caseId=$signalGroupCaseId;executed=$true;expectedResult=$signalGroup.expectedResult;observations=@($signalGroup.observations.ToArray())}
             $signalGroupEvaluationCases.Add($signalGroupCase)
-            $script:currentResultEvaluationCases.Add($signalGroupCase)
+            $observationContext.CurrentResultEvaluationCases.Add($signalGroupCase)
             $signalGroupsByCaseId[$signalGroupCaseId]=$signalGroup
         }
         if($signalGroupEvaluationCases.Count -gt 0){
@@ -2799,8 +2650,7 @@ for ($caseIndex = 0; $caseIndex -lt $cases.Count; $caseIndex++) {
         $requiredEvaluationCases=New-Object Collections.Generic.List[object]
         $requiredRecordsByCaseId=@{}
         foreach($required in $requiredExpectations.ToArray()){
-            $script:resultEvaluationSequence++
-            $requiredCaseId="required-expectation-{0:D6}" -f $script:resultEvaluationSequence
+            $requiredCaseId="required-expectation-{0:D6}" -f (Get-HtsNextObservationSequence -Context $observationContext)
             $requiredEvaluationCase=[pscustomobject]@{
                 caseId=$requiredCaseId;executed=$true
                 expectedResult=[pscustomobject]@{
@@ -2810,7 +2660,7 @@ for ($caseIndex = 0; $caseIndex -lt $cases.Count; $caseIndex++) {
                 observations=@($required.observations.ToArray())
             }
             $requiredEvaluationCases.Add($requiredEvaluationCase)
-            $script:currentResultEvaluationCases.Add($requiredEvaluationCase)
+            $observationContext.CurrentResultEvaluationCases.Add($requiredEvaluationCase)
             $requiredRecordsByCaseId[$requiredCaseId]=$required
         }
         if($requiredEvaluationCases.Count -gt 0){
@@ -2824,7 +2674,7 @@ for ($caseIndex = 0; $caseIndex -lt $cases.Count; $caseIndex++) {
         }
         $currentMain = Get-WindowInfo ([IntPtr][Int64]$main.hwnd)
         if ($currentMain.hung) { $errors.Add("HTS 메인 창이 응답하지 않습니다.") }
-        $signalEvaluationDocument=[pscustomobject]@{schemaVersion='1.0';testPackId=[string]$testPack.testPackId;aggregateId="$($case.caseId)-signals";cases=@($script:currentResultEvaluationCases.ToArray())}
+        $signalEvaluationDocument=[pscustomobject]@{schemaVersion='1.0';testPackId=[string]$testPack.testPackId;aggregateId="$($case.caseId)-signals";cases=@($observationContext.CurrentResultEvaluationCases.ToArray())}
         $signalEvaluationOutput=Invoke-RuleResultEvaluation -CliProject $cliProject -TestPackPath $resultEvaluationTestPackPath -EvaluationDocument $signalEvaluationDocument -WorkingDirectory $resultEvaluationWorkingDirectory -InvocationId 'case-signals'
         Add-Action $actions "evaluateExplicitErrors" ([string]$signalEvaluationOutput.overallResult.status) "popup/process/log" ([string]$signalEvaluationOutput.overallResult.reason)
     } catch {
@@ -2899,7 +2749,7 @@ for ($caseIndex = 0; $caseIndex -lt $cases.Count; $caseIndex++) {
     if ($PlanOnly -and $pendingReasons.Count -eq 0) { $pendingReasons.Add("계획 전용 실행") }
     $ended = Get-Date
     # 실행기는 사실만 Observation으로 기록하고 최종 상태는 Core ResultEvaluator 출력에서 복사한다.
-    $actualCaseActionsExecuted = -not $PlanOnly -and (([int]$automationMetrics.FlaUiActionAttempts -gt $flaUiActionAttemptsBeforeCase) -or $script:currentResultEvaluationCases.Count -gt 0)
+    $actualCaseActionsExecuted = -not $PlanOnly -and (([int]$automationMetrics.FlaUiActionAttempts -gt $flaUiActionAttemptsBeforeCase) -or $observationContext.CurrentResultEvaluationCases.Count -gt 0)
     $completionObservationKind = if ($externalInterruption -or $executorException -or $automationContractFailure) { 'InfrastructureError' } elseif ($errors.Count -gt 0) { 'ProductFailure' } elseif ($pendingReasons.Count -gt 0) { 'EvidenceMissing' } else { 'Success' }
     $completionObservationCode = if ($externalInterruption) { 'HTS_CONNECTION_LOST' } elseif ($automationContractFailure -and $automationContractErrorCode) { $automationContractErrorCode } elseif ($executorException) { 'EXECUTOR_EXCEPTION' } elseif ($screenOpenFailure) { 'SCREEN_NOT_VISIBLE' } elseif ($errors.Count -gt 0) { 'PRODUCT_DEFECT_DETECTED' } elseif ($existingScreenRequiredMissing) { 'EXISTING_SCREEN_REQUIRED' } elseif ($pendingReasons.Count -gt 0) { 'PRECONDITION_PENDING' } else { '' }
     $completionMessage = if ($errors.Count -gt 0) { @($errors | Select-Object -Unique) -join ' | ' } elseif ($pendingReasons.Count -gt 0) { @($pendingReasons | Select-Object -Unique) -join ' | ' } else { '케이스 실행 및 증거 수집을 완료했습니다.' }
@@ -2917,7 +2767,7 @@ for ($caseIndex = 0; $caseIndex -lt $cases.Count; $caseIndex++) {
         'case-completion'
     $caseEvaluationDocument = [pscustomobject]@{
         schemaVersion='1.0';testPackId=[string]$testPack.testPackId
-        aggregateId=[string]$case.caseId;cases=@($script:currentResultEvaluationCases.ToArray())
+        aggregateId=[string]$case.caseId;cases=@($observationContext.CurrentResultEvaluationCases.ToArray())
     }
     $caseEvaluationOutput = Invoke-RuleResultEvaluation -CliProject $cliProject -TestPackPath $resultEvaluationTestPackPath -EvaluationDocument $caseEvaluationDocument -WorkingDirectory $resultEvaluationWorkingDirectory -InvocationId ("case-{0}" -f $case.caseId)
     $caseTestResult = $caseEvaluationOutput.overallResult

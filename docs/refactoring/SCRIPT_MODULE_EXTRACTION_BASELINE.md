@@ -178,7 +178,7 @@ AST 기준 공유 상태 접근 함수 수:
 | `hts-discovery.ps1` | UIA3 원시 snapshot, MAP/룰 탐색 어댑터와 탐색 계측 | 완료 |
 | `hts-binding.ps1` | 역할 locator, claimed HWND, 승인 physical binding 연결 | 완료 |
 | `hts-action.ps1` | UIA3 selector·입력·클릭·선택과 검증된 fallback 결과 | 완료 |
-| observation | 원시 메시지·상태·값·증거 | 다음 단계 |
+| `hts-observation.ps1` | 원시 메시지·대화상자·오류코드·기대 증거 정규화 | 완료 |
 | safety | 승인·allowlist·입력 경계 | 다음 단계 |
 | orchestration | 위 모듈의 순서와 결과 조립 | 모든 추출이 끝난 뒤 최종 축소 |
 
@@ -218,6 +218,12 @@ AST 기준 공유 상태 접근 함수 수:
 - `hts-action.ps1`이 UIA3 selector 생성, 의미 동작 요청, 검증 여부와 fallback 사유 계측을 소유한다.
 - rule-control의 plan item·dataset variable 실행은 Action context dependency로 호출되며 주 실행기가 해당 함수의 내부 분기를 직접 해석하지 않는다.
 - Action 모듈은 UI 동작의 원시 성공·검증·오류 정보만 반환하고 테스트 상태 판정과 리포트 생성을 수행하지 않는다.
+
+### Observation 단계
+
+- `hts-observation.ps1`이 MAP 메시지, 설치 오류코드, 시스템·입력 검증 문구를 원시 event type과 증거 객체로 정규화한다.
+- 케이스별 required expectation, signal group, sequence 상태는 명시적 Observation context에 보존되며 기존 `$script:` 공유 상태를 제거했다.
+- 모듈은 평가 입력용 Observation만 만들고 ResultEvaluator 호출, 최종 테스트 상태 선택 또는 리포트 파일 쓰기를 수행하지 않는다.
 
 검증 결과:
 
