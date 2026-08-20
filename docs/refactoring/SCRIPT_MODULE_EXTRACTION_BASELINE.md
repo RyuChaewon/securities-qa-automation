@@ -236,7 +236,15 @@ AST 기준 공유 상태 접근 함수 수:
 - `run-target-rule-suite.ps1`은 기존 공개 parameter block과 `PSBoundParameters` 전달만 남긴 32줄 진입점으로 축소했다.
 - 기존 실행 본체는 `hts-rule-suite-orchestration.ps1`로 이동했으며 Approved TestPack 검증이 FlaUI 세션 시작보다 먼저 수행되는 순서를 유지한다.
 - orchestration은 Session, Navigation, Discovery, Binding, Action, Observation, Safety context를 조립하고 각 모듈의 원시 결과를 기존 평가·리포트 경로에 전달한다.
-- `rule-control-exploration.ps1` 내부의 대상별 MAP/owner-drawn 세부 구현은 호환 어댑터 뒤에 남아 있다. 이를 물리적으로 더 분할하는 작업은 실행 의미 변경 위험이 있어 별도 characterization 범위로 넘긴다.
+- `rule-control-exploration.ps1`은 기존 소비자를 위한 8줄 호환 진입점이며 target-specific 구현을 고정된 순서로 로드한다.
+
+### Target-specific rule control 단계
+
+- `hts-target-rule-discovery.ps1`이 MAP 결합, 컨트롤/옵션 탐색, 종류·상태·탭오더 특성화를 소유한다.
+- `hts-target-rule-binding.ps1`이 계획 생성, live control 재발견·결합과 실행 전 assertion을 소유한다.
+- `hts-target-rule-action.ps1`이 콤보·목록·좌표 포커스, plan item과 dataset variable UI 동작을 소유한다.
+- 기존 49개 함수명과 로드 후 동작은 characterization test로 고정했으며 세 파일 어디에도 결과 평가 또는 리포트 파일 생성 분기를 추가하지 않았다.
+- legacy target adapter의 `$script:` 캐시와 Win32 상수는 공개 함수 동작을 유지하기 위해 이번 물리 분리에서 그대로 보존했다. 이를 명시적 target context로 바꾸는 작업은 별도 계약 마이그레이션이 필요하다.
 
 검증 결과:
 
@@ -244,7 +252,8 @@ AST 기준 공유 상태 접근 함수 수:
 - .NET 단위 테스트: 91/91 PASS
 - 기존 PowerShell 회귀: pipeline status 23, evaluator golden 8, TestPack Runner 14 PASS
 - 신규 PowerShell 회귀: Session 14, Navigation 15, characterization 11 PASS
-- PowerShell Parser: 34개 파일 PASS
+- PowerShell Parser: target-specific 분리 포함 전체 파일 PASS
 - Approved TestPack dry-run: C#과 PowerShell Runner CaseId 순서 동일, 결과 `PENDING`, FlaUI action attempt 0
+- Target-specific characterization: 기존 49개 함수가 세 책임 파일에 중복 없이 유지되고 대표 순수 함수 동작이 동일함
 
 `scripts/dev/verify-source-layout.ps1`은 기존 범위 밖인 `scripts/import-0101-testcases.ps1:7`의 target-specific production 기본값을 계속 지적한다. 이번 단계에서는 해당 파일을 수정하지 않았다.
