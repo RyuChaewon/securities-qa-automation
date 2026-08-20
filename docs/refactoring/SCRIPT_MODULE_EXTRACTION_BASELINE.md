@@ -177,7 +177,7 @@ AST 기준 공유 상태 접근 함수 수:
 | `hts-navigation.ps1` | 화면 식별·선택·연계 화면 계산과 화면 이동 순서 | 완료 대상 |
 | `hts-discovery.ps1` | UIA3 원시 snapshot, MAP/룰 탐색 어댑터와 탐색 계측 | 완료 |
 | `hts-binding.ps1` | 역할 locator, claimed HWND, 승인 physical binding 연결 | 완료 |
-| action | 입력·클릭·선택 | 다음 단계 |
+| `hts-action.ps1` | UIA3 selector·입력·클릭·선택과 검증된 fallback 결과 | 완료 |
 | observation | 원시 메시지·상태·값·증거 | 다음 단계 |
 | safety | 승인·allowlist·입력 경계 | 다음 단계 |
 | orchestration | 위 모듈의 순서와 결과 조립 | 모든 추출이 끝난 뒤 최종 축소 |
@@ -212,6 +212,12 @@ AST 기준 공유 상태 접근 함수 수:
 - `hts-binding.ps1`이 역할 locator 해석, claimed HWND 계산, 조회 컨트롤 수집과 승인된 physical binding identity 검증을 소유한다.
 - Binding은 명시적 Discovery context와 창 열거·실행 적격성 dependency를 받으며 `$script:` 상태를 사용하지 않는다.
 - identity가 승인 계획과 다르면 기존 계약대로 `PHYSICAL_BINDING_DRIFT`와 `PENDING`을 보존한다. UI 입력과 최종 결과 판정은 수행하지 않는다.
+
+### Action 단계
+
+- `hts-action.ps1`이 UIA3 selector 생성, 의미 동작 요청, 검증 여부와 fallback 사유 계측을 소유한다.
+- rule-control의 plan item·dataset variable 실행은 Action context dependency로 호출되며 주 실행기가 해당 함수의 내부 분기를 직접 해석하지 않는다.
+- Action 모듈은 UI 동작의 원시 성공·검증·오류 정보만 반환하고 테스트 상태 판정과 리포트 생성을 수행하지 않는다.
 
 검증 결과:
 

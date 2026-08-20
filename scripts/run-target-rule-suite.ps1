@@ -35,6 +35,7 @@ $root = Split-Path -Parent $PSScriptRoot
 . (Join-Path $PSScriptRoot "modules\hts-navigation.ps1")
 . (Join-Path $PSScriptRoot "modules\hts-discovery.ps1")
 . (Join-Path $PSScriptRoot "modules\hts-binding.ps1")
+. (Join-Path $PSScriptRoot "modules\hts-action.ps1")
 
 # 공통 manifest와 대상 컨텍스트를 한 번만 읽고 이하 모든 단계가 같은 파일·창·화면 범위를 사용하게 한다.
 $pipelineManifest = Get-RulePipelineManifest $root
@@ -358,69 +359,6 @@ $sessionContext = New-HtsSessionContext `
     -DisplayName ([string]$targetContext.DisplayName) `
     -GetTopWindows { Get-TopWindows }
 
-# PowerShell 창 객체를 UIA3 재식별 선택자로 변환한다.
-function New-FlaUiSelector($Window) {
-    $bounds = if ($Window -and $Window.rect) {
-        [ordered]@{left=[int]$Window.rect.left;top=[int]$Window.rect.top;right=[int]$Window.rect.right;bottom=[int]$Window.rect.bottom}
-    } else { $null }
-    $uiaClassName = if ($Window.PSObject.Properties.Name -contains 'uiaClassName') { [string]$Window.uiaClassName } elseif ([string]$Window.className -notlike 'UIA:*') { [string]$Window.className } else { '' }
-    [ordered]@{
-        runtimeId=$(if ($Window.PSObject.Properties.Name -contains 'uiaRuntimeId') { [string]$Window.uiaRuntimeId } else { '' })
-        nativeWindowHandle=$(if ($Window.PSObject.Properties.Name -contains 'hwnd') { [Int64]$Window.hwnd } else { [Int64]0 })
-        automationId=$(if ($Window.PSObject.Properties.Name -contains 'automationId') { [string]$Window.automationId } else { '' })
-        name=$(if ($Window.PSObject.Properties.Name -contains 'rawTitle') { [string]$Window.rawTitle } else { '' })
-        className=$uiaClassName
-        controlType=$(if ($Window.PSObject.Properties.Name -contains 'uiaControlType') { [string]$Window.uiaControlType } else { '' })
-        bounds=$bounds
-    }
-}
-
-# 현재 활성 입력 표면 안에서만 UIA3 의미 동작을 허용하고 사용 패턴과 fallback 사유를 감사한다.
-function Invoke-FlaUiControlAction(
-    $Window,
-    [string]$Action,
-    [string]$Value = '',
-    [Nullable[int]]$Index = $null,
-    [Nullable[bool]]$Checked = $null,
-    [string]$Key = '') {
-    if (-not $Window -or [string]$Window.className -eq 'ConfiguredVisualHotspot') {
-        return [pscustomobject]@{success=$false;verified=$false;fallbackRequired=$true;errorCode='VISUAL_HOTSPOT_REQUIRES_COORDINATE';message='시각 핫스팟은 UIA 요소가 아니므로 좌표 fallback이 필요합니다.';engine='FlaUI.UIA3'}
-    }
-
-    $centerX=[int](($Window.rect.left+$Window.rect.right)/2)
-    $centerY=[int](($Window.rect.top+$Window.rect.bottom)/2)
-    try {
-        Assert-HtsClickScope $Window $centerX $centerY
-        $root = Get-HtsActiveInputSurface
-        $request = [ordered]@{
-            requestId=[Guid]::NewGuid().ToString('N');operation='action';rootHwnd=[Int64]$root.hwnd
-            selector=New-FlaUiSelector $Window;action=$Action;value=$Value;key=$Key
-        }
-        if ($null -ne $Index) { $request.index=[int]$Index }
-        if ($null -ne $Checked) { $request.checked=[bool]$Checked }
-        $automationMetrics.FlaUiActionAttempts++
-        $response = Invoke-FlaUiBridgeRequest -Context $sessionContext -Request $request
-        if ([bool]$response.success -and [bool]$response.verified) {
-            $automationMetrics.FlaUiActionSuccesses++
-            Write-HtsInputBoundaryAudit 'FlaUIAction' 'ALLOWED' $centerX $centerY ("{0}; Pattern={1}; Target={2}" -f $Action,[string]$response.pattern,[string]$Window.rawTitle)
-            return $response
-        }
-        # 성공 여부와 별개로 검증까지 완료되지 않으면 호출자는 Win32 보완을 사용하므로 fallback으로 집계한다.
-        $automationMetrics.FlaUiFallbackRequests++
-        $fallbackCode = if ($response.errorCode) { [string]$response.errorCode } else { 'UIA3_RESULT_NOT_VERIFIED' }
-        $reason = "${Action}:$fallbackCode"
-        if (-not $automationMetrics.FlaUiFallbackReasons.Contains($reason)) { $automationMetrics.FlaUiFallbackReasons.Add($reason) }
-        Write-HtsInputBoundaryAudit 'FlaUIAction' 'FALLBACK' $centerX $centerY ("{0}; {1}; {2}" -f $Action,[string]$response.errorCode,[string]$response.message)
-        return $response
-    } catch {
-        $automationMetrics.FlaUiFallbackRequests++
-        $reason = "${Action}:UIA3_BRIDGE_EXCEPTION"
-        if (-not $automationMetrics.FlaUiFallbackReasons.Contains($reason)) { $automationMetrics.FlaUiFallbackReasons.Add($reason) }
-        Write-HtsInputBoundaryAudit 'FlaUIAction' 'FALLBACK' $centerX $centerY $_.Exception.Message
-        return [pscustomobject]@{success=$false;verified=$false;fallbackRequired=$true;errorCode='UIA3_BRIDGE_EXCEPTION';message=$_.Exception.Message;engine='FlaUI.UIA3'}
-    }
-}
-
 . (Join-Path $PSScriptRoot "modules\rule-control-exploration.ps1")
 Initialize-RuleControlExploration $root $dataset $mapCatalog
 if ($OrderTabStateOverride) { Set-RuleOrderTabState '0101' 'HT010115' $OrderTabStateOverride }
@@ -436,6 +374,26 @@ $bindingDependencies = [pscustomobject]@{
     TestControlExecutionEligible = { param($Control) Test-RuleControlExecutionEligible $Control }
 }
 $bindingContext = New-HtsBindingContext -DiscoveryContext $discoveryContext -Dependencies $bindingDependencies
+$actionDependencies = [pscustomobject]@{
+    AssertClickScope = { param($Window,[int]$X,[int]$Y) Assert-HtsClickScope $Window $X $Y }
+    GetActiveInputSurface = { Get-HtsActiveInputSurface }
+    InvokeBridgeRequest = { param($Context,$Request) Invoke-FlaUiBridgeRequest -Context $Context -Request $Request }
+    WriteInputAudit = { param([string]$InputType,[string]$Status,[int]$X,[int]$Y,[string]$Detail) Write-HtsInputBoundaryAudit $InputType $Status $X $Y $Detail }
+    InvokeRuleControlPlanItem = { param($Navigation,$Screen,$PlanItem) Invoke-RuleControlPlanItem $Navigation $Screen $PlanItem }
+    InvokeRuleDatasetVariable = { param($Window,[string]$Kind,[string]$Value,[string]$ValueMatch,[int]$MaxOptions) Invoke-RuleDatasetVariable $Window $Kind $Value $ValueMatch $MaxOptions }
+}
+$actionContext = New-HtsActionContext -SessionContext $sessionContext -Metrics $automationMetrics -Dependencies $actionDependencies
+
+# 기존 rule-control과 navigation 호출 계약을 보존하는 얇은 Action 어댑터다.
+function Invoke-FlaUiControlAction(
+    $Window,
+    [string]$Action,
+    [string]$Value = '',
+    [Nullable[int]]$Index = $null,
+    [Nullable[bool]]$Checked = $null,
+    [string]$Key = '') {
+    Invoke-HtsFlaUiControlAction -Context $actionContext -Window $Window -Action $Action -Value $Value -Index $Index -Checked $Checked -Key $Key
+}
 
 # 기존 탐색 구현의 호출 계약을 유지하되 실제 UIA3 탐색과 계측은 Discovery 모듈에 위임한다.
 function Get-FlaUiActionableControls($Screen) {
@@ -2088,7 +2046,7 @@ for ($caseIndex = 0; $caseIndex -lt $cases.Count; $caseIndex++) {
                 if ($control -and [Int64]$control.hwnd -ne 0) { $claimedHwnds[[Int64]$control.hwnd] = $true }
                 $kind = if ($dimension.controlKind) { [string]$dimension.controlKind } else { "Auto" }
                 $valueMatch = if ($dimension.valueMatch) { [string]$dimension.valueMatch } else { "Value" }
-                if ($control -and (Invoke-RuleDatasetVariable $control $kind ([string]$case.variables[$name]) $valueMatch ([int]$dataset.autoExploration.maxOptionsPerControl))) {
+                if ($control -and (Invoke-HtsDatasetVariableAction -Context $actionContext -Window $control -ControlKind $kind -Value ([string]$case.variables[$name]) -ValueMatch $valueMatch -MaxOptions ([int]$dataset.autoExploration.maxOptionsPerControl))) {
                     Add-Action $actions "setCondition" "PASS" $name "$kind 방식으로 데이터셋 조건값을 적용했습니다. 기대 계약: $([string]$resolvedVariableExpectation.type) / $([string]$resolvedVariableExpectation.source) / $([string]$resolvedVariableExpectation.confidence)."
                     $variableRequirementRecord=$null
                     if([string]$resolvedVariableExpectation.type -in @('ValidationRequired','FailureRequired')){
@@ -2345,7 +2303,7 @@ for ($caseIndex = 0; $caseIndex -lt $cases.Count; $caseIndex++) {
                             $transmissionDelta = Get-TransmissionDelta $logBefore
                             $invoke=[pscustomobject]@{success=(-not [bool]$transmissionDelta.hasTransmission);queryEligible=$false;errorCode=$(if($transmissionDelta.hasTransmission){'ASSERT_TRANSMISSION_DETECTED'}else{''});automationEngine='Sensitive log delta';output=$(if($transmissionDelta.hasTransmission){"transmissionSources=$(@($transmissionDelta.sources)-join ',')"}else{'sensitiveTransmissionDelta=none'})}
                         } else {
-                            $invoke = Invoke-RuleControlPlanItem $navigationContext $screen $planItem
+                            $invoke = Invoke-HtsRuleControlPlanAction -Context $actionContext -NavigationContext $navigationContext -Screen $screen -PlanItem $planItem
                         }
                     }else{
                         $invoke=[pscustomobject]@{success=$false;queryEligible=$false;errorCode='TARGET_SCREEN_NOT_ACTIVE';output='대상 화면을 활성화하지 못해 좌표 입력을 차단했습니다.'}
