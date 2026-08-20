@@ -175,7 +175,7 @@ AST 기준 공유 상태 접근 함수 수:
 |---|---|---|
 | `hts-session.ps1` | FlaUI 프로세스 연결·요청·종료, HTS 메인 창 세션 탐색 | 완료 대상 |
 | `hts-navigation.ps1` | 화면 식별·선택·연계 화면 계산과 화면 이동 순서 | 완료 대상 |
-| discovery | UIA/MAP 탐색 | 다음 단계 |
+| `hts-discovery.ps1` | UIA3 원시 snapshot, MAP/룰 탐색 어댑터와 탐색 계측 | 완료 |
 | binding | 논리 Control과 UIA 요소 연결 | 다음 단계 |
 | action | 입력·클릭·선택 | 다음 단계 |
 | observation | 원시 메시지·상태·값·증거 | 다음 단계 |
@@ -200,6 +200,12 @@ AST 기준 공유 상태 접근 함수 수:
 - `rule-control-exploration.ps1`의 live control 실행 경로는 `NavigationContext`를 명시적으로 받는다. 기존 `activeHtsMainHwnd`, `Get-HtsScreenNumber`, `Focus-HtsRequestedScreen` 역참조를 제거했다.
 - `run-target-rule-suite.ps1`에는 기존 내부 호출 계약을 보존하기 위한 Navigation 호환 어댑터와 dependency 조립이 남아 있다. Discovery/Binding/Action/Observation/Safety 추출 전까지 최종 orchestration-only 상태는 `PENDING`이다.
 - 주 실행기는 3,426줄에서 3,273줄로 감소했다. `rule-control-exploration.ps1`은 이번 단계에서 Navigation 의존성만 명시화했으며 Discovery/Binding/Action 본체 이동은 하지 않았다.
+
+### Discovery 단계
+
+- `hts-discovery.ps1`이 FlaUI UIA3 원시 요소 수집과 MAP/룰 탐색 호출 경계를 소유한다.
+- 탐색 횟수, 발견 요소 수와 fallback 사유는 명시적 `Metrics` 객체에 기록되며 탐색 모듈은 `$script:` 상태를 사용하지 않는다.
+- 주 실행기와 기존 rule-control 구현 사이에는 context 기반 어댑터만 남겼다. 탐색 모듈은 판정, `TestResult` 생성 또는 리포트 파일 작성을 하지 않는다.
 
 검증 결과:
 

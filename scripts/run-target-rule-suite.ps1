@@ -33,6 +33,7 @@ $root = Split-Path -Parent $PSScriptRoot
 . (Join-Path $PSScriptRoot "modules\result-evaluator.ps1")
 . (Join-Path $PSScriptRoot "modules\hts-session.ps1")
 . (Join-Path $PSScriptRoot "modules\hts-navigation.ps1")
+. (Join-Path $PSScriptRoot "modules\hts-discovery.ps1")
 
 # 공통 manifest와 대상 컨텍스트를 한 번만 읽고 이하 모든 단계가 같은 파일·창·화면 범위를 사용하게 한다.
 $pipelineManifest = Get-RulePipelineManifest $root
@@ -343,12 +344,7 @@ $script:activeHtsPid = 0
 $script:activeInputSurfaceHwnd = [Int64]0
 $script:activeInputSurfaceKind = 'None'
 $script:activeInputSurfaceLabel = ''
-$script:flaUiDiscoveryCalls = 0
-$script:flaUiElementsDiscovered = 0
-$script:flaUiActionAttempts = 0
-$script:flaUiActionSuccesses = 0
-$script:flaUiFallbackRequests = 0
-$script:flaUiFallbackReasons = New-Object Collections.Generic.List[string]
+$automationMetrics = New-HtsDiscoveryMetrics
 $script:lastTextAutomationEngine = '미실행'
 
 # manifest에 등록된 FlaUI 프로젝트의 Release UIA3 브리지 DLL 경로를 계산한다.
@@ -401,24 +397,24 @@ function Invoke-FlaUiControlAction(
         }
         if ($null -ne $Index) { $request.index=[int]$Index }
         if ($null -ne $Checked) { $request.checked=[bool]$Checked }
-        $script:flaUiActionAttempts++
+        $automationMetrics.FlaUiActionAttempts++
         $response = Invoke-FlaUiBridgeRequest -Context $sessionContext -Request $request
         if ([bool]$response.success -and [bool]$response.verified) {
-            $script:flaUiActionSuccesses++
+            $automationMetrics.FlaUiActionSuccesses++
             Write-HtsInputBoundaryAudit 'FlaUIAction' 'ALLOWED' $centerX $centerY ("{0}; Pattern={1}; Target={2}" -f $Action,[string]$response.pattern,[string]$Window.rawTitle)
             return $response
         }
         # 성공 여부와 별개로 검증까지 완료되지 않으면 호출자는 Win32 보완을 사용하므로 fallback으로 집계한다.
-        $script:flaUiFallbackRequests++
+        $automationMetrics.FlaUiFallbackRequests++
         $fallbackCode = if ($response.errorCode) { [string]$response.errorCode } else { 'UIA3_RESULT_NOT_VERIFIED' }
         $reason = "${Action}:$fallbackCode"
-        if (-not $script:flaUiFallbackReasons.Contains($reason)) { $script:flaUiFallbackReasons.Add($reason) }
+        if (-not $automationMetrics.FlaUiFallbackReasons.Contains($reason)) { $automationMetrics.FlaUiFallbackReasons.Add($reason) }
         Write-HtsInputBoundaryAudit 'FlaUIAction' 'FALLBACK' $centerX $centerY ("{0}; {1}; {2}" -f $Action,[string]$response.errorCode,[string]$response.message)
         return $response
     } catch {
-        $script:flaUiFallbackRequests++
+        $automationMetrics.FlaUiFallbackRequests++
         $reason = "${Action}:UIA3_BRIDGE_EXCEPTION"
-        if (-not $script:flaUiFallbackReasons.Contains($reason)) { $script:flaUiFallbackReasons.Add($reason) }
+        if (-not $automationMetrics.FlaUiFallbackReasons.Contains($reason)) { $automationMetrics.FlaUiFallbackReasons.Add($reason) }
         Write-HtsInputBoundaryAudit 'FlaUIAction' 'FALLBACK' $centerX $centerY $_.Exception.Message
         return [pscustomobject]@{success=$false;verified=$false;fallbackRequired=$true;errorCode='UIA3_BRIDGE_EXCEPTION';message=$_.Exception.Message;engine='FlaUI.UIA3'}
     }
@@ -428,6 +424,17 @@ function Invoke-FlaUiControlAction(
 Initialize-RuleControlExploration $root $dataset $mapCatalog
 if ($OrderTabStateOverride) { Set-RuleOrderTabState '0101' 'HT010115' $OrderTabStateOverride }
 $script:ruleFastScenarioDiscovery = [bool]($scenarioMode -or $PlanOnly)
+$discoveryDependencies = [pscustomobject]@{
+    InvokeBridgeRequest = { param($Context, $Request) Invoke-FlaUiBridgeRequest -Context $Context -Request $Request }
+    GetMapScreenModel = { param([string]$ScreenNumber, [string]$MapScreenCode) Get-RuleMapScreenModel $ScreenNumber $MapScreenCode }
+    GetRuleDiscoveredControls = { param($Screen, [string]$ScreenNumber, [hashtable]$ClaimedHwnds) @(Get-RuleDiscoveredControls $Screen $ScreenNumber $ClaimedHwnds) }
+}
+$discoveryContext = New-HtsDiscoveryContext -SessionContext $sessionContext -Dependencies $discoveryDependencies -Metrics $automationMetrics
+
+# 기존 탐색 구현의 호출 계약을 유지하되 실제 UIA3 탐색과 계측은 Discovery 모듈에 위임한다.
+function Get-FlaUiActionableControls($Screen) {
+    @(Get-HtsFlaUiActionableControls -Context $discoveryContext -Screen $Screen)
+}
 
 # 공통 창·입력 유틸리티: 민감정보 보호와 모든 물리 입력의 HTS 경계 검사를 담당한다.
 function Protect-Text([string]$Text, [string]$Secret = "") {
@@ -613,41 +620,6 @@ function Get-ChildWindows([Int64]$ParentHwnd) {
         $rows[$index] | Add-Member -NotePropertyName enumerationIndex -NotePropertyValue $index -Force
     }
     $rows
-}
-
-# 현재 화면의 입력 가능한 컨트롤을 FlaUI UIA3로 탐색해 MAP/네이티브 모델과 같은 좌표 객체로 변환한다.
-function Get-FlaUiActionableControls($Screen) {
-    $rows = New-Object Collections.Generic.List[object]
-    try {
-        $script:flaUiDiscoveryCalls++
-        $response = Invoke-FlaUiBridgeRequest -Context $sessionContext -Request ([ordered]@{requestId=[Guid]::NewGuid().ToString('N');operation='discover';rootHwnd=[Int64]$Screen.hwnd})
-        if (-not $response.success) {
-            $script:flaUiFallbackRequests++
-            $reason = "discover:$([string]$response.errorCode)"
-            if (-not $script:flaUiFallbackReasons.Contains($reason)) { $script:flaUiFallbackReasons.Add($reason) }
-            return @()
-        }
-        $elements = @($response.elements)
-        $script:flaUiElementsDiscovered += $elements.Count
-        for ($index=0; $index -lt $elements.Count; $index++) {
-            $element=$elements[$index]
-            $type=[string]$element.controlType
-            $shortType=$type.Replace('ControlType.','')
-            $rect=$element.bounds
-            $rows.Add([pscustomobject]@{
-                hwnd=[Int64]$element.nativeWindowHandle;parent=[Int64]$Screen.hwnd;pid=$Screen.pid;visible=$true;enabled=[bool]$element.isEnabled;hung=$false
-                className="UIA:$shortType";uiaClassName=[string]$element.className;rawTitle=[string]$element.name;style=0;uiaControlType=$type
-                uiaRuntimeId=[string]$element.runtimeId;automationId=[string]$element.automationId;automationEngine='FlaUI.UIA3'
-                supportedActions=@($element.supportedActions);uiaOptions=@($element.options);uiaSelectedIndex=$element.selectedIndex
-                uiaCurrentValue=[string]$element.currentValue;uiaMinimum=$element.minimum;uiaMaximum=$element.maximum;enumerationIndex=100000+$index
-                rect=[pscustomobject]@{left=[int]$rect.left;top=[int]$rect.top;right=[int]$rect.right;bottom=[int]$rect.bottom;width=[int]$rect.width;height=[int]$rect.height}
-            })
-        }
-    } catch {
-        $reason = "discover:UIA3_BRIDGE_EXCEPTION"
-        if (-not $script:flaUiFallbackReasons.Contains($reason)) { $script:flaUiFallbackReasons.Add($reason) }
-    }
-    $rows.ToArray()
 }
 
 # 메인 상단의 화면 ID 입력칸 후보를 위치와 현재 값 형식으로 정렬한다.
@@ -2013,8 +1985,8 @@ try {
     [pscustomobject]@{
         runId=$runId; testPackId=[string]$testPack.testPackId;testPackPath=$resolvedTestPackPath;datasetId=[string]$dataset.datasetId;datasetPath=[string]$testPack.datasetSource; status=[string]$precheckEvaluationOutput.overallResult.status; total=$precheckResults.Count
         pass=[int]$precheckEvaluationOutput.summary.pass; fail=[int]$precheckEvaluationOutput.summary.fail; error=[int]$precheckEvaluationOutput.summary.error; pending=[int]$precheckEvaluationOutput.summary.pending; dryRun=$false; explicitErrorsDetected=0
-        automationEngine='FlaUI.UIA3';automationEngineVersion='5.0.0';flaUiDiscoveryCalls=$script:flaUiDiscoveryCalls;flaUiActionAttempts=$script:flaUiActionAttempts
-        flaUiActionSuccesses=$script:flaUiActionSuccesses;flaUiFallbackRequests=$script:flaUiFallbackRequests;flaUiFallbackReasons=@($script:flaUiFallbackReasons)
+        automationEngine='FlaUI.UIA3';automationEngineVersion='5.0.0';flaUiDiscoveryCalls=$automationMetrics.FlaUiDiscoveryCalls;flaUiActionAttempts=$automationMetrics.FlaUiActionAttempts
+        flaUiActionSuccesses=$automationMetrics.FlaUiActionSuccesses;flaUiFallbackRequests=$automationMetrics.FlaUiFallbackRequests;flaUiFallbackReasons=@($automationMetrics.FlaUiFallbackReasons)
         environmentStatus="HTS_NOT_ACCESSIBLE"; finishedAt=(Get-Date).ToString("o"); executionMode=$(if($SubmitTransactionalDialogs){"승인된 테스트계좌 거래 제출"}else{"조회 전용"}); inputMode="화면 기본값 또는 데이터셋 명시 입력"; planner="결정론적 규칙"
     } | ConvertTo-Json -Depth 5 | Set-Content -LiteralPath (Join-Path $ReportDir "summary.json") -Encoding UTF8
     Stop-FlaUiBridge -Context $sessionContext
@@ -2059,7 +2031,7 @@ for ($caseIndex = 0; $caseIndex -lt $cases.Count; $caseIndex++) {
     $oracleEvents = New-Object Collections.Generic.List[object]
     $script:currentResultEvaluationCases = New-Object Collections.Generic.List[object]
     $script:currentSignalEvaluationGroups = @{}
-    $flaUiActionAttemptsBeforeCase = [int]$script:flaUiActionAttempts
+    $flaUiActionAttemptsBeforeCase = [int]$automationMetrics.FlaUiActionAttempts
     $executedExpectationPatterns = New-Object Collections.Generic.List[string]
     $requiredExpectations = New-Object Collections.Generic.List[object]
     $script:currentRequiredExpectations = $requiredExpectations
@@ -2087,7 +2059,7 @@ for ($caseIndex = 0; $caseIndex -lt $cases.Count; $caseIndex++) {
     $logBefore = @{}
     $beforeErrorTexts = @()
     $screen = $null
-    $mapModel = Get-RuleMapScreenModel ([string]$case.screen.screenNumber) $(if($scenarioMode){[string]$case.scenarioCase.mapScreenCode}else{''})
+    $mapModel = Get-HtsDiscoveryMapScreenModel -Context $discoveryContext -ScreenNumber ([string]$case.screen.screenNumber) -MapScreenCode $(if($scenarioMode){[string]$case.scenarioCase.mapScreenCode}else{''})
     $mapOracle = if ($mapModel) { $mapModel.errorOracle } else { $null }
     $mapBehavior = if ($mapModel) { $mapModel.behavior } else { $null }
     $mapQueryExecuted = $false
@@ -2266,7 +2238,7 @@ for ($caseIndex = 0; $caseIndex -lt $cases.Count; $caseIndex++) {
 
             $autoPendingReasons = New-Object Collections.Generic.List[string]
             if ($dataset.autoExploration -and [bool]$dataset.autoExploration.enabled) {
-                $initialControls = @(Get-RuleDiscoveredControls $screen ([string]$case.screen.screenNumber) $claimedHwnds)
+                $initialControls = @(Get-HtsDiscoveredControls -Context $discoveryContext -Screen $screen -ScreenNumber ([string]$case.screen.screenNumber) -ClaimedHwnds $claimedHwnds)
                 if ($scenarioMode -and [bool]$case.scenarioCase.transactional) {
                     $expectedAccount = ([string]$case.account.accountNumber -replace '\D','')
                     $allowObservedPrefilledAccount = [bool]$dataset.executionPolicy.allowObservedPrefilledTransactionalAccount -and $inputMode -eq 'Prefilled'
@@ -2344,7 +2316,7 @@ for ($caseIndex = 0; $caseIndex -lt $cases.Count; $caseIndex++) {
                 for ($planIndex=0; $planIndex -lt $queue.Count; $planIndex++) {
                     $planItem = $queue[$planIndex]
                     if ($scenarioMode -and [string]$planItem.status -ne 'READY' -and (Test-HtsRequestedScreen $screen ([string]$case.screen.screenNumber))) {
-                        $scenarioRefresh = @(Get-RuleDiscoveredControls $screen ([string]$case.screen.screenNumber) $claimedHwnds)
+                        $scenarioRefresh = @(Get-HtsDiscoveredControls -Context $discoveryContext -Screen $screen -ScreenNumber ([string]$case.screen.screenNumber) -ClaimedHwnds $claimedHwnds)
                         foreach ($refreshedControl in $scenarioRefresh) {
                             if (@($discoveredControls | Where-Object { [string]$_.controlId -eq [string]$refreshedControl.controlId -and [string]$_.stateContext -eq [string]$refreshedControl.stateContext }).Count -eq 0) {
                                 $discoveredControls.Add($refreshedControl)
@@ -2748,7 +2720,7 @@ for ($caseIndex = 0; $caseIndex -lt $cases.Count; $caseIndex++) {
                     })
 
                     if (-not $scenarioMode -and (Test-HtsRequestedScreen $screen ([string]$case.screen.screenNumber))) {
-                        $refreshed = @(Get-RuleDiscoveredControls $screen ([string]$case.screen.screenNumber) $claimedHwnds)
+                        $refreshed = @(Get-HtsDiscoveredControls -Context $discoveryContext -Screen $screen -ScreenNumber ([string]$case.screen.screenNumber) -ClaimedHwnds $claimedHwnds)
                         $newPlans = New-Object Collections.Generic.List[object]
                         foreach ($refreshedControl in $refreshed) {
                             $controlId = [string]$refreshedControl.controlId
@@ -3086,7 +3058,7 @@ for ($caseIndex = 0; $caseIndex -lt $cases.Count; $caseIndex++) {
     if ($PlanOnly -and $pendingReasons.Count -eq 0) { $pendingReasons.Add("계획 전용 실행") }
     $ended = Get-Date
     # 실행기는 사실만 Observation으로 기록하고 최종 상태는 Core ResultEvaluator 출력에서 복사한다.
-    $actualCaseActionsExecuted = -not $PlanOnly -and (([int]$script:flaUiActionAttempts -gt $flaUiActionAttemptsBeforeCase) -or $script:currentResultEvaluationCases.Count -gt 0)
+    $actualCaseActionsExecuted = -not $PlanOnly -and (([int]$automationMetrics.FlaUiActionAttempts -gt $flaUiActionAttemptsBeforeCase) -or $script:currentResultEvaluationCases.Count -gt 0)
     $completionObservationKind = if ($externalInterruption -or $executorException -or $automationContractFailure) { 'InfrastructureError' } elseif ($errors.Count -gt 0) { 'ProductFailure' } elseif ($pendingReasons.Count -gt 0) { 'EvidenceMissing' } else { 'Success' }
     $completionObservationCode = if ($externalInterruption) { 'HTS_CONNECTION_LOST' } elseif ($automationContractFailure -and $automationContractErrorCode) { $automationContractErrorCode } elseif ($executorException) { 'EXECUTOR_EXCEPTION' } elseif ($screenOpenFailure) { 'SCREEN_NOT_VISIBLE' } elseif ($errors.Count -gt 0) { 'PRODUCT_DEFECT_DETECTED' } elseif ($existingScreenRequiredMissing) { 'EXISTING_SCREEN_REQUIRED' } elseif ($pendingReasons.Count -gt 0) { 'PRECONDITION_PENDING' } else { '' }
     $completionMessage = if ($errors.Count -gt 0) { @($errors | Select-Object -Unique) -join ' | ' } elseif ($pendingReasons.Count -gt 0) { @($pendingReasons | Select-Object -Unique) -join ' | ' } else { '케이스 실행 및 증거 수집을 완료했습니다.' }
@@ -3215,9 +3187,9 @@ $summaryStatus=[string]$runEvaluationOutput.overallResult.status
     error=[int]$runResultSummary.error; pending=[int]$runResultSummary.pending
     dryRun=$false; explicitErrorsDetected=@($resultArray | Where-Object productDefectDetected).Count
     automationEngine='FlaUI.UIA3';automationEngineVersion='5.0.0'
-    flaUiDiscoveryCalls=$script:flaUiDiscoveryCalls;flaUiElementsDiscovered=$script:flaUiElementsDiscovered
-    flaUiActionAttempts=$script:flaUiActionAttempts;flaUiActionSuccesses=$script:flaUiActionSuccesses
-    flaUiFallbackRequests=$script:flaUiFallbackRequests;flaUiFallbackReasons=@($script:flaUiFallbackReasons)
+    flaUiDiscoveryCalls=$automationMetrics.FlaUiDiscoveryCalls;flaUiElementsDiscovered=$automationMetrics.FlaUiElementsDiscovered
+    flaUiActionAttempts=$automationMetrics.FlaUiActionAttempts;flaUiActionSuccesses=$automationMetrics.FlaUiActionSuccesses
+    flaUiFallbackRequests=$automationMetrics.FlaUiFallbackRequests;flaUiFallbackReasons=@($automationMetrics.FlaUiFallbackReasons)
     finishedAt=(Get-Date).ToString("o"); executionMode=$(if ($PlanOnly) {"계획 전용"} elseif($SubmitTransactionalDialogs){"승인된 테스트계좌 거래 제출"} elseif($scenarioMode){"승인된 시나리오 기반 조작"} else {"대상 화면 규칙 기반 전체 조작"}); inputMode="화면 기본값 또는 데이터셋 명시 입력"; planner=[string]$testPack.generatorVersion
     scenarioMode=[bool]$scenarioMode;logicalPlanId=$(if($scenarioMode){[string]$scenarioPlan.planId}else{''});physicalPlanId=$(if($physicalPlan){[string]$physicalPlan.physicalPlanId}else{''})
     scenarioGenerationMode=$(if($scenarioMode){[string]$scenarioPlan.scenarioGenerationMode}else{''});scenarioGenerator=$(if($scenarioMode){[string]$scenarioPlan.scenarioGenerator}else{''});scenarioGeneratorVersion=$(if($scenarioMode){[string]$scenarioPlan.scenarioGeneratorVersion}else{''});runtimeDiscoveryUsed=$(if($scenarioMode){[bool]$scenarioPlan.runtimeDiscoveryUsed}else{$false})
