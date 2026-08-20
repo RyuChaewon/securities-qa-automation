@@ -1,7 +1,7 @@
 ﻿<#
 .SYNOPSIS MAP과 런타임 HWND/UIA/탭오더를 결합해 화면 내부 컨트롤과 선택지를 계획·실행한다.
 .DESCRIPTION 주 실행기에서 dot-source하며 콘텐츠 경계, 컨트롤 종류, 옵션, 기대 계약과 동적 재발견을 담당한다.
-.INPUTS 현재 HTS 창 snapshot, MAP 화면 모델, 데이터셋 locator·값 계약과 FlaUI 브리지 함수.
+.INPUTS 현재 HTS 창 snapshot, 명시적 NavigationContext, MAP 화면 모델, 데이터셋 locator·값 계약과 FlaUI 브리지 함수.
 .OUTPUTS 발견 컨트롤, 탭 순서, MAP 결합 결과, 선택지 계획과 조작 결과 객체.
 .NOTES 물리 입력 전 HTS 메인 창·콘텐츠 경계 검사를 우회하지 않고 대상별 제어는 데이터나 어댑터 함수로 분리한다.
 #>
@@ -1488,11 +1488,11 @@ function Get-RuleScenarioPlanItems($Controls, $ScenarioCase) {
 }
 
 # 동적 재식별: 물리 바인딩은 고정된 MAP identity를 다시 확인하고, 일반 탐색만 제한적인 위치 fallback을 쓴다.
-function Resolve-RuleLiveControl($Screen, $PlannedControl, $ExpectedBinding = $null, [string]$ExecutionOrder = 'RuntimeTabOrder') {
+function Resolve-RuleLiveControl($NavigationContext, $Screen, $PlannedControl, $ExpectedBinding = $null, [string]$ExecutionOrder = 'RuntimeTabOrder') {
     $script:lastLiveControlResolution = [pscustomobject]@{success=$false;errorCode='CONTROL_STALE';mode='Unresolved';candidateCount=0;evidence=@()}
     $strictBinding = $null -ne $ExpectedBinding -or [string]$PlannedControl.definitionSource -eq 'MAP+Runtime'
     if ($strictBinding) {
-        $currentScreenNumber = Get-HtsScreenNumber $Screen
+        $currentScreenNumber = Get-HtsNavigationScreenNumber -Context $NavigationContext -Window $Screen
         if (-not $currentScreenNumber) {
             $script:lastLiveControlResolution = [pscustomobject]@{success=$false;errorCode='TARGET_SCREEN_NOT_ACTIVE';mode='StrictPhysical';candidateCount=0;evidence=@('현재 콘텐츠 화면 ID를 판독하지 못했습니다.')}
             return $null
@@ -1566,7 +1566,7 @@ function Resolve-RuleLiveControl($Screen, $PlannedControl, $ExpectedBinding = $n
     }
     $signature = [string]$PlannedControl.locatorSignature
     # 화면 ID 길이를 가정하지 않고 targetProfile 정규식을 쓰는 공통 판독기로 현재 제목을 해석한다.
-    $currentScreenNumber = Get-HtsScreenNumber $Screen
+    $currentScreenNumber = Get-HtsNavigationScreenNumber -Context $NavigationContext -Window $Screen
     if (-not $currentScreenNumber) { return $null }
     $candidates = @(Get-RuleDiscoveredControls $Screen $currentScreenNumber @{})
     $sameMapControl = @($candidates | Where-Object { [string]$_.controlId -eq [string]$PlannedControl.controlId -and [Int64]$_.hwnd -ne 0 } | Select-Object -First 1)
@@ -1617,12 +1617,12 @@ function Resolve-RuleLiveControl($Screen, $PlannedControl, $ExpectedBinding = $n
 }
 
 # 시나리오 Assert 단계: 현재 HWND/UIA 상태를 읽어 성공 여부와 관찰값을 반환한다.
-function Invoke-RuleControlAssertion($Screen, $PlanItem) {
+function Invoke-RuleControlAssertion($NavigationContext, $Screen, $PlanItem) {
     $action = [string]$PlanItem.scenarioAction
     $control = $PlanItem.control
     $expectedBinding = if ($PlanItem.PSObject.Properties.Name -contains 'physicalBinding') { $PlanItem.physicalBinding } else { $null }
     $executionOrder = if ([string]$PlanItem.executionOrder) { [string]$PlanItem.executionOrder } else { 'RuntimeTabOrder' }
-    $live = Resolve-RuleLiveControl $Screen $control $expectedBinding $executionOrder
+    $live = Resolve-RuleLiveControl $NavigationContext $Screen $control $expectedBinding $executionOrder
     if (-not $live) {
         $resolutionCode = if ($script:lastLiveControlResolution.errorCode) { [string]$script:lastLiveControlResolution.errorCode } else { 'ASSERT_CONTROL_NOT_FOUND' }
         return [pscustomobject]@{success=$false;queryEligible=$false;errorCode=$resolutionCode;automationEngine='Win32/UIA state';output="검증 시점에 고정된 대상 컨트롤을 확인하지 못했습니다. mode=$([string]$script:lastLiveControlResolution.mode), candidates=$([int]$script:lastLiveControlResolution.candidateCount)";resolution=$script:lastLiveControlResolution}
@@ -1651,13 +1651,13 @@ function Invoke-RuleControlAssertion($Screen, $PlanItem) {
         $expectedIndex = if ($PlanItem.option) { [int]$PlanItem.option.index } else { 0 }
         $kind = [string]$control.controlKind
         $logicalName = if ([string]$PlanItem.controlLogicalName) { [string]$PlanItem.controlLogicalName } else { [string]$control.name }
-        $orderTabProfile = if ($kind -eq 'Tab') { Get-RuleOrderTabProfile (Get-HtsScreenNumber $Screen) ([string]$PlanItem.mapScreenCode) $logicalName } else { $null }
+        $orderTabProfile = if ($kind -eq 'Tab') { Get-RuleOrderTabProfile (Get-HtsNavigationScreenNumber -Context $NavigationContext -Window $Screen) ([string]$PlanItem.mapScreenCode) $logicalName } else { $null }
         if ($orderTabProfile -and ([string]$live.className).StartsWith('AfxWnd',[StringComparison]::OrdinalIgnoreCase)) {
             $orderTabItem = Get-RuleOrderTabItem $orderTabProfile $PlanItem.option
             if (-not $orderTabItem) {
                 return [pscustomobject]@{success=$false;queryEligible=$false;errorCode='ORDER_TAB_PROFILE_VALUE_MISSING';automationEngine='MAP+Runtime state';output="주문 탭 프로필에 값 '$([string]$PlanItem.option.value)'이 없습니다."}
             }
-            $refreshedControls = @(Get-RuleDiscoveredControls $Screen (Get-HtsScreenNumber $Screen))
+            $refreshedControls = @(Get-RuleDiscoveredControls $Screen (Get-HtsNavigationScreenNumber -Context $NavigationContext -Window $Screen))
             $verifiedControls = @($orderTabItem.verificationControls | Where-Object {
                 $verificationName = [string]$_
                 @($refreshedControls | Where-Object {
@@ -1710,11 +1710,11 @@ function Invoke-RuleControlAssertion($Screen, $PlanItem) {
 }
 
 # 좌표 우선 입력은 클릭 지점의 HTS 소유권 검증 뒤 포커스가 요청 화면 안에 남았는지 다시 확인한다.
-function Set-RuleCoordinateFocus($Screen, $Live) {
-    $screenNumber = Get-HtsScreenNumber $Screen
+function Set-RuleCoordinateFocus($NavigationContext, $Screen, $Live) {
+    $screenNumber = Get-HtsNavigationScreenNumber -Context $NavigationContext -Window $Screen
     Click-Center $Live
     Start-Sleep -Milliseconds 100
-    if (-not $screenNumber -or (Get-HtsScreenNumber $Screen) -ne $screenNumber) {
+    if (-not $screenNumber -or (Get-HtsNavigationScreenNumber -Context $NavigationContext -Window $Screen) -ne $screenNumber) {
         return [pscustomobject]@{success=$false;errorCode='COORDINATE_FOCUS_SCREEN_CHANGED';output='좌표 클릭 직후 요청 화면이 바뀌어 후속 키 입력을 차단했습니다.'}
     }
     $threadInfo = New-Object TargetRuleNative+GUITHREADINFO
@@ -1737,19 +1737,19 @@ function Set-RuleCoordinateFocus($Screen, $Live) {
 }
 
 # 컨트롤 실행: 종류별 입력/선택/토글/클릭을 수행하고 적용 여부와 복원 정보를 반환한다.
-function Invoke-RuleControlPlanItem($Screen, $PlanItem) {
+function Invoke-RuleControlPlanItem($NavigationContext, $Screen, $PlanItem) {
     if ($PlanItem.status -ne "READY") { return [pscustomobject]@{success=$false;queryEligible=$false;errorCode=[string]$PlanItem.errorCode;output=[string]$PlanItem.control.pendingReason} }
     $control = $PlanItem.control
     $option = $PlanItem.option
     # 대상 프로필과 일치하는 현재 화면만 조작해 다른 화면이나 HTS 외부로 입력이 새는 것을 막는다.
-    $screenNumber = Get-HtsScreenNumber $Screen
-    if(-not $screenNumber -or -not (Focus-HtsRequestedScreen ([pscustomobject]@{hwnd=$script:activeHtsMainHwnd}) $Screen $screenNumber)){
+    $screenNumber = Get-HtsNavigationScreenNumber -Context $NavigationContext -Window $Screen
+    if(-not $screenNumber -or -not (Focus-HtsNavigationRequestedScreen -Context $NavigationContext -Main $NavigationContext.SessionContext.MainWindow -Screen $Screen -ScreenNumber $screenNumber)){
         return [pscustomobject]@{success=$false;queryEligible=$false;errorCode="TARGET_SCREEN_NOT_ACTIVE";output="실행 직전에 대상 콘텐츠 화면을 활성화하지 못해 입력을 차단했습니다."}
     }
     $expectedBinding = if ($PlanItem.PSObject.Properties.Name -contains 'physicalBinding') { $PlanItem.physicalBinding } else { $null }
     $executionOrder = if ([string]$PlanItem.executionOrder) { [string]$PlanItem.executionOrder } else { 'RuntimeTabOrder' }
     $coordinateFocus = $executionOrder -eq 'CoordinateFocus'
-    $live = Resolve-RuleLiveControl $Screen $control $expectedBinding $executionOrder
+    $live = Resolve-RuleLiveControl $NavigationContext $Screen $control $expectedBinding $executionOrder
     if (-not $live) {
         $resolutionCode = if ($script:lastLiveControlResolution.errorCode) { [string]$script:lastLiveControlResolution.errorCode } else { 'CONTROL_STALE' }
         return [pscustomobject]@{success=$false;queryEligible=$false;errorCode=$resolutionCode;output="실행 직전에 고정된 컨트롤을 다시 확인하지 못했습니다. mode=$([string]$script:lastLiveControlResolution.mode), candidates=$([int]$script:lastLiveControlResolution.candidateCount)";resolution=$script:lastLiveControlResolution}
@@ -1766,7 +1766,7 @@ function Invoke-RuleControlPlanItem($Screen, $PlanItem) {
     $coordinateFocusVerified = $false
     try {
     if ($coordinateFocus -and [string]$control.controlKind -in @('Text','Date')) {
-        $focusResult = Set-RuleCoordinateFocus $Screen $live
+        $focusResult = Set-RuleCoordinateFocus $NavigationContext $Screen $live
         if (-not [bool]$focusResult.success) {
             return [pscustomobject]@{
                 success=$false;queryEligible=$false;errorCode=[string]$focusResult.errorCode

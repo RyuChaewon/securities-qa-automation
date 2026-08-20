@@ -31,6 +31,8 @@ $root = Split-Path -Parent $PSScriptRoot
 . (Join-Path $PSScriptRoot "modules\pipeline-common.ps1")
 . (Join-Path $PSScriptRoot "modules\report-sanitization.ps1")
 . (Join-Path $PSScriptRoot "modules\result-evaluator.ps1")
+. (Join-Path $PSScriptRoot "modules\hts-session.ps1")
+. (Join-Path $PSScriptRoot "modules\hts-navigation.ps1")
 
 # 공통 manifest와 대상 컨텍스트를 한 번만 읽고 이하 모든 단계가 같은 파일·창·화면 범위를 사용하게 한다.
 $pipelineManifest = Get-RulePipelineManifest $root
@@ -60,7 +62,6 @@ $scenarioMode = [bool]$ScenarioPlanPath
 $reuseExistingTargetScreenRequested = [bool]($ReuseExistingTargetScreen -or $RequireExistingTargetScreen)
 $script:visiblePointerMotion = [bool]$VisiblePointerMotion
 $script:pointerDwellMilliseconds = [int]$PointerDwellMilliseconds
-$script:preservedTargetScreenHwnds = @()
 $executableScenarioCaseIds = @()
 $requestedScenarioCaseIds = @($CaseIdsCsv -split ',' | ForEach-Object { $_.Trim() } | Where-Object { $_ } | Select-Object -Unique)
 if ($SubmitTransactionalDialogs -and -not $scenarioMode) { throw '-SubmitTransactionalDialogs에는 승인된 -ScenarioPlanPath가 필요합니다.' }
@@ -342,7 +343,6 @@ $script:activeHtsPid = 0
 $script:activeInputSurfaceHwnd = [Int64]0
 $script:activeInputSurfaceKind = 'None'
 $script:activeInputSurfaceLabel = ''
-$script:flaUiBridge = $null
 $script:flaUiDiscoveryCalls = 0
 $script:flaUiElementsDiscovered = 0
 $script:flaUiActionAttempts = 0
@@ -354,79 +354,12 @@ $script:lastTextAutomationEngine = '미실행'
 # manifest에 등록된 FlaUI 프로젝트의 Release UIA3 브리지 DLL 경로를 계산한다.
 $flaUiProject = Resolve-RulePath $root ([string]$pipelineManifest.flaUiProject)
 $flaUiAssembly = Join-Path (Split-Path -Parent $flaUiProject) 'bin\Release\net8.0-windows7.0\HtsQa.FlaUi.dll'
-
-# UIA3 COM 객체를 한 번만 초기화하는 상주 브리지를 시작하고 ping으로 프로토콜까지 확인한다.
-function Start-FlaUiBridge {
-    if ($script:flaUiBridge -and -not $script:flaUiBridge.HasExited) { return }
-    if (-not (Test-Path -LiteralPath $flaUiAssembly -PathType Leaf)) {
-        throw "FlaUI UIA3 실행기 빌드 결과를 찾을 수 없습니다: $flaUiAssembly. 먼저 dotnet build HtsQaPoc.sln -c Release를 실행하세요."
-    }
-
-    $dotnetCommand = Get-Command dotnet -ErrorAction Stop
-    $startInfo = New-Object Diagnostics.ProcessStartInfo
-    $startInfo.FileName = $dotnetCommand.Source
-    $startInfo.Arguments = '"' + $flaUiAssembly + '" --stdio'
-    $startInfo.UseShellExecute = $false
-    $startInfo.CreateNoWindow = $true
-    $startInfo.RedirectStandardInput = $true
-    $startInfo.RedirectStandardOutput = $true
-    $startInfo.RedirectStandardError = $true
-
-    $process = New-Object Diagnostics.Process
-    $process.StartInfo = $startInfo
-    if (-not $process.Start()) { throw 'FlaUI UIA3 실행기 프로세스를 시작하지 못했습니다.' }
-    $script:flaUiBridge = $process
-
-    $ping = Invoke-FlaUiBridgeRequest ([ordered]@{requestId=[Guid]::NewGuid().ToString('N');operation='ping';rootHwnd=0})
-    if (-not $ping.success -or [string]$ping.engine -ne 'FlaUI.UIA3') {
-        $errorText = if ($process.HasExited) { $process.StandardError.ReadToEnd() } else { [string]$ping.message }
-        Stop-FlaUiBridge
-        throw "FlaUI UIA3 실행기 ping에 실패했습니다: $errorText"
-    }
-}
-
-# Windows PowerShell 5.1의 리디렉션 인코딩 차이를 피하도록 비 ASCII 문자를 JSON \uXXXX로 바꾼다.
-function ConvertTo-FlaUiAsciiJson($Request) {
-    $json = ConvertTo-Json -InputObject $Request -Compress -Depth 12
-    $builder = New-Object Text.StringBuilder
-    foreach ($character in $json.ToCharArray()) {
-        if ([int]$character -gt 127) { [void]$builder.AppendFormat('\u{0:X4}', [int]$character) }
-        else { [void]$builder.Append($character) }
-    }
-    $builder.ToString()
-}
-
-# JSON 한 줄을 브리지에 쓰고 같은 requestId의 단일 응답 한 줄을 역직렬화한다.
-function Invoke-FlaUiBridgeRequest($Request) {
-    if (-not $script:flaUiBridge -or $script:flaUiBridge.HasExited) {
-        throw 'FlaUI UIA3 실행기가 실행 중이 아닙니다.'
-    }
-    $json = ConvertTo-FlaUiAsciiJson $Request
-    $script:flaUiBridge.StandardInput.WriteLine($json)
-    $script:flaUiBridge.StandardInput.Flush()
-    $line = $script:flaUiBridge.StandardOutput.ReadLine()
-    if ([string]::IsNullOrWhiteSpace($line)) {
-        $errorText = if ($script:flaUiBridge.HasExited) { $script:flaUiBridge.StandardError.ReadToEnd() } else { '빈 응답' }
-        throw "FlaUI UIA3 실행기가 응답을 반환하지 않았습니다: $errorText"
-    }
-    $response = $line | ConvertFrom-Json
-    if ([string]$response.requestId -ne [string]$Request.requestId) {
-        throw "FlaUI UIA3 요청/응답 식별자가 일치하지 않습니다: $($Request.requestId) / $($response.requestId)"
-    }
-    $response
-}
-
-# 표준입력을 닫아 정상 종료를 유도하고 남아 있으면 이 실행이 만든 자식 프로세스만 종료한다.
-function Stop-FlaUiBridge {
-    $process = $script:flaUiBridge
-    $script:flaUiBridge = $null
-    if (-not $process) { return }
-    try { $process.StandardInput.Close() } catch { }
-    try {
-        if (-not $process.WaitForExit(2000)) { $process.Kill() }
-    } catch { }
-    try { $process.Dispose() } catch { }
-}
+$sessionContext = New-HtsSessionContext `
+    -FlaUiAssembly $flaUiAssembly `
+    -TargetWindowClassName $script:targetWindowClassName `
+    -TargetWindowTitlePrefix $script:targetWindowTitlePrefix `
+    -DisplayName ([string]$targetContext.DisplayName) `
+    -GetTopWindows { Get-TopWindows }
 
 # PowerShell 창 객체를 UIA3 재식별 선택자로 변환한다.
 function New-FlaUiSelector($Window) {
@@ -469,7 +402,7 @@ function Invoke-FlaUiControlAction(
         if ($null -ne $Index) { $request.index=[int]$Index }
         if ($null -ne $Checked) { $request.checked=[bool]$Checked }
         $script:flaUiActionAttempts++
-        $response = Invoke-FlaUiBridgeRequest $request
+        $response = Invoke-FlaUiBridgeRequest -Context $sessionContext -Request $request
         if ([bool]$response.success -and [bool]$response.verified) {
             $script:flaUiActionSuccesses++
             Write-HtsInputBoundaryAudit 'FlaUIAction' 'ALLOWED' $centerX $centerY ("{0}; Pattern={1}; Target={2}" -f $Action,[string]$response.pattern,[string]$Window.rawTitle)
@@ -687,7 +620,7 @@ function Get-FlaUiActionableControls($Screen) {
     $rows = New-Object Collections.Generic.List[object]
     try {
         $script:flaUiDiscoveryCalls++
-        $response = Invoke-FlaUiBridgeRequest ([ordered]@{requestId=[Guid]::NewGuid().ToString('N');operation='discover';rootHwnd=[Int64]$Screen.hwnd})
+        $response = Invoke-FlaUiBridgeRequest -Context $sessionContext -Request ([ordered]@{requestId=[Guid]::NewGuid().ToString('N');operation='discover';rootHwnd=[Int64]$Screen.hwnd})
         if (-not $response.success) {
             $script:flaUiFallbackRequests++
             $reason = "discover:$([string]$response.errorCode)"
@@ -715,35 +648,6 @@ function Get-FlaUiActionableControls($Screen) {
         if (-not $script:flaUiFallbackReasons.Contains($reason)) { $script:flaUiFallbackReasons.Add($reason) }
     }
     $rows.ToArray()
-}
-
-# HTS 메인 창 탐색: 프로세스/클래스/제목을 확인하고 동일 권한의 유효한 메인 HWND만 반환한다.
-function Find-HtsMainWindow {
-    # 클래스명이나 제목 접두사가 비어 있으면 나머지 조건만 사용하되 둘 다 빈 프로필은 데이터셋 검증에서 차단된다.
-    $main = Get-TopWindows | Where-Object {
-        $classMatches = (-not $script:targetWindowClassName) -or $_.className -eq $script:targetWindowClassName
-        $titleMatches = (-not $script:targetWindowTitlePrefix) -or $_.rawTitle.StartsWith($script:targetWindowTitlePrefix)
-        $_.visible -and $classMatches -and $titleMatches
-    } |
-        Sort-Object hwnd -Descending | Select-Object -First 1
-    if (-not $main) { throw "표시 중인 $($targetContext.DisplayName) 메인 창을 찾을 수 없습니다. 대상과 같은 권한 수준에서 이 스크립트를 실행하세요." }
-    $main
-}
-
-# 메인 창 재생성이나 일시 정지에 대응해 제한 시간 동안 유효한 창을 다시 찾는다.
-function Wait-HtsMainWindow([int]$TimeoutMs = 45000) {
-    $deadline = (Get-Date).AddMilliseconds($TimeoutMs)
-    $lastMessage = ""
-    while ((Get-Date) -lt $deadline) {
-        try {
-            $candidate = Find-HtsMainWindow
-            if ($candidate -and -not $candidate.hung) { return $candidate }
-        } catch {
-            $lastMessage = $_.Exception.Message
-        }
-        Start-Sleep -Milliseconds 500
-    }
-    throw "HTS 메인 창이 제한 시간 안에 복구되지 않았습니다. $lastMessage"
 }
 
 # 메인 상단의 화면 ID 입력칸 후보를 위치와 현재 값 형식으로 정렬한다.
@@ -819,7 +723,7 @@ function Assert-HtsForeground {
     $mainHwnd=[IntPtr][Int64]$script:activeHtsMainHwnd
     if(-not [TargetRuleNative]::IsWindow($mainHwnd)){
         $replacement=$null
-        try{$replacement=Wait-HtsMainWindow 15000}catch{}
+        try{$replacement=Wait-HtsMainWindow -Context $sessionContext -TimeoutMs 15000}catch{}
         if(-not $replacement){throw 'HTS_FOREGROUND_GUARD: HTS 메인 창이 사라졌고 새 메인 창도 찾지 못했습니다.'}
         $script:activeHtsMainHwnd=[Int64]$replacement.hwnd
         $script:activeHtsPid=[int]$replacement.pid
@@ -1139,180 +1043,71 @@ function Set-AutomationText($Window, [string]$Value, [switch]$Sensitive, [switch
 
 # 화면 수명주기: 번호 입력, 대상 창 식별, 연계 창 정리와 순차 종료를 한 화면 단위로 관리한다.
 function Open-HtsScreen($Main, $ScreenEdit, [string]$ScreenNumber) {
-    $script:activeHtsMainHwnd=[Int64]$Main.hwnd
-    $script:activeHtsPid=[int]$Main.pid
-    Set-HtsInputSurface $Main 'Main' 'HTS 메인 화면번호 입력 영역'
-    [void][TargetRuleNative]::ShowWindow([IntPtr][Int64]$Main.hwnd, 9)
-    [void][TargetRuleNative]::SetForegroundWindow([IntPtr][Int64]$Main.hwnd)
-    Set-HtsScreenNumber $ScreenEdit $ScreenNumber
-    $currentEdit = Get-WindowInfo ([IntPtr][Int64]$ScreenEdit.hwnd)
-    # 번호 입력 후 Enter 역시 UIA3 요소 포커스에서 먼저 전송하고 실패할 때만 좌표/Win32 키를 사용한다.
-    $enterResult = Invoke-FlaUiControlAction $currentEdit 'pressKey' -Key 'ENTER'
-    if (-not ([bool]$enterResult.success -and [bool]$enterResult.verified)) {
-        [void](Test-HtsScreenNavigationInputAccess $currentEdit)
-        Click-Center $currentEdit
-        Send-Key ([byte]$VK_RETURN)
-    }
-    $openWaitMs = [Math]::Min(5000, [Math]::Max(1000, [int]$dataset.executionPolicy.screenOpenTimeoutMs / 2))
-    Start-Sleep -Milliseconds $openWaitMs
-    # UIA의 키 전송 성공은 업무 화면 생성까지 보장하지 않으므로 화면 생성 결과로 재검증한다.
-    if (-not (Find-ScreenWindow $Main $ScreenNumber)) {
-        # HTS 메인 입력부는 표준 Edit HWND이므로 물리 마우스 없이도 포커스를
-        # 검증하고 Enter를 전송할 수 있다. 원격/격리 세션의 커서 차단을 피한다.
-        [void](Test-HtsScreenNavigationInputAccess $currentEdit)
-        Focus-HtsInputWindow $currentEdit
-        Send-Key ([byte]$VK_RETURN)
-        Start-Sleep -Milliseconds $openWaitMs
-    }
+    Open-HtsNavigationScreen -Context $navigationContext -Main $Main -ScreenEdit $ScreenEdit -ScreenNumber $ScreenNumber
 }
 
 # 요청 화면 ID가 제목에 표시된 가장 큰 자식 창을 대상 화면으로 선택한다.
 function Find-ScreenWindow($Main, [string]$ScreenNumber) {
-    Get-ChildWindows ([Int64]$Main.hwnd) | Where-Object { $_.visible -and $_.rawTitle -match ("^\[" + [regex]::Escape($ScreenNumber) + "\]") } |
-        Sort-Object @{ Expression = { [int]$_.rect.width * [int]$_.rect.height }; Descending = $true } | Select-Object -First 1
+    Find-HtsNavigationScreenWindow -Context $navigationContext -Main $Main -ScreenNumber $ScreenNumber
 }
 
 # targetProfile 화면 정규식으로 자식 창 제목에서 화면 ID를 추출한다.
 function Get-HtsScreenNumber($Window) {
-    if ($Window) {
-        $match = $script:targetScreenTitleRegex.Match([string]$Window.rawTitle)
-        if ($match.Success) { return [string]$match.Groups['screen'].Value }
-    }
-    ""
+    Get-HtsNavigationScreenNumber -Context $navigationContext -Window $Window
 }
 
 # 대상 화면 형식과 최소 콘텐츠 크기를 만족하는 열린 업무 화면을 나열한다.
 function Get-HtsScreenWindows($Main) {
-    @(Get-ChildWindows ([Int64]$Main.hwnd) | Where-Object {
-        $_.visible -and $script:targetScreenTitleRegex.IsMatch([string]$_.rawTitle) -and $_.rect.width -ge 240 -and $_.rect.height -ge 120
-    } | Sort-Object @{Expression={ [Int64]$_.rect.width * [Int64]$_.rect.height };Descending=$true})
+    @(Get-HtsNavigationScreenWindows -Context $navigationContext -Main $Main)
 }
 
 # HWND가 살아 있고 현재 제목의 화면 ID가 요청값과 같은지 확인한다.
 function Test-HtsRequestedScreen($Screen, [string]$ScreenNumber) {
-    if (-not $Screen -or -not [TargetRuleNative]::IsWindow([IntPtr][Int64]$Screen.hwnd)) { return $false }
-    $current = Get-WindowInfo ([IntPtr][Int64]$Screen.hwnd)
-    $current.visible -and (Get-HtsScreenNumber $current) -eq $ScreenNumber
+    Test-HtsNavigationRequestedScreen -Context $navigationContext -Screen $Screen -ScreenNumber $ScreenNumber
 }
 
 # MDI 활성화와 전경 복구 후 요청 화면을 현재 입력 콘텐츠로 등록한다.
 function Focus-HtsRequestedScreen($Main, $Screen, [string]$ScreenNumber) {
-    if (-not (Test-HtsRequestedScreen $Screen $ScreenNumber)) { return $false }
-    $screenHwnd=[IntPtr][Int64]$Screen.hwnd
-    $parentHwnd=[TargetRuleNative]::GetParent($screenHwnd)
-    [void][TargetRuleNative]::ShowWindow([IntPtr][Int64]$Main.hwnd,9)
-    [void][TargetRuleNative]::SetForegroundWindow([IntPtr][Int64]$Main.hwnd)
-    if($parentHwnd -ne [IntPtr]::Zero){
-        [void][TargetRuleNative]::SendMessage($parentHwnd,$WM_MDIACTIVATE,$screenHwnd,[IntPtr]::Zero)
-    }
-    [void][TargetRuleNative]::BringWindowToTop($screenHwnd)
-    Start-Sleep -Milliseconds 180
-    if(-not (Test-HtsRequestedScreen $Screen $ScreenNumber)){return $false}
-    Set-HtsInputSurface (Get-WindowInfo $screenHwnd) 'Content' "[$ScreenNumber] 대상 화면"
-    $true
+    Focus-HtsNavigationRequestedScreen -Context $navigationContext -Main $Main -Screen $Screen -ScreenNumber $ScreenNumber
 }
 
 # 조작 중 추가로 열린 화면을 요청 화면과 분리해 연계 화면으로 반환한다.
 function Get-HtsLinkedScreens($Main, [string]$RequestedScreenNumber) {
-    @(Get-HtsScreenWindows $Main | Where-Object {
-        (Get-HtsScreenNumber $_) -ne $RequestedScreenNumber -and
-        $script:preservedTargetScreenHwnds -notcontains [Int64]$_.hwnd
-    })
+    @(Get-HtsNavigationLinkedScreens -Context $navigationContext -Main $Main -RequestedScreenNumber $RequestedScreenNumber)
 }
 
 # 요청 화면을 제외한 연계 화면을 닫고 실제 종료된 수를 반환한다.
 function Close-HtsLinkedScreens($Main, [string]$RequestedScreenNumber) {
-    $closed=0
-    foreach($linked in @(Get-HtsLinkedScreens $Main $RequestedScreenNumber)){
-        if(Close-HtsScreen $linked){$closed++;continue}
-        if([TargetRuleNative]::IsWindow([IntPtr][Int64]$linked.hwnd)){
-            Start-Sleep -Milliseconds 250
-            if(Close-HtsScreen $linked){$closed++}
-        }
-    }
-    $closed
+    Close-HtsNavigationLinkedScreens -Context $navigationContext -Main $Main -RequestedScreenNumber $RequestedScreenNumber
 }
 
 # 후보 화면 안의 입력 가능 자식 수를 계산해 실제 콘텐츠가 있는 창을 우선한다.
 function Get-HtsInputSurfaceScore($Window) {
-    if (-not $Window -or -not [TargetRuleNative]::IsWindow([IntPtr][Int64]$Window.hwnd)) { return 0 }
-    $Window=Get-WindowInfo ([IntPtr][Int64]$Window.hwnd)
-    $children=@(Get-ChildWindows ([Int64]$Window.hwnd) | Where-Object {
-        $_.visible -and $_.enabled -and $_.rect.width -ge 8 -and $_.rect.height -ge 8
-    })
-    @($children | Where-Object {
-        (([Int64]$_.style -band 0x00010000) -ne 0) -or
-        $_.className -in @('Edit','ComboBox','ComboBoxEx32','SysTabControl32','ListBox') -or
-        ($_.className -like 'AfxWnd*' -and $_.rawTitle -match '^\d{8,14}(-\d{3})?$') -or
-        ($_.className -like 'AfxWnd*' -and ($_.rawTitle -match '조회|검색|확인|저장' -or $_.rect.height -le 40))
-    }).Count
+    Get-HtsNavigationInputSurfaceScore -Context $navigationContext -Window $Window
 }
 
 # 정확한 화면 ID, 새 HWND와 입력 가능 컨트롤 수를 조합해 콘텐츠 표면을 결정한다.
 function Find-BestHtsContentSurface($Main, $RequestedWindow, [string]$RequestedScreenNumber, [Int64[]]$BaselineScreenHwnds = @()) {
-    $requestedHwnd=if($RequestedWindow){[Int64]$RequestedWindow.hwnd}else{[Int64]0}
-    $candidates=@(Get-ChildWindows ([Int64]$Main.hwnd) | Where-Object {
-        $_.visible -and $script:targetScreenTitleRegex.IsMatch([string]$_.rawTitle) -and $_.rect.width -ge 240 -and $_.rect.height -ge 120
-    })
-    if($RequestedWindow -and @($candidates | Where-Object { $_.hwnd -eq $RequestedWindow.hwnd }).Count -eq 0){$candidates=@($RequestedWindow)+$candidates}
-
-    $exactCandidates=@($candidates | Where-Object {
-        ($requestedHwnd -ne 0 -and $_.hwnd -eq $requestedHwnd) -or $_.rawTitle -match ("^\[" + [regex]::Escape($RequestedScreenNumber) + "\]")
-    })
-    $rankedExact=@($exactCandidates | ForEach-Object {
-        [pscustomobject]@{window=$_;score=(Get-HtsInputSurfaceScore $_);area=([Int64]$_.rect.width*[Int64]$_.rect.height)}
-    } | Sort-Object score,area -Descending)
-    if($rankedExact.Count -gt 0){return $rankedExact[0].window}
-
-    $newCandidates=@($candidates | Where-Object { $BaselineScreenHwnds -notcontains [Int64]$_.hwnd })
-    $rankedNew=@($newCandidates | ForEach-Object {
-        [pscustomobject]@{window=$_;score=(Get-HtsInputSurfaceScore $_);area=([Int64]$_.rect.width*[Int64]$_.rect.height)}
-    } | Sort-Object score,area -Descending)
-    if($rankedNew.Count -gt 0 -and $rankedNew[0].score -gt 0){return $rankedNew[0].window}
-    $RequestedWindow
+    Find-HtsNavigationBestContentSurface -Context $navigationContext -Main $Main -RequestedWindow $RequestedWindow -RequestedScreenNumber $RequestedScreenNumber -BaselineScreenHwnds $BaselineScreenHwnds
 }
 
 # 대상 프로세스의 자식 화면에만 WM_CLOSE를 보내고 HWND 소멸까지 확인한다.
 function Close-HtsScreen($Screen) {
-    if (-not $Screen -or -not [TargetRuleNative]::IsWindow([IntPtr][Int64]$Screen.hwnd)) { return $true }
-    $screenHwnd=[IntPtr][Int64]$Screen.hwnd
-    $mainHwnd=[IntPtr][Int64]$script:activeHtsMainHwnd
-    if($screenHwnd -eq $mainHwnd){return $false}
-    [uint32]$screenPid=0
-    [void][TargetRuleNative]::GetWindowThreadProcessId($screenHwnd,[ref]$screenPid)
-    if([int]$screenPid -ne [int]$script:activeHtsPid -or -not [TargetRuleNative]::IsChild($mainHwnd,$screenHwnd)){return $false}
-    if([Int64]$script:activeInputSurfaceHwnd -eq [Int64]$Screen.hwnd){Clear-HtsInputSurface}
-    [void][TargetRuleNative]::SendMessage($screenHwnd, $WM_CLOSE, [IntPtr]::Zero, [IntPtr]::Zero)
-    $deadline=(Get-Date).AddSeconds(3)
-    while([TargetRuleNative]::IsWindow([IntPtr][Int64]$Screen.hwnd) -and (Get-Date)-lt$deadline){Start-Sleep -Milliseconds 100}
-    -not [TargetRuleNative]::IsWindow([IntPtr][Int64]$Screen.hwnd)
+    Close-HtsNavigationScreen -Context $navigationContext -Screen $Screen
 }
 
 # 새 케이스 시작 전에 targetProfile 형식의 기존 업무 화면을 모두 정리한다.
 function Close-ExistingTargetScreens($Main) {
-    $closed = 0
-    $targets = @(Get-ChildWindows ([Int64]$Main.hwnd) | Where-Object {
-            $script:targetScreenTitleRegex.IsMatch([string]$_.rawTitle) -and
-            $script:preservedTargetScreenHwnds -notcontains [Int64]$_.hwnd
-        } |
-        Sort-Object { [int]$_.rect.width * [int]$_.rect.height } -Descending)
-    foreach ($target in $targets) {
-        if (Close-HtsScreen $target) { $closed++ }
-    }
-    $closed
+    Close-HtsNavigationExistingTargetScreens -Context $navigationContext -Main $Main
 }
 
 function Test-PreservedTargetScreen($Window) {
-    $Window -and $script:preservedTargetScreenHwnds -contains [Int64]$Window.hwnd
+    Test-HtsNavigationPreservedTargetScreen -Context $navigationContext -Window $Window
 }
 
 # 화면번호 입력을 가릴 수 있는 화면검색 오버레이만 선택적으로 닫는다.
 function Close-ScreenSearchOverlays($Main) {
-    $closed = 0
-    foreach ($overlay in @(Get-ChildWindows ([Int64]$Main.hwnd) | Where-Object { $_.visible -and $_.rawTitle -eq "화면검색" })) {
-        if (Close-HtsScreen $overlay) { $closed++ }
-    }
-    $closed
+    Close-HtsNavigationSearchOverlays -Context $navigationContext -Main $Main
 }
 
 # 팝업 관찰: 현재 HTS 프로세스의 새 대화상자를 읽고 민감 문구를 제거한 관찰 객체를 만든다.
@@ -2115,6 +1910,57 @@ function Add-Action($List, [string]$Action, [string]$Status, [string]$Target = "
         ConvertTo-Json -Compress | Add-Content -LiteralPath $script:executionTracePath -Encoding UTF8
 }
 
+$navigationDependencies = [pscustomobject]@{
+    GetChildWindows = { param([Int64]$Hwnd) @(Get-ChildWindows $Hwnd) }
+    GetWindowInfo = { param([Int64]$Hwnd) Get-WindowInfo ([IntPtr]$Hwnd) }
+    IsWindow = { param([Int64]$Hwnd) [TargetRuleNative]::IsWindow([IntPtr]$Hwnd) }
+    ActivateMain = {
+        param($Main)
+        [void][TargetRuleNative]::ShowWindow([IntPtr][Int64]$Main.hwnd, 9)
+        [void][TargetRuleNative]::SetForegroundWindow([IntPtr][Int64]$Main.hwnd)
+    }
+    ActivateRequestedScreen = {
+        param($Main, $Screen)
+        $screenHwnd = [IntPtr][Int64]$Screen.hwnd
+        $parentHwnd = [TargetRuleNative]::GetParent($screenHwnd)
+        [void][TargetRuleNative]::ShowWindow([IntPtr][Int64]$Main.hwnd, 9)
+        [void][TargetRuleNative]::SetForegroundWindow([IntPtr][Int64]$Main.hwnd)
+        if ($parentHwnd -ne [IntPtr]::Zero) {
+            [void][TargetRuleNative]::SendMessage($parentHwnd, $WM_MDIACTIVATE, $screenHwnd, [IntPtr]::Zero)
+        }
+        [void][TargetRuleNative]::BringWindowToTop($screenHwnd)
+    }
+    SetInputSurface = { param($Window, [string]$Kind, [string]$Label) Set-HtsInputSurface $Window $Kind $Label }
+    SetScreenNumber = { param($ScreenEdit, [string]$ScreenNumber) Set-HtsScreenNumber $ScreenEdit $ScreenNumber }
+    InvokeControlAction = {
+        param($Window, [string]$Action, [string]$Key)
+        Invoke-FlaUiControlAction $Window $Action -Key $Key
+    }
+    TestInputAccess = { param($Window) Test-HtsScreenNavigationInputAccess $Window }
+    ClickCenter = { param($Window) Click-Center $Window }
+    SendEnter = { Send-Key ([byte]$VK_RETURN) }
+    FocusInputWindow = { param($Window) Focus-HtsInputWindow $Window }
+    Sleep = { param([int]$Milliseconds) Start-Sleep -Milliseconds $Milliseconds }
+    GetNow = { Get-Date }
+    GetWindowProcessId = {
+        param([Int64]$Hwnd)
+        [uint32]$processId = 0
+        [void][TargetRuleNative]::GetWindowThreadProcessId([IntPtr]$Hwnd, [ref]$processId)
+        [int]$processId
+    }
+    IsChild = { param([Int64]$ParentHwnd, [Int64]$ChildHwnd) [TargetRuleNative]::IsChild([IntPtr]$ParentHwnd, [IntPtr]$ChildHwnd) }
+    CloseWindow = { param($Window) [void][TargetRuleNative]::SendMessage([IntPtr][Int64]$Window.hwnd, $WM_CLOSE, [IntPtr]::Zero, [IntPtr]::Zero) }
+    ClearInputSurfaceForWindow = {
+        param($Window)
+        if ([Int64]$script:activeInputSurfaceHwnd -eq [Int64]$Window.hwnd) { Clear-HtsInputSurface }
+    }
+}
+$navigationContext = New-HtsNavigationContext `
+    -SessionContext $sessionContext `
+    -TargetScreenTitleRegex $script:targetScreenTitleRegex `
+    -ScreenOpenTimeoutMs ([int]$dataset.executionPolicy.screenOpenTimeoutMs) `
+    -Dependencies $navigationDependencies
+
 # 실행 루프: 각 화면을 열고 같은 화면의 사례를 연속 처리한 뒤 완전히 닫고 다음 화면으로 이동한다.
 $cases = @(Get-ExecutionCasesFromApprovedPlans)
 if ($cases.Count -gt $MaxCases -or $cases.Count -gt [int]$testPack.maxCases) { throw "승인 TestPack 케이스 수 $($cases.Count)가 실행 제한을 초과했습니다." }
@@ -2125,8 +1971,8 @@ $errorRegex = [regex]::new($errorPattern, [Text.RegularExpressions.RegexOptions]
 $main = $null
 $screenEdit = $null
 try {
-    Start-FlaUiBridge
-    $main = Find-HtsMainWindow
+    [void](Start-FlaUiBridge -Context $sessionContext)
+    $main = Find-HtsMainWindow -Context $sessionContext
     $script:activeHtsMainHwnd=[Int64]$main.hwnd
     $script:activeHtsPid=[int]$main.pid
     [void][TargetRuleNative]::ShowWindow([IntPtr][Int64]$main.hwnd, 9)
@@ -2171,7 +2017,7 @@ try {
         flaUiActionSuccesses=$script:flaUiActionSuccesses;flaUiFallbackRequests=$script:flaUiFallbackRequests;flaUiFallbackReasons=@($script:flaUiFallbackReasons)
         environmentStatus="HTS_NOT_ACCESSIBLE"; finishedAt=(Get-Date).ToString("o"); executionMode=$(if($SubmitTransactionalDialogs){"승인된 테스트계좌 거래 제출"}else{"조회 전용"}); inputMode="화면 기본값 또는 데이터셋 명시 입력"; planner="결정론적 규칙"
     } | ConvertTo-Json -Depth 5 | Set-Content -LiteralPath (Join-Path $ReportDir "summary.json") -Encoding UTF8
-    Stop-FlaUiBridge
+    Stop-FlaUiBridge -Context $sessionContext
     if (-not $SkipExcel) { Export-RuleResultWorkbooks $ReportDir }
     Write-Output $ReportDir
     return
@@ -2179,8 +2025,9 @@ try {
 $initialSearchOverlaysClosed = Close-ScreenSearchOverlays $main
 $initialScreensPreserved = 0
 if ($reuseExistingTargetScreenRequested) {
-    $script:preservedTargetScreenHwnds = @(Get-HtsScreenWindows $main | ForEach-Object { [Int64]$_.hwnd } | Select-Object -Unique)
-    $initialScreensPreserved = $script:preservedTargetScreenHwnds.Count
+    $preservedTargetScreenHwnds = @(Get-HtsScreenWindows $main | ForEach-Object { [Int64]$_.hwnd } | Select-Object -Unique)
+    [void](Set-HtsNavigationPreservedScreens -Context $navigationContext -Hwnds $preservedTargetScreenHwnds)
+    $initialScreensPreserved = $navigationContext.PreservedTargetScreenHwnds.Count
     $initialScreensClosed = 0
 } else {
     $initialScreensClosed = Close-ExistingTargetScreens $main
@@ -2248,7 +2095,7 @@ for ($caseIndex = 0; $caseIndex -lt $cases.Count; $caseIndex++) {
     $caseErrorRegex = Get-MapOracleErrorRegex $errorRegex $mapOracle
     try {
         $previousPid = if ($main) { [int]$main.pid } else { 0 }
-        $main = Wait-HtsMainWindow
+        $main = Wait-HtsMainWindow -Context $sessionContext
         $script:activeHtsMainHwnd=[Int64]$main.hwnd
         $script:activeHtsPid=[int]$main.pid
         if ($previousPid -ne 0 -and $main.pid -ne $previousPid) {
@@ -2424,7 +2271,7 @@ for ($caseIndex = 0; $caseIndex -lt $cases.Count; $caseIndex++) {
                     $expectedAccount = ([string]$case.account.accountNumber -replace '\D','')
                     $allowObservedPrefilledAccount = [bool]$dataset.executionPolicy.allowObservedPrefilledTransactionalAccount -and $inputMode -eq 'Prefilled'
                     foreach ($accountCandidate in @($initialControls | Where-Object { [string]$_.mapKind -eq 'Account' -and [string]$_.definitionSource -eq 'MAP+Runtime' })) {
-                        $accountLive = Resolve-RuleLiveControl $screen $accountCandidate
+                        $accountLive = Resolve-RuleLiveControl $navigationContext $screen $accountCandidate
                         if (-not $accountLive) { continue }
                         $observedAccount = ([string]$accountLive.rawTitle -replace '\D','')
                         if (-not $observedAccount) { $observedAccount = ([string]$accountCandidate.initialValue -replace '\D','') }
@@ -2595,7 +2442,7 @@ for ($caseIndex = 0; $caseIndex -lt $cases.Count; $caseIndex++) {
                             elseif ([string]::IsNullOrWhiteSpace([string]$case.account.accountNumber) -and -not [bool]$policy.allowObservedPrefilledTransactionalAccount) { $transactionBlockReason = '테스트 계좌번호가 데이터셋에 없고 사전입력 계좌 실행 정책도 허용되지 않았습니다.' }
                             elseif (-not $transactionAccountVerified) { $transactionBlockReason = '현재 화면 계좌가 데이터셋 테스트 계좌와 일치한다고 확인되지 않았습니다.' }
                             elseif ($transactionAccountCandidate) {
-                                $currentAccountLive = Resolve-RuleLiveControl $screen $transactionAccountCandidate
+                                $currentAccountLive = Resolve-RuleLiveControl $navigationContext $screen $transactionAccountCandidate
                                 $currentAccountDigits = if ($currentAccountLive) { ([string]$currentAccountLive.rawTitle -replace '\D','') } else { '' }
                                 if (-not $currentAccountDigits) { $currentAccountDigits = ([string]$transactionAccountCandidate.initialValue -replace '\D','') }
                                 if (-not $currentAccountDigits -or (Get-AccountFingerprint $currentAccountDigits) -ne $transactionAccountFingerprint) {
@@ -2615,7 +2462,7 @@ for ($caseIndex = 0; $caseIndex -lt $cases.Count; $caseIndex++) {
                         } elseif ($transactionBlockReason) {
                             $invoke=[pscustomobject]@{success=$false;queryEligible=$false;errorCode='TRANSACTION_GUARD_BLOCKED';automationEngine='Transaction guard';output=$transactionBlockReason}
                         } elseif ([string]$planItem.scenarioAction -in @('AssertVisible','AssertEnabled','AssertSelected','AssertGrid')) {
-                            $invoke = Invoke-RuleControlAssertion $screen $planItem
+                            $invoke = Invoke-RuleControlAssertion $navigationContext $screen $planItem
                         } elseif ([string]$planItem.scenarioAction -eq 'Restore') {
                             $restoreDialogs = @(Get-HtsDialogs $main $secret)
                             $restoreConnectionDialogs = @($restoreDialogs | Where-Object { Test-HtsConnectionDialog $_ })
@@ -2643,7 +2490,7 @@ for ($caseIndex = 0; $caseIndex -lt $cases.Count; $caseIndex++) {
                             $transmissionDelta = Get-TransmissionDelta $logBefore
                             $invoke=[pscustomobject]@{success=(-not [bool]$transmissionDelta.hasTransmission);queryEligible=$false;errorCode=$(if($transmissionDelta.hasTransmission){'ASSERT_TRANSMISSION_DETECTED'}else{''});automationEngine='Sensitive log delta';output=$(if($transmissionDelta.hasTransmission){"transmissionSources=$(@($transmissionDelta.sources)-join ',')"}else{'sensitiveTransmissionDelta=none'})}
                         } else {
-                            $invoke = Invoke-RuleControlPlanItem $screen $planItem
+                            $invoke = Invoke-RuleControlPlanItem $navigationContext $screen $planItem
                         }
                     }else{
                         $invoke=[pscustomobject]@{success=$false;queryEligible=$false;errorCode='TARGET_SCREEN_NOT_ACTIVE';output='대상 화면을 활성화하지 못해 좌표 입력을 차단했습니다.'}
@@ -2788,7 +2635,7 @@ for ($caseIndex = 0; $caseIndex -lt $cases.Count; $caseIndex++) {
                     $triggerQueryForPlanItem = if ($scenarioMode) { [bool]$planItem.triggerQueryAfterChange } else { [bool]$dataset.autoExploration.triggerQueryAfterStateChange }
                     if ($invoke.success -and $invoke.queryEligible -and -not $navigationHandled -and $screenAlive -and $triggerQueryForPlanItem) {
                         [void](Focus-HtsRequestedScreen $main $screen $requestedScreenNumber)
-                        $liveTabQuery=if($tabOrderQueryControl){Resolve-RuleLiveControl $screen $tabOrderQueryControl}else{$null}
+                        $liveTabQuery=if($tabOrderQueryControl){Resolve-RuleLiveControl $navigationContext $screen $tabOrderQueryControl}else{$null}
                         if($liveTabQuery){
                             $queryResult=Invoke-FlaUiControlAction $liveTabQuery 'invoke'
                             if(-not ([bool]$queryResult.success -and [bool]$queryResult.verified)){Click-Center $liveTabQuery}
@@ -2957,7 +2804,7 @@ for ($caseIndex = 0; $caseIndex -lt $cases.Count; $caseIndex++) {
                 $queryStrategies = if ($case.screen.locators -and $case.screen.locators.query) { $case.screen.locators.query } else { $dataset.defaultLocators.query }
                 $queryControls = if(Test-HtsRequestedScreen $screen $requestedScreenNumber){@(Get-RequiredQueryControls $screen $queryStrategies)}else{@()}
                 if($tabOrderQueryControl -and (Test-HtsRequestedScreen $screen $requestedScreenNumber)){
-                    $liveTabQuery=Resolve-RuleLiveControl $screen $tabOrderQueryControl
+                    $liveTabQuery=Resolve-RuleLiveControl $navigationContext $screen $tabOrderQueryControl
                     if($liveTabQuery){$queryControls=@($liveTabQuery)+@($queryControls)}
                 }
                 $queryControls=@($queryControls | Group-Object { "{0}:{1}" -f [int](($_.rect.left+$_.rect.right)/2),[int](($_.rect.top+$_.rect.bottom)/2) } | ForEach-Object {$_.Group[0]})
@@ -3419,7 +3266,7 @@ $summaryStatus=[string]$runEvaluationOutput.overallResult.status
     initialScreensClosed=$initialScreensClosed; initialScreensPreserved=$initialScreensPreserved; initialSearchOverlaysClosed=$initialSearchOverlaysClosed
 } | ConvertTo-Json -Depth 5 | Set-Content -LiteralPath (Join-Path $ReportDir "summary.json") -Encoding UTF8
 
-Stop-FlaUiBridge
+Stop-FlaUiBridge -Context $sessionContext
 if (-not $SkipExcel) {
     Export-RuleResultWorkbooks $ReportDir
 }
