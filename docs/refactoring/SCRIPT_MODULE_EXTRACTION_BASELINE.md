@@ -180,7 +180,7 @@ AST 기준 공유 상태 접근 함수 수:
 | `hts-action.ps1` | UIA3 selector·입력·클릭·선택과 검증된 fallback 결과 | 완료 |
 | `hts-observation.ps1` | 원시 메시지·대화상자·오류코드·기대 증거 정규화 | 완료 |
 | `hts-safety.ps1` | 프로세스·창·콘텐츠 입력 경계, 소유권과 감사 증거 | 완료 |
-| orchestration | 위 모듈의 순서와 결과 조립 | 모든 추출이 끝난 뒤 최종 축소 |
+| `hts-rule-suite-orchestration.ps1` | 승인 검증 후 각 context와 단계 호출 순서 조립 | 완료 |
 
 이번 단계의 Session/Navigation 모듈은 명시적 context와 dependency 객체를 받고 결과를 반환한다. 판정, TestResult 생성, 리포트 파일 생성은 포함하지 않는다. 기존 함수명은 주 실행기의 얇은 호환 어댑터가 유지하여 실행 의미를 고정한다.
 
@@ -230,6 +230,13 @@ AST 기준 공유 상태 접근 함수 수:
 - `hts-safety.ps1`이 HTS PID·메인 HWND, 활성 콘텐츠 표면, 클릭·키보드·물리 커서 소유권 경계를 명시적 context로 관리한다.
 - 기존 `$script:` 입력 표면과 audit path 공유 상태를 제거했으며, 허용·차단 조건과 오류 코드는 그대로 유지했다.
 - Action과 Navigation은 Safety 어댑터를 통해서만 입력 경계를 등록·검증하며, Safety 모듈은 업무 동작이나 테스트 판정을 수행하지 않는다.
+
+### Orchestration 단계
+
+- `run-target-rule-suite.ps1`은 기존 공개 parameter block과 `PSBoundParameters` 전달만 남긴 32줄 진입점으로 축소했다.
+- 기존 실행 본체는 `hts-rule-suite-orchestration.ps1`로 이동했으며 Approved TestPack 검증이 FlaUI 세션 시작보다 먼저 수행되는 순서를 유지한다.
+- orchestration은 Session, Navigation, Discovery, Binding, Action, Observation, Safety context를 조립하고 각 모듈의 원시 결과를 기존 평가·리포트 경로에 전달한다.
+- `rule-control-exploration.ps1` 내부의 대상별 MAP/owner-drawn 세부 구현은 호환 어댑터 뒤에 남아 있다. 이를 물리적으로 더 분할하는 작업은 실행 의미 변경 위험이 있어 별도 characterization 범위로 넘긴다.
 
 검증 결과:
 
