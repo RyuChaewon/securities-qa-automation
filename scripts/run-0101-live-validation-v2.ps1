@@ -8,6 +8,8 @@ param(
     [string]$SourceTestCaseIdsCsv = '0101-CMD-0901,0101-CTL-0101',
     [int]$MaxCases = 1,
     [string]$CompiledPlanPath = '',
+    [Parameter(Mandatory = $true)]
+    [string]$TestPackPath,
     [switch]$SubmitTransactionalDialogs
 )
 
@@ -38,7 +40,7 @@ if (-not $CaseIdsCsv) {
 
 $runner = Join-Path $PSScriptRoot 'run-target-rule-suite-recorded.ps1'
 $runArguments = @{
-    DatasetPath = Join-Path $root 'outputs\0101_automation\0101.dataset.json'
+    TestPackPath = $TestPackPath
     ScenarioPlanPath = $compiledPlanPath
     RefreshPhysicalPlanBeforeRun = $true
     AllowPartialScenarioPlan = $true

@@ -16,6 +16,7 @@
       "filePattern": "ht{screenNumber}00.map"
     }
   },
+  "combinationPolicy": "Cartesian",
   "maxExpandedCases": 10000,
   "executionPolicy": {
     "mode": "explicitErrorOnly",

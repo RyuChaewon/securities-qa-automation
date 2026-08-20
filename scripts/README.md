@@ -1,6 +1,6 @@
 # PowerShell 명령 지도
 
-대상에 연결되는 모든 명령은 `-DatasetPath <dataset.json>`을 필수로 받는다. 화면번호·설치 경로·창 클래스는 스크립트 기본값이 아니라 해당 데이터셋의 `targetProfile`과 `screens[]`에서 읽는다.
+실행기와 바인딩 명령은 `-TestPackPath <approved-test-pack.json>`을 필수로 받는다. 화면번호·설치 경로·창 클래스는 TestPack에 해시 고정된 `datasetSnapshot`에서 읽으며 원본 Dataset을 직접 확장하지 않는다. 진단·시나리오 원본 생성 도구만 `-DatasetPath`를 사용한다.
 
 ## 기본 실행
 

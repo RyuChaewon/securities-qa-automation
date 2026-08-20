@@ -6,7 +6,7 @@ param(
     [Parameter(Mandatory=$true)]
     [string]$CompiledPlanPath,
     [Parameter(Mandatory = $true)]
-    [string]$DatasetPath,
+    [string]$TestPackPath,
     [string]$ReportDir = "",
     [string]$ScreensCsv = "",
     [string]$RuntimeControlPlanPath = "",
@@ -17,17 +17,22 @@ $ErrorActionPreference = "Stop"
 $root = Split-Path -Parent $PSScriptRoot
 . (Join-Path $PSScriptRoot "modules\pipeline-common.ps1")
 $pipelineManifest = Get-RulePipelineManifest $root
+$cliProject = Resolve-RulePath $root ([string]$pipelineManifest.cliProject)
 
-# 컴파일 계획과 데이터셋의 식별자를 비교해 서로 다른 실행 묶음이 섞이지 않게 한다.
+# 컴파일 계획과 승인 TestPack의 식별자를 비교해 서로 다른 실행 묶음이 섞이지 않게 한다.
 $planPath = Resolve-RulePath $root $CompiledPlanPath
-$datasetFullPath = Resolve-RulePath $root $DatasetPath
+$testPackFullPath = Resolve-RulePath $root $TestPackPath
 if (-not (Test-Path -LiteralPath $planPath)) { throw "컴파일 계획을 찾을 수 없습니다: $planPath" }
-if (-not (Test-Path -LiteralPath $datasetFullPath)) { throw "기준 데이터셋을 찾을 수 없습니다: $datasetFullPath" }
+if (-not (Test-Path -LiteralPath $testPackFullPath)) { throw "승인 TestPack을 찾을 수 없습니다: $testPackFullPath" }
+& dotnet run --project $cliProject -c Release --no-build -- validate-test-pack --file $testPackFullPath | Out-Null
+if ($LASTEXITCODE -ne 0) { throw 'TestPack 무결성 또는 승인 검증에 실패했습니다.' }
 
 $plan = Get-Content -LiteralPath $planPath -Raw -Encoding UTF8 | ConvertFrom-Json
-$dataset = Get-Content -LiteralPath $datasetFullPath -Raw -Encoding UTF8 | ConvertFrom-Json
+$testPack = Get-Content -LiteralPath $testPackFullPath -Raw -Encoding UTF8 | ConvertFrom-Json
+if ([string]$testPack.approval.status -ne 'Approved') { throw '바인딩 계획은 Approved TestPack만 사용할 수 있습니다.' }
+$dataset = $testPack.datasetSnapshot
 if ([string]$plan.datasetId -ne [string]$dataset.datasetId) {
-    throw "컴파일 계획의 datasetId와 기준 데이터셋이 일치하지 않습니다."
+    throw "컴파일 계획의 datasetId와 TestPack datasetSnapshot이 일치하지 않습니다."
 }
 
 if (-not $ReportDir) {
@@ -64,10 +69,10 @@ if ($reuseRuntimeEvidence) {
     $runner = Get-RulePipelineEntryPoint $pipelineManifest $root 'targetRunner'
     # 현재 HTS를 plan-only로 관찰해 컨트롤 후보와 설치 fingerprint를 수집한다.
     & $runner `
-        -DatasetPath $datasetFullPath `
+        -TestPackPath $testPackFullPath `
         -ReportDir $runtimeDir `
         -ScreensCsv ($targetScreens -join ',') `
-        -MaxCases $targetScreens.Count `
+        -MaxCases ([int]$testPack.maxCases) `
         -PlanOnly `
         -SkipExcel | Out-Null
     $runtimeSummaryPath = Join-Path $runtimeDir "summary.json"

@@ -7,6 +7,7 @@
 ```powershell
 .\scripts\run-auto-scenario-pipeline.ps1 `
   -DatasetPath .\data\rule-tests\1q-hts-account-inquiry.dataset.json `
+  -TestPackPath <approved-test-pack.json> `
   -AllowElevatedActionPrompt
 ```
 
@@ -15,6 +16,7 @@
 ```powershell
 .\scripts\run-auto-scenario-pipeline.ps1 `
   -DatasetPath .\data\rule-tests\1q-hts-account-inquiry.dataset.json `
+  -TestPackPath <approved-test-pack.json> `
   -ScreensCsv '화면ID1,화면ID2' `
   -AllowElevatedActionPrompt
 ```
@@ -58,23 +60,23 @@
 
 ```powershell
 # 데이터셋과 설치 MAP만 사용하며 대상 창을 열지 않는다.
-.\scripts\run-auto-scenario-pipeline.ps1 -DatasetPath <dataset.json> -StaticOnly
+.\scripts\run-auto-scenario-pipeline.ps1 -DatasetPath <dataset.json> -TestPackPath <approved-test-pack.json> -StaticOnly
 
 # 화면을 열어 컨트롤을 관찰하지만 테스트 입력·선택·클릭은 수행하지 않는다.
-.\scripts\run-auto-scenario-pipeline.ps1 -DatasetPath <dataset.json> -PrepareOnly
+.\scripts\run-auto-scenario-pipeline.ps1 -DatasetPath <dataset.json> -TestPackPath <approved-test-pack.json> -PrepareOnly
 
 # 녹화와 실제 시나리오 조작까지 수행한다.
-.\scripts\run-auto-scenario-pipeline.ps1 -DatasetPath <dataset.json> -AllowElevatedActionPrompt
+.\scripts\run-auto-scenario-pipeline.ps1 -DatasetPath <dataset.json> -TestPackPath <approved-test-pack.json> -AllowElevatedActionPrompt
 ```
 
 ## 직접 하위 기능 실행
 
 ```powershell
-# 케이스 조합만 확인
-.\scripts\run-target-rule-suite.ps1 -DatasetPath <dataset.json> -DryRun
+# 승인 TestPack의 고정 케이스만 확인
+.\scripts\run-target-rule-suite.ps1 -TestPackPath <approved-test-pack.json> -DryRun
 
 # 런타임 탭 순서와 바인딩 후보만 확인
-.\scripts\run-target-rule-suite.ps1 -DatasetPath <dataset.json> -PlanOnly
+.\scripts\run-target-rule-suite.ps1 -TestPackPath <approved-test-pack.json> -PlanOnly
 
 # 이미 생성된 JSON을 Excel로 변환
 .\scripts\export-rule-results-xlsx.ps1 -ReportDir <results-folder>

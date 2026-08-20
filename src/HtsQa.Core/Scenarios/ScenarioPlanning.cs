@@ -984,7 +984,9 @@ public sealed class ScenarioPlanCompiler
 
                 var refs = scenario.Steps.Where(x => !string.IsNullOrWhiteSpace(x.ValueRef)).Select(x => x.ValueRef!)
                     .Distinct(StringComparer.OrdinalIgnoreCase).Select(x => variables[x]).ToArray();
-                var combinations = Cartesian(refs).ToArray();
+                var combinations = new CombinationGenerator()
+                    .GenerateCartesian(refs, x => x.Name, x => x.Values, x => x.Id)
+                    .ToArray();
                 var caseCount = combinations.Length * accounts.Length;
                 var definition = new CompiledScenarioDefinition
                 {
@@ -1016,8 +1018,14 @@ public sealed class ScenarioPlanCompiler
                         x => x.Key,
                         x => ToCompiledValue(variables[x.Key], x.Value),
                         StringComparer.OrdinalIgnoreCase);
-                    var identity = $"{sourceSha256}|{scenario.ScenarioId}|{account.Id}|{string.Join('|', selectedValues.OrderBy(x => x.Key).Select(x => $"{x.Key}={x.Value.ValueId}"))}";
-                    var caseId = $"SC-{ScenarioIds.Hash(identity, 16)}";
+                    var caseId = CaseIdFactory.Create("SC", new
+                    {
+                        sourceSha256,
+                        scenarioId = scenario.ScenarioId,
+                        accountId = account.Id,
+                        values = selectedValues.OrderBy(x => x.Key, StringComparer.Ordinal)
+                            .ToDictionary(x => x.Key, x => x.Value.ValueId, StringComparer.Ordinal)
+                    });
                     cases.Add(new CompiledScenarioCase
                     {
                         CaseId = caseId,
@@ -1296,23 +1304,6 @@ public sealed class ScenarioPlanCompiler
         Rationale = value.Rationale,
         SourceRefs = value.SourceRefs
     };
-
-    private static IEnumerable<Dictionary<string, GeneratedScenarioValue>> Cartesian(GeneratedScenarioVariable[] dimensions)
-    {
-        IEnumerable<Dictionary<string, GeneratedScenarioValue>> rows = [new(StringComparer.OrdinalIgnoreCase)];
-        foreach (var dimension in dimensions)
-        {
-            rows = rows.SelectMany(row => dimension.Values.Select(value =>
-            {
-                var next = new Dictionary<string, GeneratedScenarioValue>(row, StringComparer.OrdinalIgnoreCase)
-                {
-                    [dimension.Name] = value
-                };
-                return next;
-            }));
-        }
-        return rows;
-    }
 
     private static int PriorityOrder(string priority) => priority.ToUpperInvariant() switch
     {

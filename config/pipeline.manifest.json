@@ -21,11 +21,12 @@
   ],
   "stages": [
     { "order": 1, "id": "build", "executor": "dotnet", "input": ["solution"], "output": ["Release binaries"] },
-    { "order": 2, "id": "map-model", "executor": "HtsQa.Cli:extract-map-models", "input": ["targetProfile.map", "screens"], "output": ["map-catalog.json"] },
-    { "order": 3, "id": "runtime-plan", "executor": "targetRunner:PlanOnly+FlaUI.UIA3", "input": ["dataset", "map-catalog.json"], "output": ["runtime-discovery/control-plan.json"] },
-    { "order": 4, "id": "scenario", "executor": "HtsQa.Cli:generate/validate/approve/compile", "input": ["dataset", "map-catalog.json", "control-plan.json"], "output": ["compiled-plan.json"] },
-    { "order": 5, "id": "binding", "executor": "HtsQa.Cli:materialize/build-physical", "input": ["compiled-plan.json", "control-plan.json"], "output": ["physical-plan.json"] },
-    { "order": 6, "id": "record-and-run", "executor": "recordedRunner+FlaUI.UIA3", "input": ["dataset", "compiled-plan.json", "physical-plan.json"], "output": ["full-run.mp4", "results/*.json"] },
-    { "order": 7, "id": "report", "executor": "reportExporter+tcReportExporter", "input": ["results/*.json", "screenshots/*"], "output": ["테스트결과-*.xlsx", "TC실행결과-*.xlsx"] }
+    { "order": 2, "id": "test-pack", "executor": "HtsQa.Cli:compile-test-pack/validate-test-pack", "input": ["dataset", "approval"], "output": ["approved test-pack.json"] },
+    { "order": 3, "id": "map-model", "executor": "HtsQa.Cli:extract-map-models", "input": ["targetProfile.map", "screens"], "output": ["map-catalog.json"] },
+    { "order": 4, "id": "runtime-plan", "executor": "targetRunner:PlanOnly+FlaUI.UIA3", "input": ["approved test-pack.json", "map-catalog.json"], "output": ["runtime-discovery/control-plan.json"] },
+    { "order": 5, "id": "scenario", "executor": "HtsQa.Cli:generate/validate/approve/compile", "input": ["dataset", "map-catalog.json", "control-plan.json"], "output": ["compiled-plan.json"] },
+    { "order": 6, "id": "binding", "executor": "HtsQa.Cli:materialize/build-physical", "input": ["approved test-pack.json", "compiled-plan.json", "control-plan.json"], "output": ["physical-plan.json"] },
+    { "order": 7, "id": "record-and-run", "executor": "recordedRunner+FlaUI.UIA3", "input": ["approved test-pack.json", "compiled-plan.json", "physical-plan.json"], "output": ["full-run.mp4", "results/*.json"] },
+    { "order": 8, "id": "report", "executor": "reportExporter+tcReportExporter", "input": ["results/*.json", "screenshots/*"], "output": ["테스트결과-*.xlsx", "TC실행결과-*.xlsx"] }
   ]
 }

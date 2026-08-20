@@ -12,14 +12,15 @@ LLM 없이 데이터셋, 설치 MAP, **FlaUI UIA3**, Windows HWND와 실제 탭 
 powershell -NoProfile -ExecutionPolicy Bypass `
   -File .\scripts\run-auto-scenario-pipeline.ps1 `
   -DatasetPath .\data\rule-tests\1q-hts-account-inquiry.dataset.json `
+  -TestPackPath <approved-test-pack.json> `
   -AllowElevatedActionPrompt
 ```
 
 실제 HTS를 조작하지 않는 정적 검증은 `-StaticOnly`, 화면을 열어 바인딩까지만 수행하는 검증은 `-PrepareOnly`를 사용한다. 두 모드는 실제 테스트 PASS가 아니라 `PENDING`이다.
 
 ```powershell
-.\scripts\run-auto-scenario-pipeline.ps1 -DatasetPath <dataset.json> -StaticOnly
-.\scripts\run-auto-scenario-pipeline.ps1 -DatasetPath <dataset.json> -PrepareOnly
+.\scripts\run-auto-scenario-pipeline.ps1 -DatasetPath <dataset.json> -TestPackPath <approved-test-pack.json> -StaticOnly
+.\scripts\run-auto-scenario-pipeline.ps1 -DatasetPath <dataset.json> -TestPackPath <approved-test-pack.json> -PrepareOnly
 ```
 
 ## 새 대상 설정
@@ -48,8 +49,9 @@ dotnet run --project .\src\HtsQa.Cli -c Release --no-build -- `
 
 ```text
 run-auto-scenario-pipeline.ps1
+  -> HtsQa.Cli: Dataset 검증 + Approved TestPack 검증
   -> HtsQa.Cli: MAP 추출
-  -> run-target-rule-suite.ps1 -PlanOnly
+  -> run-target-rule-suite.ps1 -TestPackPath ... -PlanOnly
        -> HtsQa.FlaUi --stdio (FlaUI.UIA3 탐색)
   -> HtsQa.Cli: 생성·검증·승인·컴파일·바인딩
   -> run-target-rule-suite-recorded.ps1
@@ -61,7 +63,7 @@ run-auto-scenario-pipeline.ps1
 ```
 
 - `run-auto-scenario-pipeline.ps1`: 전체 단계를 연결하는 기본 오케스트레이터
-- `run-target-rule-suite.ps1`: DryRun, PlanOnly, 실제 실행을 독립 수행하는 핵심 실행기
+- `run-target-rule-suite.ps1`: Approved TestPack만 받아 DryRun, PlanOnly, 실제 실행을 수행하는 핵심 실행기
 - `HtsQa.FlaUi`: FlaUI UIA3의 요소 탐색과 Value/Invoke/Toggle/Selection/Range 패턴 호출을 제공하는 .NET 8 상주 브리지
 - `run-target-rule-suite-recorded.ps1`: 녹화와 실행기를 동시에 구동하는 독립 래퍼
 - `record-desktop-frames.ps1`: 대상 프로필의 전체 메인 창만 녹화하는 독립 도구

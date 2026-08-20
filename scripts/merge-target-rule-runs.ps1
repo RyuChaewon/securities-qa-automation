@@ -14,6 +14,7 @@ param(
 $ErrorActionPreference = "Stop"
 $root = Split-Path -Parent $PSScriptRoot
 . (Join-Path $PSScriptRoot "modules\report-sanitization.ps1")
+. (Join-Path $PSScriptRoot "modules\result-evaluator.ps1")
 
 # 상대·절대 보고서 경로를 정규화하고 병합에 필요한 두 JSON 파일을 선검증한다.
 function Resolve-ReportDir([string]$Path) {
@@ -94,13 +95,25 @@ foreach ($caseId in $orderedCaseIds) {
     $selected.Add($row)
 }
 $resultArray = $selected.ToArray()
-
-$pass = @($resultArray | Where-Object status -eq "PASS").Count
-$fail = @($resultArray | Where-Object status -eq "FAIL").Count
-$errorCount = @($resultArray | Where-Object status -eq "ERROR").Count
-$pending = @($resultArray | Where-Object status -eq "PENDING").Count
-$status = if ($errorCount -gt 0) { "ERROR" } elseif ($fail -gt 0) { "FAIL" } elseif ($pending -gt 0) { "PENDING" } else { "PASS" }
 $runId = "target-rule-merged-" + (Get-Date -Format "yyyyMMdd-HHmmss")
+$cliProject = Join-Path $root 'src\HtsQa.Cli\HtsQa.Cli.csproj'
+$compiledPlanPath = Join-Path $baseDir 'compiled-plan.json'
+$mergeTestPackPath = if (Test-Path -LiteralPath $compiledPlanPath) { $compiledPlanPath } else { Join-Path $baseDir 'summary.json' }
+$completedResults = @($resultArray | Where-Object { $_.PSObject.Properties.Name -contains 'testResult' -and $_.testResult } | ForEach-Object { $_.testResult })
+$missingResultCases = @($resultArray | Where-Object { -not ($_.PSObject.Properties.Name -contains 'testResult') -or -not $_.testResult } | ForEach-Object {
+    [pscustomobject]@{caseId=[string]$_.caseId;executed=$false;expectedResult=@{type='Success';description='Legacy merged row without completed TestResult';messagePatterns=@();errorCodes=@()};observations=@()}
+})
+$mergeEvaluationDocument = [pscustomobject]@{schemaVersion='1.0';testPackId=[string]$baseSummary.datasetId;aggregateId=$runId;cases=$missingResultCases;completedResults=$completedResults}
+$mergeEvaluationOutput = Invoke-RuleResultEvaluation -CliProject $cliProject -TestPackPath $mergeTestPackPath -EvaluationDocument $mergeEvaluationDocument -WorkingDirectory (Join-Path $OutputDir 'result-evaluation') -InvocationId 'merge-summary'
+$resultsByCase=@{}
+foreach($testResult in @($mergeEvaluationOutput.results)){$resultsByCase[[string]$testResult.caseId]=$testResult}
+foreach($row in $resultArray){$row | Add-Member -NotePropertyName testResult -NotePropertyValue $resultsByCase[[string]$row.caseId] -Force;$row.status=[string]$row.testResult.status}
+$mergeEvaluationOutput | ConvertTo-Json -Depth 12 | Set-Content -LiteralPath (Join-Path $OutputDir 'test-results.json') -Encoding UTF8
+$pass = [int]$mergeEvaluationOutput.summary.pass
+$fail = [int]$mergeEvaluationOutput.summary.fail
+$errorCount = [int]$mergeEvaluationOutput.summary.error
+$pending = [int]$mergeEvaluationOutput.summary.pending
+$status = [string]$mergeEvaluationOutput.overallResult.status
 
 ConvertTo-Json -InputObject $resultArray -Depth 12 | Set-Content -LiteralPath (Join-Path $OutputDir "case-results.json") -Encoding UTF8
 $resultArray | ForEach-Object {

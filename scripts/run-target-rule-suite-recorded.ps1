@@ -4,7 +4,7 @@
 #>
 param(
     [Parameter(Mandatory = $true)]
-    [string]$DatasetPath,
+    [string]$TestPackPath,
     [string]$SuiteDir = "",
     [string]$ScreensCsv = "",
     [string]$CaseIdsCsv = "",
@@ -35,13 +35,18 @@ param(
 $ErrorActionPreference = "Stop"
 $root = Split-Path -Parent $PSScriptRoot
 . (Join-Path $PSScriptRoot "modules\pipeline-common.ps1")
+$pipelineStatusModule = Join-Path $PSScriptRoot 'modules\pipeline-status.ps1'
+. $pipelineStatusModule
 
 # manifest는 녹화기와 실행기 연결을, targetContext는 대상별 창과 화면 범위를 제공한다.
 $pipelineManifest = Get-RulePipelineManifest $root
-$targetContext = Get-RuleTargetContext $root $DatasetPath $ScreensCsv
+$cliProject = Resolve-RulePath $root ([string]$pipelineManifest.cliProject)
+$resolvedTestPackPath = Resolve-RulePath $root $TestPackPath
+& dotnet run --project $cliProject -c Release --no-build -- validate-test-pack --file $resolvedTestPackPath | Out-Null
+if ($LASTEXITCODE -ne 0) { throw 'TestPack 무결성 또는 승인 검증에 실패했습니다.' }
+$targetContext = Get-RuleTestPackContext $root $resolvedTestPackPath $ScreensCsv
 $reportExporter = Get-RulePipelineEntryPoint $pipelineManifest $root 'reportExporter'
 $tcReportExporter = Get-RulePipelineEntryPoint $pipelineManifest $root 'tcReportExporter'
-$resolvedDatasetPath = $targetContext.DatasetPath
 $datasetPreflight = $targetContext.Dataset
 $registeredScreens = @($datasetPreflight.screens | ForEach-Object { [string]$_.screenNumber })
 if ($ScenarioPlanPath) {
@@ -100,7 +105,7 @@ $recordEncoded = [Convert]::ToBase64String([Text.Encoding]::Unicode.GetBytes($re
 
 $screensLiteral = "'" + ($ScreensCsv -replace "'", "''") + "'"
 $caseIdsLiteral = "'" + ($CaseIdsCsv -replace "'", "''") + "'"
-$datasetLiteral = "'" + ($resolvedDatasetPath -replace "'", "''") + "'"
+$testPackLiteral = "'" + ($resolvedTestPackPath -replace "'", "''") + "'"
 $planOnlyArgument = if ($PlanOnly) { "-PlanOnly" } else { "" }
 $scenarioPlanArgument = if ($ScenarioPlanPath) { "-ScenarioPlanPath '" + ($resolvedScenarioPlanPath -replace "'", "''") + "'" } else { "" }
 $physicalPlanArgument = if ($PhysicalPlanPath) { "-PhysicalPlanPath '" + ($resolvedPhysicalPlanPath -replace "'", "''") + "'" } else { "" }
@@ -115,7 +120,7 @@ $refreshPhysicalPlanBlock = if ($RefreshPhysicalPlanBeforeRun) {
 @"
   `$bindingDiscoveryDir = Join-Path '$SuiteDir' 'binding-discovery'
   `$refreshedBindingDir = Join-Path '$SuiteDir' 'refreshed-binding-plan'
-  & '$runner' -DatasetPath $datasetLiteral -ReportDir `$bindingDiscoveryDir -ScreensCsv $screensLiteral -CaseIdsCsv $caseIdsLiteral -MaxCases $MaxCases -SkipExcel -PlanOnly -ScenarioPlanPath '$resolvedScenarioPlanPath' -AllowPartialScenarioPlan $reuseExistingTargetScreenArgument $requireExistingTargetScreenArgument $preserveTargetScreenAfterRunArgument | Out-Null
+  & '$runner' -TestPackPath $testPackLiteral -ReportDir `$bindingDiscoveryDir -ScreensCsv $screensLiteral -CaseIdsCsv $caseIdsLiteral -MaxCases $MaxCases -SkipExcel -PlanOnly -ScenarioPlanPath '$resolvedScenarioPlanPath' -AllowPartialScenarioPlan $reuseExistingTargetScreenArgument $requireExistingTargetScreenArgument $preserveTargetScreenAfterRunArgument | Out-Null
   `$discoverySummaryPath = Join-Path `$bindingDiscoveryDir 'summary.json'
   `$discoveryControlPlanPath = Join-Path `$bindingDiscoveryDir 'control-plan.json'
   if (-not (Test-Path -LiteralPath `$discoverySummaryPath) -or -not (Test-Path -LiteralPath `$discoveryControlPlanPath)) {
@@ -134,7 +139,7 @@ $refreshPhysicalPlanBlock = if ($RefreshPhysicalPlanBeforeRun) {
   if (`$bindingEvidenceViolations.Count -gt 0) {
     throw "MAP+Runtime 바인딩 증거 직렬화 계약이 누락되었습니다: `$(`$bindingEvidenceViolations -join ' | ')"
   }
-  & '$bindingPlanner' -CompiledPlanPath '$resolvedScenarioPlanPath' -DatasetPath $datasetLiteral -ReportDir `$refreshedBindingDir -ScreensCsv $screensLiteral -RuntimeControlPlanPath (Join-Path `$bindingDiscoveryDir 'control-plan.json') -RuntimeSummaryPath (Join-Path `$bindingDiscoveryDir 'summary.json') | Out-Null
+  & '$bindingPlanner' -CompiledPlanPath '$resolvedScenarioPlanPath' -TestPackPath $testPackLiteral -ReportDir `$refreshedBindingDir -ScreensCsv $screensLiteral -RuntimeControlPlanPath (Join-Path `$bindingDiscoveryDir 'control-plan.json') -RuntimeSummaryPath (Join-Path `$bindingDiscoveryDir 'summary.json') | Out-Null
   `$effectivePhysicalPlanPath = Join-Path `$refreshedBindingDir 'physical-plan.json'
   if (-not (Test-Path -LiteralPath `$effectivePhysicalPlanPath)) { throw '실행 직전 물리 바인딩 계획이 생성되지 않았습니다.' }
   `$refreshedPhysicalPlan = Get-Content -LiteralPath `$effectivePhysicalPlanPath -Raw -Encoding UTF8 | ConvertFrom-Json
@@ -150,14 +155,18 @@ $refreshPhysicalPlanBlock = if ($RefreshPhysicalPlanBeforeRun) {
     "  `$effectivePhysicalPlanPath = '" + ($effectivePath -replace "'", "''") + "'"
 }
 $refreshFlagText = if ($RefreshPhysicalPlanBeforeRun) { 'true' } else { 'false' }
+$pipelineStatusModuleLiteral = $pipelineStatusModule -replace "'", "''"
 $actionCommand = @"
 `$ErrorActionPreference = 'Stop'
+    . '$pipelineStatusModuleLiteral'
+`$runSummary = `$null
+`$actualScenarioActionsExecuted = `$false
 try {
     # HTS와 권한 수준이 맞아야 UI 메시지와 입력을 전달할 수 있으므로 필요할 때만 액션 프로세스를 승격한다.
   while (-not (Test-Path -LiteralPath '$readyFile')) { Start-Sleep -Milliseconds 200 }
 $refreshPhysicalPlanBlock
   `$runParams = @{
-    DatasetPath = $datasetLiteral
+    TestPackPath = $testPackLiteral
     ReportDir = '$reportDir'
     ScreensCsv = $screensLiteral
     CaseIdsCsv = $caseIdsLiteral
@@ -180,14 +189,18 @@ $refreshPhysicalPlanBlock
   if (-not (Test-Path -LiteralPath `$runSummaryPath)) { throw '대상 화면 룰 기반 실행 결과가 생성되지 않았습니다.' }
   `$runSummary=Get-Content -LiteralPath `$runSummaryPath -Raw -Encoding UTF8 | ConvertFrom-Json
   if ([int]`$runSummary.total -le 0) { throw '대상 테스트 케이스가 0건이어서 실행을 완료 처리할 수 없습니다.' }
+  `$actualScenarioActionsExecuted = Get-RuleActualScenarioActionsExecuted -Summary `$runSummary
+  `$actionState = Resolve-RulePipelineState -Status 'DONE' -TestStatus ([string]`$runSummary.status) -ActualScenarioActionsExecuted `$actualScenarioActionsExecuted
   `$datasetLabel=([string]`$runSummary.datasetId -replace '[<>:"/\\|?*]','-' -replace '\s+','-').Trim('-')
   `$runLabel=([string]`$runSummary.runId -replace '[<>:"/\\|?*]','-' -replace '\s+','-').Trim('-')
   `$workbookName="테스트결과-`$datasetLabel-`$runLabel.xlsx"
   [pscustomobject]@{
-    status='DONE'
-    pipelineCompleted=`$true
-    testStatus=[string]`$runSummary.status
-    testPassed=([string]`$runSummary.status -eq 'PASS')
+    status=`$actionState.Status
+    pipelineStatus=`$actionState.PipelineStatus
+    pipelineCompleted=`$actionState.PipelineCompleted
+    testStatus=`$actionState.TestStatus
+    testPassed=`$actionState.TestPassed
+    actualScenarioActionsExecuted=`$actionState.ActualScenarioActionsExecuted
     message='대상 화면 룰 기반 테스트 프로세스와 결과 저장을 완료했습니다.'
     reportDir='$reportDir'
     summary=(Join-Path '$reportDir' 'summary.json')
@@ -197,8 +210,19 @@ $refreshPhysicalPlanBlock
     finishedAt=(Get-Date).ToString('o')
   } | ConvertTo-Json -Depth 5 | Set-Content -LiteralPath '$marker' -Encoding UTF8
 } catch {
-  `$_.Exception.ToString() | Set-Content -LiteralPath '$errorLog' -Encoding UTF8
-  [pscustomobject]@{ status='ERROR'; message='대상 화면 룰 기반 테스트 실행 중 오류가 발생했습니다.'; error=`$_.Exception.Message; finishedAt=(Get-Date).ToString('o') } |
+  `$actionError = `$_
+  if (-not `$runSummary -and (Test-Path -LiteralPath (Join-Path '$reportDir' 'summary.json'))) {
+    try { `$runSummary = Get-Content -LiteralPath (Join-Path '$reportDir' 'summary.json') -Raw -Encoding UTF8 | ConvertFrom-Json } catch { }
+  }
+  `$actualScenarioActionsExecuted = Get-RuleActualScenarioActionsExecuted -RecordedValue `$actualScenarioActionsExecuted -Summary `$runSummary
+  `$observedTestStatus = if (`$runSummary -and [string]`$runSummary.status -in @('PASS','FAIL','ERROR','PENDING')) { [string]`$runSummary.status } else { 'PENDING' }
+  `$actionState = Resolve-RulePipelineState -Status 'ERROR' -TestStatus `$observedTestStatus -ActualScenarioActionsExecuted `$actualScenarioActionsExecuted
+  `$actionError.Exception.ToString() | Set-Content -LiteralPath '$errorLog' -Encoding UTF8
+  [pscustomobject]@{
+    status=`$actionState.Status; pipelineStatus=`$actionState.PipelineStatus; pipelineCompleted=`$actionState.PipelineCompleted
+    testStatus=`$actionState.TestStatus; testPassed=`$actionState.TestPassed; actualScenarioActionsExecuted=`$actionState.ActualScenarioActionsExecuted
+    message='대상 화면 룰 기반 테스트 실행 중 오류가 발생했습니다.'; error=`$actionError.Exception.Message; finishedAt=(Get-Date).ToString('o')
+  } |
     ConvertTo-Json -Depth 5 | Set-Content -LiteralPath '$marker' -Encoding UTF8
 }
 "@
@@ -267,7 +291,15 @@ try {
 }
 
 # 실행 종료 후 영상 자체를 검사하고, 오류 행에 즉시 캡처가 없으면 해당 시점의 영상 프레임을 증거로 보완한다.
-$actionDone = if (Test-Path -LiteralPath $marker) { Get-Content -LiteralPath $marker -Raw -Encoding UTF8 | ConvertFrom-Json } else { $null }
+$actionDone = $null
+$actionMarkerReadError = ''
+if (Test-Path -LiteralPath $marker) {
+    try { $actionDone = Get-Content -LiteralPath $marker -Raw -Encoding UTF8 | ConvertFrom-Json }
+    catch {
+        $actionMarkerReadError = $_.Exception.Message
+        $_.Exception.ToString() | Set-Content -LiteralPath (Join-Path $SuiteDir '실행완료표식읽기오류.txt') -Encoding UTF8
+    }
+}
 $videoInspection = @("영상 파일이 생성되지 않았습니다.")
 $videoOk = $false
 if (Test-Path -LiteralPath $video) {
@@ -405,50 +437,38 @@ if (-not $KeepFrames -and $videoOk -and (Test-Path -LiteralPath $framesDir)) {
     Remove-Item -LiteralPath $resolvedFrames -Recurse -Force
 }
 
-# 액션·영상·Excel 상태를 합쳐 실행 전체의 최종 상태를 계산한다.
-$summary = if (Test-Path -LiteralPath (Join-Path $reportDir "summary.json")) {
-    Get-Content -LiteralPath (Join-Path $reportDir "summary.json") -Raw -Encoding UTF8 | ConvertFrom-Json
-} else { $null }
+# 액션·영상·Excel 증거를 공통 상태 계약에 전달해 파이프라인 완료와 테스트 결과를 독립 계산한다.
+$summary = $null
+$summaryReadError = ''
+if (Test-Path -LiteralPath (Join-Path $reportDir "summary.json")) {
+    try { $summary = Get-Content -LiteralPath (Join-Path $reportDir "summary.json") -Raw -Encoding UTF8 | ConvertFrom-Json }
+    catch { $summaryReadError = $_.Exception.Message }
+}
 $actionStatus = if ($actionDone -and $actionDone.status) { [string]$actionDone.status } else { "" }
 $testStatus = if ($summary -and $summary.status) { [string]$summary.status } else { "" }
-$pipelineCompleted = $videoOk -and $cursorAuditOk -and $actionStatus -eq 'DONE' -and $summary -and [int]$summary.total -gt 0 -and $excelStatus -eq 'DONE'
-$overallStatus = if ($actionStatus -like "PENDING_*") {
-    $actionStatus
-} elseif ($launchError) {
-    "LAUNCH_ERROR"
-} elseif ($timedOut) {
-    "TIMEOUT"
-} elseif ($actionStatus -eq "ERROR") {
-    "ERROR"
-} elseif ($excelStatus -eq "ERROR") {
-    "REPORT_ERROR"
-} elseif (-not $cursorAuditOk) {
-    "CURSOR_AUDIT_ERROR"
-} elseif ($pipelineCompleted) {
-    switch ($testStatus) {
-        'ERROR' { 'DONE_WITH_TEST_ERRORS' }
-        'FAIL' { 'DONE_WITH_TEST_FAILURES' }
-        'PENDING' { 'DONE_WITH_PENDING' }
-        'PASS' { 'DONE' }
-        default { 'DONE_WITH_TEST_ERRORS' }
-    }
-} else {
-    "VIDEO_ERROR"
-}
+$actualScenarioActionsExecuted = Get-RuleActualScenarioActionsExecuted -RecordedValue $actionDone.actualScenarioActionsExecuted -Summary $summary
+$pipelineState = Resolve-RuleRecordedPipelineState `
+    -ActionStatus $actionStatus `
+    -TestStatus $testStatus `
+    -HasSummary ([bool]$summary) `
+    -TotalTests $(if ($summary) { [int]$summary.total } else { 0 }) `
+    -VideoOk $videoOk `
+    -CursorAuditOk $cursorAuditOk `
+    -ExcelStatus $excelStatus `
+    -LaunchError $launchError `
+    -TimedOut $timedOut `
+    -ActualScenarioActionsExecuted $actualScenarioActionsExecuted
 
 [pscustomobject]@{
-    status = $overallStatus
-    pipelineCompleted = [bool]$pipelineCompleted
-    testStatus = $testStatus
-    testPassed = $testStatus -eq 'PASS'
-    message = switch ($overallStatus) {
-        'DONE' { '전체 HTS 화면 녹화와 테스트 실행을 완료했으며 테스트가 통과했습니다.' }
-        'DONE_WITH_TEST_ERRORS' { '녹화와 결과 생성을 완료했으며 자동화 또는 외부 중단 오류가 있습니다.' }
-        'DONE_WITH_TEST_FAILURES' { '녹화와 결과 생성을 완료했으며 테스트 실패가 있습니다.' }
-        'DONE_WITH_PENDING' { '녹화와 결과 생성을 완료했으며 판정 보류 항목이 있습니다.' }
-        'CURSOR_AUDIT_ERROR' { '실행기 클릭 좌표와 녹화기의 실제 커서 위치가 일치하지 않아 결과를 무효화했습니다.' }
-        default { '실행 인프라, 녹화 또는 리포트 결과를 확인해야 합니다.' }
-    }
+    status = $pipelineState.Status
+    pipelineStatus = $pipelineState.PipelineStatus
+    pipelineCompleted = $pipelineState.PipelineCompleted
+    testStatus = $pipelineState.TestStatus
+    testPassed = $pipelineState.TestPassed
+    actualScenarioActionsExecuted = $pipelineState.ActualScenarioActionsExecuted
+    message = Get-RulePipelineStatusMessage $pipelineState.Status
+    testPackId = [string]$targetContext.TestPack.testPackId
+    testPackPath = $resolvedTestPackPath
     suiteDir = $SuiteDir
     reportDir = $reportDir
     workbook = $workbookPath
@@ -459,6 +479,8 @@ $overallStatus = if ($actionStatus -like "PENDING_*") {
     recordingDone = Test-Path -LiteralPath (Join-Path $SuiteDir "recording.done.json")
     excelStatus = $excelStatus
     excelError = $excelError
+    actionMarkerReadError = $actionMarkerReadError
+    summaryReadError = $summaryReadError
     actionsTimedOut = $timedOut
     videoInspection = @($videoInspection)
     cursorAudit = $cursorAuditVerification
@@ -470,7 +492,7 @@ $overallStatus = if ($actionStatus -like "PENDING_*") {
 } | ConvertTo-Json -Depth 12 | Set-Content -LiteralPath (Join-Path $SuiteDir "녹화실행완료.json") -Encoding UTF8
 
 Write-Output $SuiteDir
-if (-not $pipelineCompleted) {
+if (-not $pipelineState.PipelineCompleted) {
     exit 1
 }
-if ($FailOnTestFailure -and $testStatus -ne 'PASS') { exit 2 }
+if ($FailOnTestFailure -and $pipelineState.TestStatus -ne 'PASS') { exit 2 }

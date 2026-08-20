@@ -5,6 +5,7 @@
 - `config/pipeline.manifest.json`: 실행 파일 연결과 단계 순서
 - `scripts/modules/pipeline-common.ps1`: 데이터셋을 공통 실행 컨텍스트로 변환
 - `src/HtsQa.Core/Datasets/RuleBased.cs`: 데이터셋·결과 모델과 검증
+- `src/HtsQa.Core/TestPacks/TestPack.cs`: 조합 정책, canonical CaseId, 기대 결과, TestPack 컴파일·승인 검증
 - `scripts/run-target-rule-suite.ps1`: 실제 실행과 오류 관찰
 - `scripts/modules/rule-control-exploration.ps1`: 컨트롤 발견·계획·조작
 - `src/HtsQa.Core/Scenarios/RuleScenarioGeneration.cs`: 자동 시나리오 생성

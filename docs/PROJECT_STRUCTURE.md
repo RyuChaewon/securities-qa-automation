@@ -39,9 +39,9 @@
 | `data/rule-tests` | `targetProfile`, `screens`, 입력 조합 | `scripts/modules/pipeline-common.ps1`, `HtsQa.Core` |
 | `config` | 논리 진입점과 단계 순서 | 모든 오케스트레이션 스크립트, 구조 검증기 |
 | `scripts` | 단계 실행과 프로세스 연결 | `HtsQa.Cli`, `HtsQa.FlaUi`, `tools` |
-| `HtsQa.Cli` | MAP 모델, 시나리오, 승인·컴파일·바인딩 JSON | PowerShell 실행기와 다음 CLI 단계 |
+| `HtsQa.Cli` | TestPack, MAP 모델, 시나리오, 승인·컴파일·바인딩 JSON | PowerShell 실행기와 다음 CLI 단계 |
 | `HtsQa.FlaUi` | UIA3 발견·조작 결과 NDJSON | `run-target-rule-suite.ps1` |
-| `HtsQa.Core` | 데이터 검증, MAP·설치 해석, 판정 정책 | `HtsQa.Cli`, 단위 테스트 |
+| `HtsQa.Core` | 데이터 검증, 조합·CaseId·TestPack, MAP·설치 해석, 판정 정책 | `HtsQa.Cli`, 단위 테스트 |
 | `tools` | Excel, 영상, 요청 패키지 | `reports`, `exports` |
 | `tests`와 `scripts/dev` | 회귀 결과 | 개발자와 CI |
 
@@ -49,10 +49,11 @@
 
 ```text
 대상 dataset
-  -> pipeline-common: TargetContext 정규화
+  -> HtsQa.Core: 검증·조합·CaseId·TestPack 컴파일/승인
+  -> pipeline-common: Approved TestPack TargetContext 정규화
   -> run-auto-scenario-pipeline: 전체 단계 조정
   -> HtsQa.Cli + HtsQa.Core: MAP/시나리오/계획 생성
-  -> run-target-rule-suite: 화면별 실행 수명주기 관리
+  -> run-target-rule-suite: TestPack 고정 케이스의 화면별 실행 수명주기 관리
   -> HtsQa.FlaUi: 현재 화면 경계 안 UIA3 탐색·조작
   -> tools: JSON 증적을 Excel·영상·외부 패키지로 변환
   -> reports / artifacts / exports
@@ -69,7 +70,7 @@
 | `reports`, `artifacts`, `exports`, `archive` | 실행 당시 대상을 보존하는 생성 증적 |
 | `tests/HtsQa.Tests/Fixtures` | 실제 제품과 무관한 합성 화면 규약 |
 
-`src`, `scripts`, `tools`, `config`에는 실제 화면번호, 제품 설치 경로, 특정 제품 데이터셋 기본값을 두지 않는다. 모든 대상 의존 명령은 `-DatasetPath`를 필수로 받고 선택 화면은 데이터셋 또는 `-ScreensCsv`에서 읽는다. `scripts/dev/verify-source-layout.ps1`가 이 경계를 정적으로 검사한다.
+`src`, `scripts`, `tools`, `config`에는 실제 화면번호, 제품 설치 경로, 특정 제품 데이터셋 기본값을 두지 않는다. Runner와 바인딩 명령은 `-TestPackPath`를 필수로 받고 선택 화면은 해시 고정된 `datasetSnapshot` 또는 `-ScreensCsv`에서 읽는다. 진단·시나리오 원본 도구만 `-DatasetPath`를 받는다. `scripts/dev/verify-source-layout.ps1`가 이 경계를 정적으로 검사한다.
 
 ## Core 책임
 
@@ -77,6 +78,7 @@
 |---|---|---|
 | `Contracts` | 공통 상태와 JSON 계약 | `RuleCommon.cs` |
 | `Datasets` | 데이터셋 모델·검증·케이스 확장 | `RuleBased.cs` |
+| `Evaluation` | Observation + ExpectedResult + EvaluationPolicy를 완성 TestResult로 변환 | `ResultEvaluator.cs` |
 | `Installation` | HTS 설치 자료 카탈로그 | `HtsInstallation.cs` |
 | `Maps` | MAP 파싱·화면 모델·동작/오류 오라클 | `HtsMap.cs` |
 | `Outcomes` | 기대 결과와 관찰 사건의 판정 | `RuleOutcomePolicy.cs` |
@@ -104,6 +106,7 @@ FlaUI 객체는 `Automation` 밖으로 내보내지 않는다. PowerShell에는 
 | 모듈 | 책임 |
 |---|---|
 | `pipeline-common.ps1` | 저장소 경로, manifest, 대상 프로필 정규화 |
+| `result-evaluator.ps1` | 원시 Observation JSON을 CLI에 전달하고 완성 TestResult를 반환하는 무판정 어댑터 |
 | `rule-control-exploration.ps1` | 콘텐츠 경계, 발견, 탭 순서, MAP 결합, 조작 |
 | `report-sanitization.ps1` | 저장 전 민감정보 마스킹 |
 

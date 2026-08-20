@@ -4,7 +4,6 @@
 // 수정 지점: 필드 추가 시 템플릿 데이터셋, Validator, Excel 안내, 관련 테스트를 함께 갱신한다.
 using System.Security.Cryptography;
 using System.Text;
-using System.Text.Json;
 using System.Text.RegularExpressions;
 
 namespace HtsQa.Core;
@@ -240,6 +239,7 @@ public sealed record RuleTestDataset
     public required string SchemaVersion { get; init; }
     public required string DatasetId { get; init; }
     public RuleTargetProfile TargetProfile { get; init; } = new();
+    public CombinationPolicy CombinationPolicy { get; init; } = CombinationPolicy.Cartesian;
     public int MaxExpandedCases { get; init; } = 10000;
     public required RuleExecutionPolicy ExecutionPolicy { get; init; }
     public RuleAccountInput[] Accounts { get; init; } = [];
@@ -270,6 +270,7 @@ public sealed record RuleTestCase
     public Dictionary<string, bool> VariableRequired { get; init; } = [];
     public Dictionary<string, bool> VariableTriggerQuery { get; init; } = [];
     public Dictionary<string, RuleExpectedOutcome> VariableExpectedOutcomes { get; init; } = [];
+    public ResolvedExpectedResult ExpectedResult { get; init; } = new();
     public bool AutoExplorationEnabled { get; init; }
     public Dictionary<string, RuleLocatorStrategy[]> Locators { get; init; } = [];
 }
@@ -579,7 +580,7 @@ public sealed class RuleDatasetValidator
                 ValidateExpectedOutcome(value.ExpectedOutcome, $"variables[{dimension.Name}].values[{value.Id}]", issues);
         }
 
-        var projected = RuleCaseExpander.CountCases(dataset);
+        var projected = new CombinationGenerator().CountCases(dataset);
         if (projected > dataset.MaxExpandedCases)
             issues.Add(new("POLICY.CASE_LIMIT", $"Projected case count {projected} exceeds maxExpandedCases {dataset.MaxExpandedCases}."));
         return new(issues.Count == 0, issues);
@@ -631,35 +632,11 @@ public sealed class RuleDatasetValidator
 public static class RuleCaseExpander
 {
     /// <summary>활성 계좌가 없을 때도 일반 화면 테스트가 한 번 실행되도록 기본 컨텍스트를 제공한다.</summary>
-    public static RuleAccountInput[] ActiveExecutionContexts(RuleTestDataset dataset)
-    {
-        var configured = dataset.Accounts.Where(x => x.Enabled).ToArray();
-        if (configured.Length > 0) return configured;
-        return
-        [
-            new RuleAccountInput
-            {
-                Id = "default",
-                AccountNumber = "",
-                Owner = "",
-                InputMode = RuleInputMode.Prefilled
-            }
-        ];
-    }
+    public static RuleAccountInput[] ActiveExecutionContexts(RuleTestDataset dataset) =>
+        CombinationGenerator.ActiveExecutionContexts(dataset);
 
     /// <summary>실제 배열을 만들지 않고 예상 케이스 수를 계산해 조합 폭증을 사전 차단한다.</summary>
-    public static long CountCases(RuleTestDataset dataset)
-    {
-        long count = 0;
-        foreach (var screen in dataset.Screens.Where(x => x.Enabled))
-        {
-            long combinations = 1;
-            foreach (var dimension in ApplicableDimensions(dataset, screen.ScreenNumber))
-                combinations = checked(combinations * dimension.Values.Length);
-            count = checked(count + combinations * ActiveExecutionContexts(dataset).Length);
-        }
-        return count;
-    }
+    public static long CountCases(RuleTestDataset dataset) => new CombinationGenerator().CountCases(dataset);
 
     /// <summary>검증된 데이터셋을 실행 가능한 개별 테스트 케이스 배열로 확장한다.</summary>
     public static RuleTestCase[] Expand(RuleTestDataset dataset)
@@ -668,41 +645,7 @@ public static class RuleCaseExpander
         if (!validation.IsValid)
             throw new InvalidDataException(string.Join(Environment.NewLine, validation.Issues.Select(x => $"{x.Code}: {x.Message}")));
 
-        var result = new List<RuleTestCase>();
-        foreach (var screen in dataset.Screens.Where(x => x.Enabled))
-        foreach (var account in ActiveExecutionContexts(dataset))
-        foreach (var selectedValues in Cartesian(ApplicableDimensions(dataset, screen.ScreenNumber)))
-        {
-            var variables = selectedValues.ToDictionary(x => x.Key, x => x.Value.Value, StringComparer.OrdinalIgnoreCase);
-            foreach (var fixedPair in screen.FixedConditions) variables[fixedPair.Key] = fixedPair.Value;
-            var sensitive = dataset.Variables.ToDictionary(x => x.Name, x => x.Sensitive, StringComparer.OrdinalIgnoreCase);
-            var applicableDimensions = ApplicableDimensions(dataset, screen.ScreenNumber);
-            var identity = JsonSerializer.Serialize(new { dataset.DatasetId, screen.ScreenNumber, account.Id, variables }, JsonDefaults.Options);
-            result.Add(new RuleTestCase
-            {
-                CaseId = $"RC-{Fingerprint(identity, 16)}",
-                DatasetId = dataset.DatasetId,
-                ScreenNumber = screen.ScreenNumber,
-                ScreenName = screen.ScreenName,
-                QueryTrigger = screen.QueryTrigger,
-                AccountId = account.Id,
-                AccountNumber = account.AccountNumber,
-                AccountOwner = account.Owner,
-                InputMode = account.InputMode,
-                PasswordSecret = account.PasswordSecret,
-                Variables = new Dictionary<string, string>(variables, StringComparer.OrdinalIgnoreCase),
-                SensitiveVariables = sensitive,
-                VariableControlKinds = applicableDimensions.ToDictionary(x => x.Name, x => x.ControlKind, StringComparer.OrdinalIgnoreCase),
-                VariableValueMatches = applicableDimensions.ToDictionary(x => x.Name, x => x.ValueMatch, StringComparer.OrdinalIgnoreCase),
-                VariableTargetRoles = applicableDimensions.ToDictionary(x => x.Name, x => x.TargetRole ?? $"condition:{x.Name}", StringComparer.OrdinalIgnoreCase),
-                VariableRequired = applicableDimensions.ToDictionary(x => x.Name, x => x.Required, StringComparer.OrdinalIgnoreCase),
-                VariableTriggerQuery = applicableDimensions.ToDictionary(x => x.Name, x => x.TriggerQueryAfterChange, StringComparer.OrdinalIgnoreCase),
-                VariableExpectedOutcomes = selectedValues.ToDictionary(x => x.Key, x => x.Value.ExpectedOutcome, StringComparer.OrdinalIgnoreCase),
-                AutoExplorationEnabled = dataset.AutoExploration.Enabled,
-                Locators = MergeLocators(dataset.DefaultLocators, screen.Locators)
-            });
-        }
-        return result.ToArray();
+        return new CombinationGenerator().Generate(dataset);
     }
 
     /// <summary>리포트 저장 전에 계좌번호와 민감 변수를 마스킹한 사본을 만든다.</summary>
@@ -756,34 +699,6 @@ public static class RuleCaseExpander
         return hash[..Math.Clamp(length, 4, hash.Length)];
     }
 
-    private static RuleVariableDimension[] ApplicableDimensions(RuleTestDataset dataset, string screenNumber) =>
-        dataset.Variables.Where(x => x.AppliesToScreens.Contains("*") || x.AppliesToScreens.Contains(screenNumber)).ToArray();
-
-    private static IEnumerable<Dictionary<string, RuleVariableValue>> Cartesian(RuleVariableDimension[] dimensions)
-    {
-        IEnumerable<Dictionary<string, RuleVariableValue>> rows = [new(StringComparer.OrdinalIgnoreCase)];
-        foreach (var dimension in dimensions)
-        {
-            rows = rows.SelectMany(row => dimension.Values.Select(value =>
-            {
-                var next = new Dictionary<string, RuleVariableValue>(row, StringComparer.OrdinalIgnoreCase)
-                {
-                    [dimension.Name] = value
-                };
-                return next;
-            }));
-        }
-        return rows;
-    }
-
-    private static Dictionary<string, RuleLocatorStrategy[]> MergeLocators(
-        Dictionary<string, RuleLocatorStrategy[]> defaults,
-        Dictionary<string, RuleLocatorStrategy[]> overrides)
-    {
-        var merged = new Dictionary<string, RuleLocatorStrategy[]>(defaults, StringComparer.OrdinalIgnoreCase);
-        foreach (var pair in overrides) merged[pair.Key] = pair.Value;
-        return merged;
-    }
 }
 
 /// <summary>HTS를 조작하지 않고 계획과 산출물 구조만 검증하는 드라이런 결과를 만든다.</summary>

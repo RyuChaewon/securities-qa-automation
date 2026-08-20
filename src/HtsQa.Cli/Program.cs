@@ -1,4 +1,4 @@
-// 역할: 데이터셋 검증, MAP 추출, 시나리오 생성·승인·컴파일·바인딩 명령을 노출하는 CLI 호스트다.
+// 역할: 데이터셋 검증, TestPack 컴파일·승인, MAP 추출, 시나리오 생성·컴파일·바인딩 명령을 노출하는 CLI 호스트다.
 // 입력/출력: 명령행 인수와 JSON 파일을 받아 다음 파이프라인 단계가 소비할 JSON을 표준 출력 또는 파일로 만든다.
 // 경계: 실제 HTS 조작과 녹화는 PowerShell 실행기가 담당하므로 이 파일에 UI 입력 코드를 추가하지 않는다.
 // 수정 지점: 새 명령은 help, switch 분기, 전용 처리 함수와 docs/PROJECT_STRUCTURE.md를 함께 갱신한다.
@@ -16,6 +16,10 @@ try
         "validate-rule-dataset" => ValidateRuleDataset(Required(args, "--file")),
         "expand-rule-cases" => ExpandRuleCases(args),
         "run-rule-dataset" => RunRuleDataset(args),
+        "compile-test-pack" => CompileTestPack(args),
+        "create-test-pack-approval" => CreateTestPackApproval(args),
+        "validate-test-pack" => ValidateTestPack(args),
+        "run-test-pack" => RunTestPack(args),
         "extract-map-models" => ExtractMapModels(args),
         "generate-rule-scenarios" => GenerateRuleScenarios(args),
         "create-rule-scenario-approval" => CreateRuleScenarioApproval(args),
@@ -26,6 +30,7 @@ try
         "plan-scenarios" => PlanScenarios(args),
         "materialize-scenario-bindings" => MaterializeScenarioBindings(args),
         "build-physical-scenario-plan" => BuildPhysicalScenarioPlan(args),
+        "evaluate-results" => EvaluateResults(args),
         "analyze-run" => AnalyzeRun(GetOpt(args, "--run", "")),
         _ => Unknown($"알 수 없는 명령: {command}")
     };
@@ -42,7 +47,11 @@ int Help()
     HtsQa.Cli 명령:
       validate-rule-dataset --file PATH
       expand-rule-cases --file PATH [--out PATH]
-      run-rule-dataset --file PATH --dry-run [--report-dir PATH]
+      compile-test-pack --dataset PATH [--combination-policy Cartesian|Pairwise|PerControl] [--max-cases N] [--approval PATH] [--out PATH]
+      create-test-pack-approval --test-pack PATH [--out PATH]
+      validate-test-pack --file PATH [--dataset PATH]
+      run-test-pack --file PATH --dry-run [--report-dir PATH]
+      run-rule-dataset (지원 종료: compile-test-pack + run-test-pack 사용)
       extract-map-models --screen-dir PATH --screens ID1,ID2 [--installation-root PATH] [--file-pattern PATTERN] [--out PATH]
       generate-rule-scenarios --map PATH --dataset PATH [--control-plan PATH] [--reference-date yyyyMMdd] [--max-options N] [--out PATH]
       create-rule-scenario-approval --file PATH [--out PATH]
@@ -53,10 +62,39 @@ int Help()
       plan-scenarios --file PATH --dataset PATH [--approval PATH] [--max-cases N] [--report-dir PATH]
       materialize-scenario-bindings --plan PATH --control-plan PATH --runtime-fingerprint HASH --out PATH
       build-physical-scenario-plan --plan PATH --bindings PATH --out PATH
+      evaluate-results --test-pack PATH --observations PATH --output PATH
       analyze-run --run REPORT_DIR
 
     실제 HTS 실행과 녹화는 scripts/run-target-rule-suite-recorded.ps1을 사용합니다.
     """);
+    return 0;
+}
+
+// TestPack과 원시 Observation 파일을 읽고 순수 ResultEvaluator가 만든 완성 TestResult만 출력한다.
+int EvaluateResults(string[] argv)
+{
+    var testPackPath = Full(Required(argv, "--test-pack"));
+    var observationsPath = Full(Required(argv, "--observations"));
+    var outputPath = Full(Required(argv, "--output"));
+    if (!File.Exists(testPackPath)) throw new FileNotFoundException("TestPack 파일을 찾을 수 없습니다.", testPackPath);
+    if (!File.Exists(observationsPath)) throw new FileNotFoundException("Observation 파일을 찾을 수 없습니다.", observationsPath);
+
+    var input = JsonFile.Read<ResultEvaluationDocument>(observationsPath);
+    var evaluator = new ResultEvaluator();
+    var results = input.Cases.Select(evaluator.Evaluate).Concat(input.CompletedResults).ToArray();
+    var testPackId = string.IsNullOrWhiteSpace(input.TestPackId)
+        ? Path.GetFileNameWithoutExtension(testPackPath)
+        : input.TestPackId;
+    var output = new TestResultDocument
+    {
+        TestPackId = testPackId,
+        TestPackSha256 = JsonFile.Sha256Bytes(testPackPath),
+        Results = results,
+        Summary = evaluator.Summarize(results),
+        OverallResult = evaluator.Aggregate(string.IsNullOrWhiteSpace(input.AggregateId) ? testPackId : input.AggregateId, results)
+    };
+    JsonFile.Write(outputPath, output);
+    Console.WriteLine(outputPath);
     return 0;
 }
 
@@ -361,7 +399,8 @@ int ValidateRuleDataset(string file)
     Console.WriteLine(JsonSerializer.Serialize(new
     {
         validation.IsValid,
-        projectedCases = validation.IsValid ? RuleCaseExpander.CountCases(dataset) : 0,
+        combinationPolicy = dataset.CombinationPolicy,
+        projectedCases = validation.IsValid ? new CombinationGenerator().CountCases(dataset) : 0,
         validation.Issues
     }, JsonDefaults.Options));
     return validation.IsValid ? 0 : 1;
@@ -371,7 +410,7 @@ int ValidateRuleDataset(string file)
 int ExpandRuleCases(string[] argv)
 {
     var dataset = LoadValidatedDataset(Required(argv, "--file"));
-    var expanded = RuleCaseExpander.Expand(dataset).Select(RuleCaseExpander.Sanitize).ToArray();
+    var expanded = new CombinationGenerator().Generate(dataset).Select(RuleCaseExpander.Sanitize).ToArray();
     var defaultPath = Path.Combine(root, "reports", $"expanded-cases-{DateTimeOffset.Now:yyyyMMdd-HHmmss}.json");
     var outPath = Full(GetOpt(argv, "--out", defaultPath));
     JsonFile.Write(outPath, new
@@ -388,20 +427,109 @@ int ExpandRuleCases(string[] argv)
 // 제품을 조작하지 않는 드라이런 결과와 기본 리포트 JSON을 생성한다.
 int RunRuleDataset(string[] argv)
 {
+    return Unknown("run-rule-dataset은 승인되지 않은 Dataset 직접 실행을 막기 위해 지원 종료되었습니다. compile-test-pack 후 run-test-pack을 사용하세요.");
+}
+
+// 데이터셋을 C# 단일 조합 생성기로 확장하고 승인 정보까지 포함한 불변 TestPack을 만든다.
+int CompileTestPack(string[] argv)
+{
+    var datasetPath = Full(Required(argv, "--dataset"));
+    var dataset = LoadValidatedDataset(datasetPath);
+    var policyText = GetOpt(argv, "--combination-policy", dataset.CombinationPolicy.ToString());
+    if (!Enum.TryParse<CombinationPolicy>(policyText, ignoreCase: true, out var policy))
+        throw new ArgumentException("--combination-policy는 Cartesian, Pairwise, PerControl 중 하나여야 합니다.");
+    int? maxCases = null;
+    var maxCasesText = GetOpt(argv, "--max-cases", "");
+    if (!string.IsNullOrWhiteSpace(maxCasesText))
+    {
+        if (!int.TryParse(maxCasesText, out var parsed) || parsed < 1)
+            throw new ArgumentException("--max-cases는 1 이상의 정수여야 합니다.");
+        maxCases = parsed;
+    }
+    TestPackApprovalOverlay? approval = null;
+    var approvalPath = GetOpt(argv, "--approval", "");
+    if (!string.IsNullOrWhiteSpace(approvalPath)) approval = JsonFile.Read<TestPackApprovalOverlay>(Full(approvalPath));
+    var testPack = new TestPackCompiler().Compile(
+        dataset,
+        JsonFile.Sha256Bytes(datasetPath),
+        Path.GetFileName(datasetPath),
+        policy,
+        maxCases,
+        approval);
+    var defaultPath = Path.Combine(root, "artifacts", "test-packs", testPack.TestPackId, "test-pack.json");
+    var outPath = Full(GetOpt(argv, "--out", defaultPath));
+    JsonFile.Write(outPath, testPack);
+    Console.WriteLine(outPath);
+    return 0;
+}
+
+// 컴파일 내용 해시에 결합된 승인 초안을 만든다. Approved 전환은 승인자와 시각을 명시해 사람이 수행한다.
+int CreateTestPackApproval(string[] argv)
+{
+    var testPackPath = Full(Required(argv, "--test-pack"));
+    var testPack = JsonFile.Read<RuleTestPack>(testPackPath);
+    var validation = new TestPackValidator().Validate(testPack, requireApproved: false);
+    if (!validation.IsValid)
+        throw new InvalidDataException(string.Join(Environment.NewLine, validation.Issues.Select(x => $"{x.Code}: {x.Message}")));
+    var defaultPath = Path.Combine(Path.GetDirectoryName(testPackPath)!, "approval.template.json");
+    var outPath = Full(GetOpt(argv, "--out", defaultPath));
+    if (File.Exists(outPath)) throw new IOException($"승인 파일이 이미 존재합니다: {outPath}");
+    JsonFile.Write(outPath, TestPackCompiler.CreateApprovalTemplate(testPack));
+    Console.WriteLine(outPath);
+    return 0;
+}
+
+// TestPack 자체 무결성·승인을 검사하고 선택적으로 현재 Dataset 원본 해시까지 대조한다.
+int ValidateTestPack(string[] argv)
+{
+    var testPackPath = Full(Required(argv, "--file"));
+    var testPack = JsonFile.Read<RuleTestPack>(testPackPath);
+    var validator = new TestPackValidator();
+    var baseValidation = validator.Validate(testPack, requireApproved: true);
+    var issues = baseValidation.Issues.ToList();
+    var datasetPath = GetOpt(argv, "--dataset", "");
+    if (!string.IsNullOrWhiteSpace(datasetPath))
+    {
+        datasetPath = Full(datasetPath);
+        var currentDataset = JsonFile.Read<RuleTestDataset>(datasetPath);
+        issues.AddRange(validator.ValidateSource(testPack, currentDataset, JsonFile.Sha256Bytes(datasetPath)).Issues);
+    }
+    var output = new ValidationResult(issues.Count == 0, issues);
+    Console.WriteLine(JsonSerializer.Serialize(new
+    {
+        output.IsValid,
+        testPack.TestPackId,
+        testPack.Approval.Status,
+        testPack.CombinationPolicy,
+        testPack.CaseCount,
+        output.Issues
+    }, JsonDefaults.Options));
+    return output.IsValid ? 0 : 3;
+}
+
+// 승인 TestPack의 고정 케이스 배열만 읽어 제품을 조작하지 않는 드라이런 증적을 만든다.
+int RunTestPack(string[] argv)
+{
     if (!argv.Contains("--dry-run", StringComparer.OrdinalIgnoreCase))
         return Unknown("실제 실행은 scripts/run-target-rule-suite-recorded.ps1을 사용하세요.");
 
-    var dataset = LoadValidatedDataset(Required(argv, "--file"));
-    var cases = RuleCaseExpander.Expand(dataset);
+    var testPackPath = Full(Required(argv, "--file"));
+    var testPack = JsonFile.Read<RuleTestPack>(testPackPath);
+    var cases = new TestPackRunnerContract().LoadApprovedCases(testPack);
+    var dataset = testPack.DatasetSnapshot;
     var runId = $"rule-dry-{DateTimeOffset.Now:yyyyMMdd-HHmmss-fff}";
     var reportDir = Full(GetOpt(argv, "--report-dir", Path.Combine(root, "reports", runId)));
     Directory.CreateDirectory(reportDir);
     var executor = new RuleDryRunExecutor();
     var results = cases.Select(x => executor.Execute(runId, x)).ToArray();
 
+    JsonFile.Write(Path.Combine(reportDir, "test-pack.json"), testPack);
     JsonFile.Write(Path.Combine(reportDir, "expanded-cases.json"), new
     {
         datasetId = dataset.DatasetId,
+        testPackId = testPack.TestPackId,
+        testPackContentHash = testPack.ContentHash,
+        combinationPolicy = testPack.CombinationPolicy,
         generatedAt = DateTimeOffset.Now,
         caseCount = cases.Length,
         cases = cases.Select(RuleCaseExpander.Sanitize).ToArray()
@@ -420,6 +548,8 @@ int RunRuleDataset(string[] argv)
     JsonFile.Write(Path.Combine(reportDir, "summary.json"), new
     {
         runId,
+        testPackId = testPack.TestPackId,
+        testPackContentHash = testPack.ContentHash,
         datasetId = dataset.DatasetId,
         targetProfileId = dataset.TargetProfile.Id,
         targetDisplayName = dataset.TargetProfile.DisplayName,
@@ -438,7 +568,7 @@ int RunRuleDataset(string[] argv)
         finishedAt = DateTimeOffset.Now,
         executionMode = "드라이런 - 실제 HTS 조작 없음",
         inputMode = "화면 기본값 또는 데이터셋 명시 입력",
-        planner = "결정론적 규칙",
+        planner = testPack.GeneratorVersion,
         note = "실제 HTS를 조작하지 않았으므로 모든 결과를 대기로 기록했습니다."
     });
     Console.WriteLine(reportDir);

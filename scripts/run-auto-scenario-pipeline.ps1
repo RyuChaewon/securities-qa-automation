@@ -5,6 +5,8 @@
 param(
     [Parameter(Mandatory = $true)]
     [string]$DatasetPath,
+    [Parameter(Mandatory = $true)]
+    [string]$TestPackPath,
     [string]$InstallationRoot = '',
     [string]$ScreensCsv = '',
     [string]$OutputDir = '',
@@ -23,6 +25,7 @@ param(
 $ErrorActionPreference = 'Stop'
 $root = Split-Path -Parent $PSScriptRoot
 . (Join-Path $PSScriptRoot 'modules\pipeline-common.ps1')
+. (Join-Path $PSScriptRoot 'modules\pipeline-status.ps1')
 
 # 기계 판독 가능한 manifest가 실행 파일 사이의 연결을 소유하며 호출 스크립트는 논리 이름만 사용한다.
 $pipelineManifest = Get-RulePipelineManifest $root
@@ -32,10 +35,22 @@ $recordedRunner = Get-RulePipelineEntryPoint $pipelineManifest $root 'recordedRu
 
 # 현재 단계와 실제 HTS 조작 여부를 상태 JSON에 남겨 중단 후에도 실행 사실을 판별할 수 있게 한다.
 function Write-State([string]$Status, [hashtable]$Values) {
+    $requestedTestStatus = if ($Values.Contains('testStatus')) {
+        [string]$Values.testStatus
+    } elseif ($Values.Contains('testOutcome') -and [string]$Values.testOutcome -in @('PASS', 'FAIL', 'ERROR', 'PENDING')) {
+        [string]$Values.testOutcome
+    } else { 'PENDING' }
+    $actionsExecuted = $Values.Contains('actualScenarioActionsExecuted') -and [bool]$Values.actualScenarioActionsExecuted
+    $contract = Resolve-RulePipelineState -Status $Status -TestStatus $requestedTestStatus -ActualScenarioActionsExecuted $actionsExecuted
     $state = [ordered]@{
         schemaVersion = '1.0'
         mode = 'AutomaticRuleScenarioPipeline'
-        status = $Status
+        status = $contract.Status
+        pipelineStatus = $contract.PipelineStatus
+        pipelineCompleted = $contract.PipelineCompleted
+        testStatus = $contract.TestStatus
+        testPassed = $contract.TestPassed
+        actualScenarioActionsExecuted = $contract.ActualScenarioActionsExecuted
         generatedAt = (Get-Date).ToString('o')
     }
     # targetContext 생성 후 호출되는 모든 상태에 대상 식별값을 자동 포함해 단계 갱신 시 추적 정보가 사라지지 않게 한다.
@@ -44,7 +59,11 @@ function Write-State([string]$Status, [hashtable]$Values) {
         $state.targetDisplayName = $targetContext.DisplayName
         $state.targetScreens = @($targetContext.TargetScreens)
     }
-    foreach ($key in $Values.Keys) { $state[$key] = $Values[$key] }
+    foreach ($key in $Values.Keys) {
+        if ($key -notin @('status', 'pipelineStatus', 'pipelineCompleted', 'testStatus', 'testPassed', 'actualScenarioActionsExecuted')) {
+            $state[$key] = $Values[$key]
+        }
+    }
     $state | ConvertTo-Json -Depth 16 | Set-Content -LiteralPath $statePath -Encoding UTF8
 }
 
@@ -54,9 +73,11 @@ function Invoke-Cli([string[]]$Arguments, [int[]]$AllowedExitCodes = @(0)) {
     if ($AllowedExitCodes -notcontains $LASTEXITCODE) { throw "CLI 명령이 실패했습니다: $($Arguments -join ' ') / 종료 코드 $LASTEXITCODE" }
 }
 
-# 데이터셋의 targetProfile을 창·설치·화면 범위가 결합된 단일 실행 컨텍스트로 만든다.
-$targetContext = Get-RuleTargetContext $root $DatasetPath $ScreensCsv $InstallationRoot
-$datasetFull = $targetContext.DatasetPath
+# 승인 TestPack을 원본 Dataset 해시와 대조한 뒤 내장 snapshot으로 실행 컨텍스트를 만든다.
+$datasetFull = Resolve-RulePath $root $DatasetPath
+$testPackFull = Resolve-RulePath $root $TestPackPath
+Invoke-Cli @('validate-test-pack', '--file', $testPackFull, '--dataset', $datasetFull)
+$targetContext = Get-RuleTestPackContext $root $testPackFull $ScreensCsv $InstallationRoot
 $installationFull = $targetContext.InstallationRoot
 $screenDirectory = $targetContext.ScreenDirectory
 if (-not (Test-Path -LiteralPath $screenDirectory -PathType Container)) { throw "HTS screen 폴더를 찾을 수 없습니다: $screenDirectory" }
@@ -83,6 +104,7 @@ if (-not $StaticOnly -and -not $isAdmin -and $AllowElevatedActionPrompt) {
     function Quote-PowerShellLiteral([string]$Value) { "'" + $Value.Replace("'", "''") + "'" }
     $command = "& $(Quote-PowerShellLiteral $MyInvocation.MyCommand.Path)" +
         " -DatasetPath $(Quote-PowerShellLiteral $datasetFull)" +
+        " -TestPackPath $(Quote-PowerShellLiteral $testPackFull)" +
         " -InstallationRoot $(Quote-PowerShellLiteral $installationFull)" +
         " -ScreensCsv $(Quote-PowerShellLiteral ($targetScreens -join ','))" +
         " -OutputDir $(Quote-PowerShellLiteral $OutputDir)" +
@@ -134,6 +156,7 @@ ConvertTo-Json -InputObject $effectiveDataset -Depth 64 | Set-Content -LiteralPa
 
 Write-State 'STARTED' ([ordered]@{
     dataset = $datasetFull
+    testPack = $testPackFull
     targetProfileId = $targetContext.ProfileId
     targetDisplayName = $targetContext.DisplayName
     installationRoot = $installationFull
@@ -145,6 +168,8 @@ Write-State 'STARTED' ([ordered]@{
     testOutcome = 'PENDING'
 })
 
+$actualScenarioActionsExecuted = $false
+$recordedCompletion = $null
 try {
     # 1단계: 빌드된 CLI와 설치 MAP으로 실행 환경에 독립적인 정적 화면 모델을 만든다.
     $env:DOTNET_CLI_HOME = Join-Path $root '.dotnet-home'
@@ -181,7 +206,7 @@ try {
             return
         }
 
-        & $runner -DatasetPath $datasetFull -ReportDir $runtimeDir -ScreensCsv ($targetScreens -join ',') -MaxCases $targetScreens.Count -PlanOnly -SkipExcel | Out-Null
+        & $runner -TestPackPath $testPackFull -ReportDir $runtimeDir -ScreensCsv ($targetScreens -join ',') -MaxCases $MaxCases -PlanOnly -SkipExcel | Out-Null
         if (-not (Test-Path -LiteralPath $controlPlanPath)) { throw "런타임 컨트롤 계획이 생성되지 않았습니다: $controlPlanPath" }
         $runtimeSummaryPath = Join-Path $runtimeDir 'summary.json'
         if (-not (Test-Path -LiteralPath $runtimeSummaryPath)) { throw "런타임 탐색 요약이 생성되지 않았습니다: $runtimeSummaryPath" }
@@ -294,7 +319,7 @@ try {
     }
 
     $runArguments = @{
-        DatasetPath = $datasetFull
+        TestPackPath = $testPackFull
         SuiteDir = $recordedDir
         ScreensCsv = ($targetScreens -join ',')
         ScenarioPlanPath = $compiledPath
@@ -312,9 +337,14 @@ try {
 
     $completionPath = Join-Path $recordedDir '녹화실행완료.json'
     if (-not (Test-Path -LiteralPath $completionPath)) { throw "녹화 실행 완료 파일을 찾지 못했습니다: $completionPath" }
-    $completion = Get-Content -LiteralPath $completionPath -Raw -Encoding UTF8 | ConvertFrom-Json
-    if ([string]$completion.status -ne 'DONE') { throw "실제 실행이 완료되지 않았습니다: $([string]$completion.status)" }
-    Write-State 'DONE' ([ordered]@{
+    $recordedCompletion = Get-Content -LiteralPath $completionPath -Raw -Encoding UTF8 | ConvertFrom-Json
+    $actualScenarioActionsExecuted = Get-RuleActualScenarioActionsExecuted -RecordedValue $recordedCompletion.actualScenarioActionsExecuted -Summary $recordedCompletion.actionSummary
+    $completionState = Resolve-RulePipelineState `
+        -Status ([string]$recordedCompletion.status) `
+        -TestStatus ([string]$recordedCompletion.testStatus) `
+        -ActualScenarioActionsExecuted $actualScenarioActionsExecuted
+    if (-not $completionState.PipelineCompleted) { throw "실제 실행 파이프라인이 완료되지 않았습니다: $([string]$recordedCompletion.status)" }
+    Write-State $completionState.Status ([ordered]@{
         dataset = $datasetFull
         mapCatalog = $mapPath
         runtimeDiscovery = $runtimeDir
@@ -325,24 +355,43 @@ try {
         bindingCatalog = $bindingsPath
         physicalPlan = $physicalPath
         recordedRun = $recordedDir
-        resultDirectory = [string]$completion.reportDir
-        workbook = [string]$completion.workbook
-        video = [string]$completion.video
+        resultDirectory = [string]$recordedCompletion.reportDir
+        workbook = [string]$recordedCompletion.workbook
+        video = [string]$recordedCompletion.video
         actualHtsManipulated = $true
-        actualScenarioActionsExecuted = $true
+        actualScenarioActionsExecuted = $actualScenarioActionsExecuted
+        testStatus = $completionState.TestStatus
         testOutcome = 'SEE_RESULT_SUMMARY'
     })
 } catch {
+    $pipelineError = $_
+    if (-not $recordedCompletion -and (Test-Path -LiteralPath (Join-Path $recordedDir '녹화실행완료.json'))) {
+        try { $recordedCompletion = Get-Content -LiteralPath (Join-Path $recordedDir '녹화실행완료.json') -Raw -Encoding UTF8 | ConvertFrom-Json } catch { }
+    }
+    $recordedSummary = if ($recordedCompletion -and $recordedCompletion.actionSummary) {
+        $recordedCompletion.actionSummary
+    } elseif (Test-Path -LiteralPath (Join-Path $recordedDir 'results\summary.json')) {
+        try { Get-Content -LiteralPath (Join-Path $recordedDir 'results\summary.json') -Raw -Encoding UTF8 | ConvertFrom-Json } catch { $null }
+    } else { $null }
+    $actualScenarioActionsExecuted = Get-RuleActualScenarioActionsExecuted `
+        -RecordedValue $(if ($recordedCompletion) { $recordedCompletion.actualScenarioActionsExecuted } else { $actualScenarioActionsExecuted }) `
+        -Summary $recordedSummary
+    $observedTestStatus = if ($recordedSummary -and [string]$recordedSummary.status -in @('PASS','FAIL','ERROR','PENDING')) {
+        [string]$recordedSummary.status
+    } elseif ($recordedCompletion -and [string]$recordedCompletion.testStatus -in @('PASS','FAIL','ERROR','PENDING')) {
+        [string]$recordedCompletion.testStatus
+    } else { 'PENDING' }
     Write-State 'ERROR' ([ordered]@{
         dataset = $datasetFull
         mapCatalog = $mapPath
         generatedScenarios = $scenarioPath
         compiledPlan = $compiledPath
-        actualScenarioActionsExecuted = $false
+        actualScenarioActionsExecuted = $actualScenarioActionsExecuted
+        testStatus = $observedTestStatus
         testOutcome = 'PENDING'
-        error = $_.Exception.Message
+        error = $pipelineError.Exception.Message
     })
-    throw
+    throw $pipelineError
 }
 
 Write-Output $OutputDir

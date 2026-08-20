@@ -37,7 +37,7 @@ dotnet run --project src/HtsQa.Cli/HtsQa.Cli.csproj -c Release --no-build -- com
 ```powershell
 pwsh -ExecutionPolicy Bypass -File scripts/plan-scenario-bindings.ps1 `
   -CompiledPlanPath outputs/0101_automation/compiled-plan.json `
-  -DatasetPath outputs/0101_automation/0101.dataset.json `
+  -TestPackPath outputs/0101_automation/approved-test-pack.json `
   -ReportDir outputs/0101_automation/binding-plan
 ```
 
@@ -61,7 +61,7 @@ pwsh -ExecutionPolicy Bypass -File scripts/plan-scenario-bindings.ps1 `
 
 ```powershell
 pwsh -ExecutionPolicy Bypass -File scripts/run-target-rule-suite-recorded.ps1 `
-  -DatasetPath outputs/0101_automation/0101.dataset.json `
+  -TestPackPath outputs/0101_automation/approved-test-pack.json `
   -ScenarioPlanPath outputs/0101_automation/compiled-plan.json `
   -PhysicalPlanPath outputs/0101_automation/binding-plan/physical-plan.json `
   -AllowPartialScenarioPlan `
@@ -75,6 +75,7 @@ pwsh -ExecutionPolicy Bypass -File scripts/run-target-rule-suite-recorded.ps1 `
 
 ```powershell
 pwsh -ExecutionPolicy Bypass -File scripts/run-0101-live-validation-v2.ps1 `
+  -TestPackPath outputs/0101_automation/approved-test-pack.json `
   -SourceTestCaseIdsCsv "0101-CMD-0901,0101-CTL-0101" `
   -MaxCases 2
 ```

@@ -864,7 +864,7 @@ writeGuideSheet(installationSheet, `${targetDisplayName} 설치 파일 기준 �
 const columnGuideRows = [
   ["요약", "A4:B11", "실행 ID", "한 번의 테스트 묶음을 식별하는 고유 ID", "동일 실행의 모든 케이스가 같은 값을 사용", "summary.runId"],
   ["요약", "A4:B11", "데이터셋", "사용한 룰 테스트 데이터셋 ID", "입력 파일과 실행 결과의 추적 키", "summary.datasetId"],
-  ["요약", "A4:B11", "종합 상태", "전체 케이스를 집계한 최종 상태", "FAIL/ERROR 우선, 그다음 PENDING, 모두 정상일 때 PASS", "summary.status"],
+  ["요약", "A4:B11", "종합 상태", "Core ResultEvaluator가 전체 TestResult를 집계한 최종 상태", "리포터는 overallResult.status를 재판정 없이 표시", "summary.status / test-results.json"],
   ["요약", "A4:B11", "실행 구분", "계획 전용 또는 실제 HTS 실행 여부", "실제 조작은 실제 HTS로 표시", "summary.executionMode / dryRun"],
   ["요약", "A4:B11", "입력 방식", "화면 기본값 사용 또는 데이터셋 명시 입력 방식", "Prefilled/Explicit를 한국어로 표시", "summary.inputMode"],
   ["요약", "A4:B11", "계획 방식", "LLM 없이 결정론적 룰로 계획했음을 표시", "현재 값: 결정론적 규칙", "summary.planner"],
@@ -1108,7 +1108,7 @@ const pipelineRows = [
   [17, "동적 컨트롤 재발견", "탭·토글 변경 후 HWND 트리 + MAP 영향 컨트롤", "새로 나타난 하위 항목을 수집하고 이전에 미결합이던 MAP 컨트롤도 런타임 상태로 승격해 선택지를 새 계획에 추가", "rediscoverMapControls / 추가 컨트롤계획", "MAP 조회 경로를 끝내 실행하지 못하면 MAP_QUERY_NOT_EXECUTED"],
   [18, "최종 조회", "조회 버튼/대체 트리거", "모든 가능한 값 조작 뒤 반드시 최종 조회 수행", "조회 단계 결과", "미실행이면 완료로 간주하지 않음"],
   [19, "기대 결과 오라클", "팝업·신규 화면 문구·신규 로그·응답 상태 + 입력값 expectedOutcome", "시스템 실패·기대 검증·자료 없음·경고·미지정 이벤트를 분류하고 입력 계약과 대조", "oracleEvents / productDefectDetected", "기대 검증은 PASS, 기대 위반·시스템 실패는 FAIL, 미지정은 PENDING"],
-  [20, "최종 상태 결정", "외부 중단·자동화 계약·제품 결함·판정 보류", "ERROR를 우선하고 제품 동작 불일치는 FAIL, 판정 보류는 PENDING, 기대 반응만 있으면 PASS", "case status / automationContractFailure / externalInterruption", "자동화 실패를 제품 결함으로 집계하지 않음"],
+  [20, "최종 상태 결정", "완성된 TestResult 집합", "Core ResultEvaluator의 overallResult를 재판정 없이 사용", "testResult / test-results.json", "자동화 실패를 제품 결함으로 집계하지 않음"],
   [21, "오류 스크린샷", "오류 시점 전체 HTS 창", "오류 문구와 화면 상태를 이미지로 저장", "screenshots/*.png", "이미지 경로를 결과 JSON과 엑셀에 연결"],
   [22, "케이스 종료·순차 전환", "현재 업무 화면·연계 화면·팝업", "현재 대상과 연계 창을 닫고 번호 창 0개를 확인한 뒤에만 다음 화면을 엶", "close/verifySequentialClose 단계", "남은 창이 있으면 다음 화면 열기 차단 및 PENDING"],
   [23, "민감정보 정리", "계좌번호·비밀번호", "계좌는 마스킹/지문 처리, 비밀번호는 비밀 공급자 키만 기록", "보호된 결과", "평문 비밀번호 저장 금지"],

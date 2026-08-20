@@ -7,7 +7,7 @@
 | 구분 | 파일 | 독립 실행 | 역할 |
 |---|---|---:|---|
 | 오케스트레이터 | `run-auto-scenario-pipeline.ps1` | 예 | 전체 파이프라인 순서·중단 조건 관리 |
-| 핵심 실행기 | `run-target-rule-suite.ps1` | 예 | DryRun, PlanOnly, 실제 화면 조작 |
+| 핵심 실행기 | `run-target-rule-suite.ps1` | 예 | Approved TestPack 기반 DryRun, PlanOnly, 실제 화면 조작 |
 | UIA3 브리지 | `src/HtsQa.FlaUi` | 예(일반적으로 자식 실행) | FlaUI UIA3 요소 탐색·패턴 조작·검증 |
 | 녹화 래퍼 | `run-target-rule-suite-recorded.ps1` | 예 | 녹화기와 핵심 실행기를 같은 시간축으로 구동 |
 | 바인딩 계획 | `plan-scenario-bindings.ps1` | 예 | PlanOnly 관찰과 물리 계획 생성 |
@@ -27,6 +27,7 @@
 - `Get-RulePipelineManifest`: manifest와 필수 파일 존재 검증
 - `Get-RulePipelineEntryPoint`: `targetRunner` 같은 논리 이름을 절대 경로로 변환
 - `Get-RuleTargetContext`: 데이터셋의 대상 창·설치·화면 범위를 단일 객체로 정규화
+- `Get-RuleTestPackContext`: 승인 TestPack의 내장 datasetSnapshot을 Runner 대상 컨텍스트로 정규화
 
 각 실행 파일이 서로의 경로를 직접 반복해서 적지 않으므로 파일명이나 연결이 바뀌면 manifest 한 곳을 수정할 수 있다.
 
@@ -41,7 +42,8 @@ run-auto-scenario-pipeline.ps1
   |-- config/pipeline.manifest.json
   |-- HtsQa.Cli extract-map-models
   |     `-- Core/Maps/HtsMap.cs + Core/Installation/HtsInstallation.cs
-  |-- run-target-rule-suite.ps1 -PlanOnly
+  |-- HtsQa.Cli validate-test-pack
+  |-- run-target-rule-suite.ps1 -TestPackPath ... -PlanOnly
   |     |-- modules/rule-control-exploration.ps1
   |     |-- HtsQa.FlaUi --stdio
   |     |     `-- FlaUI.Core + FlaUI.UIA3
@@ -65,6 +67,7 @@ run-auto-scenario-pipeline.ps1
 
 | 생산 단계 | 산출물 | 소비 단계 |
 |---|---|---|
+| TestPack 컴파일·승인 | `test-pack.json`, `contentHash`, approval 정보 | PlanOnly·바인딩·실제 실행기 |
 | MAP 추출 | `map-catalog.json` | 시나리오 생성·오라클·바인딩 |
 | PlanOnly | `control-plan.json`, `summary.json` | 생성기·동적 바인더 |
 | 시나리오 생성 | `generated-rule-scenarios.json` | 검증·승인 |

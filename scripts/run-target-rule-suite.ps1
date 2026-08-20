@@ -1,10 +1,10 @@
 ﻿<#
-.SYNOPSIS 데이터셋에 등록된 임의의 HTS 화면군을 순차적으로 열고 승인된 룰/시나리오 동작을 실행한다.
+.SYNOPSIS 승인 TestPack에 고정된 HTS 화면군과 케이스를 순차적으로 열고 승인된 룰/시나리오 동작을 실행한다.
 .DESCRIPTION 모든 입력을 HTS 메인창과 현재 콘텐츠 경계 안으로 제한하고 팝업·로그·응답을 판정해 JSON 증적을 만든다.
 #>
 param(
     [Parameter(Mandatory = $true)]
-    [string]$DatasetPath,
+    [string]$TestPackPath,
     [string]$ReportDir = "",
     [string]$ScreensCsv = "",
     [string]$CaseIdsCsv = "",
@@ -30,13 +30,18 @@ $ErrorActionPreference = "Stop"
 $root = Split-Path -Parent $PSScriptRoot
 . (Join-Path $PSScriptRoot "modules\pipeline-common.ps1")
 . (Join-Path $PSScriptRoot "modules\report-sanitization.ps1")
+. (Join-Path $PSScriptRoot "modules\result-evaluator.ps1")
 
 # 공통 manifest와 대상 컨텍스트를 한 번만 읽고 이하 모든 단계가 같은 파일·창·화면 범위를 사용하게 한다.
 $pipelineManifest = Get-RulePipelineManifest $root
+$cliProject = Resolve-RulePath $root ([string]$pipelineManifest.cliProject)
 $reportExporter = Get-RulePipelineEntryPoint $pipelineManifest $root 'reportExporter'
 $tcReportExporter = Get-RulePipelineEntryPoint $pipelineManifest $root 'tcReportExporter'
-$targetContext = Get-RuleTargetContext $root $DatasetPath $ScreensCsv
-$datasetFullPath = $targetContext.DatasetPath
+$resolvedTestPackPath = Resolve-RulePath $root $TestPackPath
+& dotnet run --project $cliProject -c Release --no-build -- validate-test-pack --file $resolvedTestPackPath | Out-Null
+if ($LASTEXITCODE -ne 0) { throw 'TestPack 무결성 또는 승인 검증에 실패했습니다. validate-test-pack 결과를 확인하세요.' }
+$targetContext = Get-RuleTestPackContext $root $resolvedTestPackPath $ScreensCsv
+$testPack = $targetContext.TestPack
 $dataset = $targetContext.Dataset
 $script:initiallyActiveMapScreenCodes = @($dataset.targetProfile.map.initiallyActiveMapScreenCodes | ForEach-Object { ([string]$_).Trim().ToUpperInvariant() } | Where-Object { $_ } | Select-Object -Unique)
 $script:targetWindowClassName = $targetContext.WindowClassName
@@ -151,9 +156,9 @@ if (Test-Path -LiteralPath $script:executionTracePath) { Remove-Item -LiteralPat
 $script:inputBoundaryAuditPath = Join-Path $ReportDir "input-boundary-audit.ndjson"
 if (Test-Path -LiteralPath $script:inputBoundaryAuditPath) { Remove-Item -LiteralPath $script:inputBoundaryAuditPath -Force }
 
-$cliProject = Join-Path $root "src\HtsQa.Cli\HtsQa.Cli.csproj"
-& dotnet run --project $cliProject -c Release --no-build -- validate-rule-dataset --file $datasetFullPath | Out-Null
-if ($LASTEXITCODE -ne 0) { throw "룰 데이터셋 검증에 실패했습니다. validate-rule-dataset 결과를 확인하세요." }
+$resultEvaluationTestPackPath = $resolvedTestPackPath
+$resultEvaluationWorkingDirectory = Join-Path $ReportDir 'result-evaluation'
+$script:resultEvaluationSequence = 0
 
 $mapCatalog = $null
 $mapInitializationIssue = ""
@@ -181,14 +186,15 @@ if ($mapConfig -and [bool]$mapConfig.enabled) {
 }
 
 if ($DryRun) {
-    & dotnet run --project $cliProject -c Release --no-build -- run-rule-dataset --file $datasetFullPath --dry-run --report-dir $ReportDir | Out-Null
+    & dotnet run --project $cliProject -c Release --no-build -- run-test-pack --file $resolvedTestPackPath --dry-run --report-dir $ReportDir | Out-Null
     if ($LASTEXITCODE -ne 0) { throw "룰 드라이런에 실패했습니다." }
     $drySummaryPath=Join-Path $ReportDir "summary.json"
     if(Test-Path -LiteralPath $drySummaryPath){
         $drySummary=Get-Content -LiteralPath $drySummaryPath -Raw -Encoding UTF8 | ConvertFrom-Json
         $drySummary | Add-Member -NotePropertyName targetProfileId -NotePropertyValue $targetContext.ProfileId -Force
         $drySummary | Add-Member -NotePropertyName targetDisplayName -NotePropertyValue $targetContext.DisplayName -Force
-        $drySummary | Add-Member -NotePropertyName datasetPath -NotePropertyValue $datasetFullPath -Force
+        $drySummary | Add-Member -NotePropertyName datasetPath -NotePropertyValue ([string]$testPack.datasetSource) -Force
+        $drySummary | Add-Member -NotePropertyName testPackPath -NotePropertyValue $resolvedTestPackPath -Force
         $mapDefinedCount=if($mapCatalog){($mapCatalog.screens|Measure-Object actionableControlCount -Sum).Sum}else{0}
         foreach($pair in @{
             automationEngine='FlaUI.UIA3';automationEngineVersion='5.0.0';automationExecution='드라이런이므로 UIA3 조작 미실행'
@@ -1397,14 +1403,30 @@ function Get-RuleExpectedOutcome($Option, $FallbackPatterns = @()) {
     }
 }
 
-# 관찰 문구나 코드가 현재 값에 지정된 기대 신호 중 하나와 일치하는지 검사한다.
-function Test-ExpectedSignal([string]$Text, [string]$Code, $ExpectedOutcome) {
-    if(-not $ExpectedOutcome){return $false}
-    if($Code -and @($ExpectedOutcome.errorCodes) -contains $Code){return $true}
-    foreach($pattern in @($ExpectedOutcome.messagePatterns)){
-        try { if($Text -match [string]$pattern){return $true} } catch { continue }
-    }
-    $false
+# 컨트롤 실행 사실을 원시 Observation으로 넘기고 현재 케이스의 Core 평가 입력에 함께 보존한다.
+function Invoke-HtsRawObservationEvaluation(
+    [string]$ObservationKind,
+    [string]$Text,
+    [string]$SourceCode,
+    $ExpectedOutcome,
+    [bool]$Executed = $true,
+    [bool]$EvidencePresent = $true,
+    [string]$Prefix = 'control') {
+    $script:resultEvaluationSequence++
+    $evaluation = Invoke-RuleSignalEvaluation `
+        -CliProject $cliProject `
+        -TestPackPath $resultEvaluationTestPackPath `
+        -WorkingDirectory $resultEvaluationWorkingDirectory `
+        -CaseId ("{0}-{1:D6}" -f $Prefix, $script:resultEvaluationSequence) `
+        -EventType $ObservationKind `
+        -Text $Text `
+        -SourceCode $SourceCode `
+        -Source 'PowerShell raw observation' `
+        -Executed $Executed `
+        -EvidencePresent $EvidencePresent `
+        -ExpectedOutcome $ExpectedOutcome
+    if ($script:currentResultEvaluationCases) { $script:currentResultEvaluationCases.Add($evaluation.evaluationCase) }
+    $evaluation
 }
 
 # 입력 검증으로 허용할 수 없는 시스템·통신·인증·프로그램 실패 문구를 우선 감지한다.
@@ -1479,21 +1501,20 @@ function Submit-HtsTransactionalDialog($Dialog, $PlanItem) {
     }
 }
 
-# 하나의 팝업·로그 신호를 기대 반응, 제품 결함 또는 검토 대상으로 판정한다.
-function Get-HtsSignalJudgment([string]$Text, $MapOracle, $ExpectedOutcome, [regex]$ErrorRegex, [string]$FallbackClassification = '') {
+# 하나의 팝업·로그 신호를 판정하지 않고 원시 Observation 계약으로 분류한다.
+function Get-HtsSignalObservation([string]$Text, $MapOracle, $ExpectedOutcome, [regex]$ErrorRegex, [string]$FallbackClassification = '') {
     $installedMatch = Get-InstallationErrorCodeMatch $Text
     $mapMatch = Get-MapOracleMessageMatch $Text $MapOracle
     $source = '공통 규칙'
     $code = ''
     $eventType = 'Info'
-    $productFailure = $false
 
     if($installedMatch){
         $source='HTS 오류코드';$code=[string]$installedMatch.code
         switch([string]$installedMatch.classification){
-            'Authentication' {$eventType='ProductFailure';$productFailure=$true}
-            'TransientFailure' {$eventType='ProductFailure';$productFailure=$true}
-            'SystemFailure' {$eventType='ProductFailure';$productFailure=$true}
+            'Authentication' {$eventType='ProductFailure'}
+            'TransientFailure' {$eventType='ProductFailure'}
+            'SystemFailure' {$eventType='ProductFailure'}
             'NoData' {$eventType='NoData'}
             'Normal' {$eventType='Success'}
             default {$eventType='InputValidation'}
@@ -1501,89 +1522,77 @@ function Get-HtsSignalJudgment([string]$Text, $MapOracle, $ExpectedOutcome, [reg
     }elseif($mapMatch){
         $source='MAP';$code=[string]$mapMatch.ruleId
         switch([string]$mapMatch.classification){
-            'Error' {$eventType='ProductFailure';$productFailure=$true}
+            'Error' {$eventType='ProductFailure'}
             'InputValidation' {$eventType='InputValidation'}
             'Warning' {$eventType='Warning'}
             default {$eventType='Info'}
         }
     }elseif(Test-SystemFailureSignal $Text){
-        $eventType='ProductFailure';$productFailure=$true
+        $eventType='ProductFailure'
     }elseif(Test-InputValidationSignal $Text){
-        $eventType='InputValidation';$productFailure=$false
+        $eventType='InputValidation'
     }elseif($FallbackClassification -eq '경고'){
         $eventType='Warning'
     }elseif($FallbackClassification -eq '정보'){
         $eventType='Info'
     }elseif(($ErrorRegex -and $Text -match $ErrorRegex) -or $FallbackClassification -eq '오류'){
-        $eventType='GenericError';$productFailure=$true
+        $eventType='GenericError'
     }
 
-    $expectedMatch=Test-ExpectedSignal $Text $code $ExpectedOutcome
     $type=if($ExpectedOutcome){[string]$ExpectedOutcome.type}else{'Unspecified'}
-    $hasExpectedMatchers=@($ExpectedOutcome.messagePatterns).Count -gt 0 -or @($ExpectedOutcome.errorCodes).Count -gt 0
-    $disposition='Observed'
-    $requiresReview=$false
-    $expectationSatisfied=$false
-
-    if($type -eq 'FailureRequired' -and $expectedMatch -and $eventType -eq 'ProductFailure'){
-        $productFailure=$false;$disposition='Expected';$expectationSatisfied=$true
-    }elseif($type -eq 'ValidationAllowed' -and $eventType -eq 'InputValidation'){
-        # 허용 계약은 MAP·공통 규칙으로 확인된 모든 입력 검증을 정상 이벤트로 받아들인다.
-        $productFailure=$false;$disposition='Expected';$expectationSatisfied=$true
-    }elseif($type -eq 'ValidationRequired' -and $eventType -in @('InputValidation','GenericError') -and (-not $hasExpectedMatchers -or $expectedMatch)){
-        $eventType='InputValidation';$productFailure=$false;$disposition='Expected';$expectationSatisfied=$true
-    }elseif($type -eq 'NoDataAllowed' -and $eventType -eq 'NoData' -and (-not $hasExpectedMatchers -or $expectedMatch)){
-        $productFailure=$false;$disposition='Expected';$expectationSatisfied=$true
-    }elseif($type -eq 'WarningAllowed' -and $eventType -eq 'Warning' -and (-not $hasExpectedMatchers -or $expectedMatch)){
-        $productFailure=$false;$disposition='Expected';$expectationSatisfied=$true
-    }elseif($type -eq 'ObservationOnly' -and -not $productFailure){
-        $disposition='Expected';$expectationSatisfied=$expectedMatch
-    }elseif($source -eq 'MAP' -and $eventType -eq 'InputValidation'){
-        # MAP이 입력 검증으로 분류한 문구는 시스템 결함이 아니며, 값별 계약이 없으면 검토 대상으로 보수적으로 남긴다.
-        $productFailure=$false
-        if($expectedMatch){$disposition='Expected';$expectationSatisfied=$true}else{$requiresReview=$true;$disposition='Review'}
-    }elseif($type -eq 'Success' -and $eventType -notin @('Success','Info')){
-        $productFailure=$true;$disposition='Unexpected'
-    }elseif($type -eq 'Unspecified' -and $eventType -in @('GenericError','InputValidation','NoData','Warning')){
-        $productFailure=$false;$requiresReview=$true;$disposition='Review'
-    }elseif($type -ne 'Unspecified' -and $eventType -in @('GenericError','InputValidation','NoData','Warning')){
-        $productFailure=$true;$disposition='Unexpected'
-    }elseif($productFailure){
-        $disposition='Defect'
-    }elseif($expectedMatch){
-        $disposition='Expected';$expectationSatisfied=$true
-    }
+    $script:resultEvaluationSequence++
+    $evaluationCase = New-RuleSignalEvaluationCase `
+        -CaseId ("signal-{0:D6}" -f $script:resultEvaluationSequence) `
+        -EventType $eventType `
+        -Text $Text `
+        -SourceCode $code `
+        -Source $source `
+        -ExpectedOutcome $ExpectedOutcome
 
     [pscustomobject]@{
-        eventType=$eventType;disposition=$disposition;isProductDefect=$productFailure;requiresReview=$requiresReview
-        expectationSatisfied=$expectationSatisfied;expectedOutcomeType=$type
+        eventType=$eventType;disposition='Observed';expectedOutcomeType=$type
         expectedOutcomeSource=$(if($ExpectedOutcome){[string]$ExpectedOutcome.source}else{'Unspecified'})
         expectedOutcomeConfidence=$(if($ExpectedOutcome){[string]$ExpectedOutcome.confidence}else{'Unspecified'})
         expectedOutcomeEvidence=@($(if($ExpectedOutcome){$ExpectedOutcome.evidence}else{@()}))
         expectationId=$(if($ExpectedOutcome){[string]$ExpectedOutcome.expectationId}else{''})
-        source=$source;code=$code;text=$Text
+        source=$source;code=$code;text=$Text;evaluationCase=$evaluationCase
     }
 }
 
-# 대화상자의 제목·본문·버튼을 합쳐 공통 신호 판정기로 전달한다.
-function Get-HtsDialogJudgment($Dialog, $MapOracle, $ExpectedOutcome, [regex]$ErrorRegex) {
-    Get-HtsSignalJudgment ([string]$Dialog.text) $MapOracle $ExpectedOutcome $ErrorRegex ([string]$Dialog.classification)
+# 대화상자의 제목·본문·버튼을 합쳐 공통 Observation 분류기로 전달한다.
+function Get-HtsDialogObservation($Dialog, $MapOracle, $ExpectedOutcome, [regex]$ErrorRegex) {
+    Get-HtsSignalObservation ([string]$Dialog.text) $MapOracle $ExpectedOutcome $ErrorRegex ([string]$Dialog.classification)
 }
 
-# 판정 결과를 컨트롤·선택지·단계와 연결한 감사 이벤트로 누적한다.
-function Add-OracleEvent($List, $Judgment, [string]$Stage, [string]$ControlId = '', [string]$OptionId = '') {
-    if(-not $Judgment -or [string]$Judgment.eventType -in @('Success','Info')){return}
-    $key="$Stage|$ControlId|$OptionId|$([string]$Judgment.eventType)|$([string]$Judgment.text)"
+# 원시 Observation을 감사 이벤트와 기대 계약별 평가 그룹에 함께 누적한다.
+function Add-OracleObservation($List, $Observation, [string]$Stage, [string]$ControlId = '', [string]$OptionId = '') {
+    if(-not $Observation){return}
+    $key="$Stage|$ControlId|$OptionId|$([string]$Observation.eventType)|$([string]$Observation.text)"
     if(@($List | Where-Object eventKey -eq $key).Count -gt 0){return}
     $List.Add([pscustomobject]@{
-        eventKey=$key;stage=$Stage;controlId=$ControlId;optionId=$OptionId;eventType=[string]$Judgment.eventType
-        disposition=[string]$Judgment.disposition;expectedOutcomeType=[string]$Judgment.expectedOutcomeType
-        expectedOutcomeSource=[string]$Judgment.expectedOutcomeSource;expectedOutcomeConfidence=[string]$Judgment.expectedOutcomeConfidence
-        expectedOutcomeEvidence=@($Judgment.expectedOutcomeEvidence)
-        expectationId=[string]$Judgment.expectationId;source=[string]$Judgment.source;sourceCode=[string]$Judgment.code
-        message=[string]$Judgment.text;productDefect=[bool]$Judgment.isProductDefect;requiresReview=[bool]$Judgment.requiresReview
+        eventKey=$key;stage=$Stage;controlId=$ControlId;optionId=$OptionId;eventType=[string]$Observation.eventType
+        disposition='Observed';expectedOutcomeType=[string]$Observation.expectedOutcomeType
+        expectedOutcomeSource=[string]$Observation.expectedOutcomeSource;expectedOutcomeConfidence=[string]$Observation.expectedOutcomeConfidence
+        expectedOutcomeEvidence=@($Observation.expectedOutcomeEvidence)
+        expectationId=[string]$Observation.expectationId;source=[string]$Observation.source;sourceCode=[string]$Observation.code
+        message=[string]$Observation.text
         detectedAt=(Get-Date).ToString('o')
     })
+    if ($Observation.evaluationCase) {
+        $requiredRows=if($script:currentRequiredExpectations){@($script:currentRequiredExpectations.ToArray())}else{@()}
+        foreach($required in $requiredRows){
+            $sameControl = -not $ControlId -or [string]$required.controlId -eq $ControlId
+            $sameOption = -not $OptionId -or [string]$required.optionId -eq $OptionId
+            if($sameControl -and $sameOption -and $required.observations){$required.observations.Add(@($Observation.evaluationCase.observations)[0])}
+        }
+        if([string]$Observation.expectedOutcomeType -notin @('ValidationRequired','FailureRequired')){
+            $groupKey="$ControlId|$OptionId|$([string]$Observation.expectedOutcomeType)|$([string]$Observation.expectationId)"
+            if(-not $script:currentSignalEvaluationGroups.ContainsKey($groupKey)){
+                $script:currentSignalEvaluationGroups[$groupKey]=[pscustomobject]@{stage=$Stage;controlId=$ControlId;optionId=$OptionId;observation=$Observation;expectedResult=$Observation.evaluationCase.expectedResult;observations=(New-Object Collections.Generic.List[object])}
+            }
+            $script:currentSignalEvaluationGroups[$groupKey].observations.Add(@($Observation.evaluationCase.observations)[0])
+        }
+    }
 }
 
 # 공통 오류 패턴과 현재 화면 MAP 메시지를 결합한 관찰용 정규식을 만든다.
@@ -2015,26 +2024,8 @@ function Get-ExplicitWindowErrors($Main, $BeforeErrorTexts, [regex]$ErrorRegex, 
     @($rows | Sort-Object -Unique)
 }
 
-# 케이스 구성: 데이터셋 또는 컴파일 계획을 실행기 내부 객체로 바꾸고 조합 상한을 적용한다.
-# 화면에 적용되는 변수값의 카테시안 조합과 값별 기대 계약을 함께 생성한다.
-function Get-VariableCombinations($Dimensions, [int]$Index = 0, [hashtable]$Current = $null, [hashtable]$Expected = $null) {
-    if ($null -eq $Current) { $Current = @{} }
-    if ($null -eq $Expected) { $Expected = @{} }
-    if ($Index -ge @($Dimensions).Count) { return ,([pscustomobject]@{values=[hashtable]$Current.Clone();expectedOutcomes=[hashtable]$Expected.Clone()}) }
-    $dimension = @($Dimensions)[$Index]
-    $rows = @()
-    foreach ($value in @($dimension.values)) {
-        $next = [hashtable]$Current.Clone()
-        $nextExpected = [hashtable]$Expected.Clone()
-        $next[[string]$dimension.name] = [string]$value.value
-        $nextExpected[[string]$dimension.name] = $value.expectedOutcome
-        $rows += @(Get-VariableCombinations $Dimensions ($Index + 1) $next $nextExpected)
-    }
-    $rows
-}
-
-# 논리 시나리오 사례 또는 데이터셋 화면×컨텍스트×변수 조합을 실행 사례로 변환한다.
-function Get-RuleCases {
+# 논리 시나리오 사례 또는 승인 TestPack의 고정 케이스를 실행기 내부 객체로 변환한다.
+function Get-ExecutionCasesFromApprovedPlans {
     $selected = @($ScreensCsv -split ',' | ForEach-Object { $_.Trim() } | Where-Object { $_ })
     if ($scenarioMode) {
         $plannedScreens = @{}
@@ -2063,27 +2054,29 @@ function Get-RuleCases {
         }
         return
     }
-    foreach ($screen in @($dataset.screens | Where-Object { $_.enabled -ne $false })) {
-        if ($selected.Count -gt 0 -and $selected -notcontains [string]$screen.screenNumber) { continue }
-        $dimensions = @($dataset.variables | Where-Object { $_.appliesToScreens -contains "*" -or $_.appliesToScreens -contains [string]$screen.screenNumber })
-        $combinations = @(Get-VariableCombinations $dimensions)
-        foreach ($account in @($dataset.accounts | Where-Object { $_.enabled -ne $false })) {
-            foreach ($combination in $combinations) {
-                $variables=[hashtable]$combination.values
-                if ($screen.fixedConditions) {
-                    foreach ($fixed in @($screen.fixedConditions.PSObject.Properties)) {
-                        if ($fixed.Name) { $variables[[string]$fixed.Name] = [string]$fixed.Value }
-                    }
-                }
-                $pairs = @($variables.Keys | Sort-Object | ForEach-Object { "$_=$($variables[$_])" })
-                $identity = "$($dataset.datasetId)|$($screen.screenNumber)|$($account.id)|$($pairs -join '|')"
-                $hasher = [Security.Cryptography.SHA256]::Create()
-                try { $sha = $hasher.ComputeHash([Text.Encoding]::UTF8.GetBytes($identity)) }
-                finally { $hasher.Dispose() }
-                $hex = -join ($sha | ForEach-Object { $_.ToString("x2") })
-                $caseId = "RC-" + $hex.Substring(0,16)
-                [pscustomobject]@{ caseId=$caseId; screen=$screen; account=$account; variables=$variables;variableExpectedOutcomes=[hashtable]$combination.expectedOutcomes }
-            }
+    foreach ($compiledCase in @($testPack.cases)) {
+        if ($selected.Count -gt 0 -and $selected -notcontains [string]$compiledCase.screenNumber) { continue }
+        $screen = @($dataset.screens | Where-Object { [string]$_.screenNumber -eq [string]$compiledCase.screenNumber } | Select-Object -First 1)
+        if ($screen.Count -ne 1) { throw "TestPack 케이스의 화면이 datasetSnapshot에 없습니다: $([string]$compiledCase.caseId)" }
+        $variables = @{}
+        foreach ($property in @($compiledCase.variables.PSObject.Properties)) { $variables[[string]$property.Name] = [string]$property.Value }
+        $expectedOutcomes = @{}
+        foreach ($property in @($compiledCase.variableExpectedOutcomes.PSObject.Properties)) { $expectedOutcomes[[string]$property.Name] = $property.Value }
+        $account = [pscustomobject]@{
+            id = [string]$compiledCase.accountId
+            accountNumber = [string]$compiledCase.accountNumber
+            owner = [string]$compiledCase.accountOwner
+            inputMode = [string]$compiledCase.inputMode
+            passwordSecret = $compiledCase.passwordSecret
+            enabled = $true
+        }
+        [pscustomobject]@{
+            caseId = [string]$compiledCase.caseId
+            screen = $screen[0]
+            account = $account
+            variables = $variables
+            variableExpectedOutcomes = $expectedOutcomes
+            testPackCase = $compiledCase
         }
     }
 }
@@ -2123,8 +2116,8 @@ function Add-Action($List, [string]$Action, [string]$Status, [string]$Target = "
 }
 
 # 실행 루프: 각 화면을 열고 같은 화면의 사례를 연속 처리한 뒤 완전히 닫고 다음 화면으로 이동한다.
-$cases = @(Get-RuleCases)
-if ($cases.Count -gt $MaxCases -or $cases.Count -gt [int]$dataset.maxExpandedCases) { throw "확장된 케이스 수 $($cases.Count)가 설정된 제한을 초과했습니다." }
+$cases = @(Get-ExecutionCasesFromApprovedPlans)
+if ($cases.Count -gt $MaxCases -or $cases.Count -gt [int]$testPack.maxCases) { throw "승인 TestPack 케이스 수 $($cases.Count)가 실행 제한을 초과했습니다." }
 if ($scenarioMode -and -not $PlanOnly -and $cases.Count -eq 0) { throw "승인과 고신뢰 바인딩을 모두 통과한 실행 가능 시나리오 케이스가 없습니다." }
 $configuredErrorPatterns = @($dataset.executionPolicy.errorPatterns | ForEach-Object { ([string]$_).Trim() } | Where-Object { $_ })
 $errorPattern = if ($configuredErrorPatterns.Count -gt 0) { $configuredErrorPatterns -join '|' } else { '(?!)' }
@@ -2143,8 +2136,17 @@ try {
 } catch {
     $_.Exception.ToString() | Set-Content -LiteralPath (Join-Path $ReportDir "환경사전점검오류.txt") -Encoding UTF8
     $precheckMessage = Protect-Text $_.Exception.Message
+    $precheckExpectation=[pscustomobject]@{type='Success';expectationId='environment-precheck';messagePatterns=@();errorCodes=@();evidence=@('HTS/FlaUI 환경 사전점검')}
+    $precheckEvaluationCases=@($cases | ForEach-Object {
+        New-RuleSignalEvaluationCase -CaseId ([string]$_.caseId) -EventType 'InfrastructureError' -Text $precheckMessage -SourceCode 'ENVIRONMENT_HTS_NOT_ACCESSIBLE' -Source 'environment precheck' -Executed $false -EvidencePresent $true -ExpectedOutcome $precheckExpectation
+    })
+    $precheckEvaluationDocument=[pscustomobject]@{schemaVersion='1.0';testPackId=[string]$testPack.testPackId;aggregateId="$runId-precheck";cases=$precheckEvaluationCases}
+    $precheckEvaluationOutput=Invoke-RuleResultEvaluation -CliProject $cliProject -TestPackPath $resultEvaluationTestPackPath -EvaluationDocument $precheckEvaluationDocument -WorkingDirectory $resultEvaluationWorkingDirectory -InvocationId 'environment-precheck'
+    $precheckTestResults=@{}
+    foreach($testResult in @($precheckEvaluationOutput.results)){$precheckTestResults[[string]$testResult.caseId]=$testResult}
     $precheckResults = @($cases | ForEach-Object {
         $caseRow = $_
+        $caseTestResult=$precheckTestResults[[string]$caseRow.caseId]
         $safeVariables = [ordered]@{}
         foreach ($name in @($caseRow.variables.Keys | Sort-Object)) {
             $dimension = @($dataset.variables | Where-Object { $_.name -eq $name } | Select-Object -First 1)
@@ -2154,16 +2156,17 @@ try {
             runId=$runId; caseId=$caseRow.caseId; datasetId=[string]$dataset.datasetId
             screenNumber=[string]$caseRow.screen.screenNumber; screenName=[string]$caseRow.screen.screenName; inputMode=$(if ([string]$caseRow.account.inputMode -eq "Explicit") { "데이터셋 명시 입력" } else { "화면 기본값" })
             accountId=[string]$caseRow.account.id; accountMasked=(Get-MaskedAccount ([string]$caseRow.account.accountNumber)); accountFingerprint=(Get-AccountFingerprint ([string]$caseRow.account.accountNumber)); accountOwner=[string]$caseRow.account.owner
-            inputVariables=$safeVariables; status="PENDING"; errorDetected=$false; errorCode="ENVIRONMENT_HTS_NOT_ACCESSIBLE"
-            errorMessage=""; outputSummary="PENDING: $precheckMessage"; screenshotPath=""
+            inputVariables=$safeVariables; status=[string]$caseTestResult.status; errorDetected=$false;productDefectDetected=[bool]$caseTestResult.productDefectDetected;actualScenarioActionsExecuted=$false;testResult=$caseTestResult;errorCode=[string]$caseTestResult.code
+            errorMessage=""; outputSummary=[string]$caseTestResult.reason; screenshotPath=""
             actions=@([pscustomobject]@{action="environmentPrecheck";status="PENDING";target="hfrun";output=$precheckMessage;errorCode="ENVIRONMENT_HTS_NOT_ACCESSIBLE";elapsedMs=0})
             startedAt=(Get-Date).ToString("o"); endedAt=(Get-Date).ToString("o"); elapsedMs=0
         }
     })
     $precheckResults | ConvertTo-Json -Depth 12 | Set-Content -LiteralPath (Join-Path $ReportDir "case-results.json") -Encoding UTF8
+    $precheckEvaluationOutput | ConvertTo-Json -Depth 12 | Set-Content -LiteralPath (Join-Path $ReportDir 'test-results.json') -Encoding UTF8
     [pscustomobject]@{
-        runId=$runId; datasetId=[string]$dataset.datasetId; status="PENDING"; total=$precheckResults.Count
-        pass=0; fail=0; error=0; pending=$precheckResults.Count; dryRun=$false; explicitErrorsDetected=0
+        runId=$runId; testPackId=[string]$testPack.testPackId;testPackPath=$resolvedTestPackPath;datasetId=[string]$dataset.datasetId;datasetPath=[string]$testPack.datasetSource; status=[string]$precheckEvaluationOutput.overallResult.status; total=$precheckResults.Count
+        pass=[int]$precheckEvaluationOutput.summary.pass; fail=[int]$precheckEvaluationOutput.summary.fail; error=[int]$precheckEvaluationOutput.summary.error; pending=[int]$precheckEvaluationOutput.summary.pending; dryRun=$false; explicitErrorsDetected=0
         automationEngine='FlaUI.UIA3';automationEngineVersion='5.0.0';flaUiDiscoveryCalls=$script:flaUiDiscoveryCalls;flaUiActionAttempts=$script:flaUiActionAttempts
         flaUiActionSuccesses=$script:flaUiActionSuccesses;flaUiFallbackRequests=$script:flaUiFallbackRequests;flaUiFallbackReasons=@($script:flaUiFallbackReasons)
         environmentStatus="HTS_NOT_ACCESSIBLE"; finishedAt=(Get-Date).ToString("o"); executionMode=$(if($SubmitTransactionalDialogs){"승인된 테스트계좌 거래 제출"}else{"조회 전용"}); inputMode="화면 기본값 또는 데이터셋 명시 입력"; planner="결정론적 규칙"
@@ -2207,8 +2210,12 @@ for ($caseIndex = 0; $caseIndex -lt $cases.Count; $caseIndex++) {
     $controlTests = New-Object Collections.Generic.List[object]
     $popupObservations = New-Object Collections.Generic.List[object]
     $oracleEvents = New-Object Collections.Generic.List[object]
+    $script:currentResultEvaluationCases = New-Object Collections.Generic.List[object]
+    $script:currentSignalEvaluationGroups = @{}
+    $flaUiActionAttemptsBeforeCase = [int]$script:flaUiActionAttempts
     $executedExpectationPatterns = New-Object Collections.Generic.List[string]
     $requiredExpectations = New-Object Collections.Generic.List[object]
+    $script:currentRequiredExpectations = $requiredExpectations
     $queryRequiredExpectations = New-Object Collections.Generic.List[object]
     $claimedHwnds = @{}
     $tabOrderQueryControl = $null
@@ -2381,8 +2388,11 @@ for ($caseIndex = 0; $caseIndex -lt $cases.Count; $caseIndex++) {
                 $valueMatch = if ($dimension.valueMatch) { [string]$dimension.valueMatch } else { "Value" }
                 if ($control -and (Invoke-RuleDatasetVariable $control $kind ([string]$case.variables[$name]) $valueMatch ([int]$dataset.autoExploration.maxOptionsPerControl))) {
                     Add-Action $actions "setCondition" "PASS" $name "$kind 방식으로 데이터셋 조건값을 적용했습니다. 기대 계약: $([string]$resolvedVariableExpectation.type) / $([string]$resolvedVariableExpectation.source) / $([string]$resolvedVariableExpectation.confidence)."
+                    $variableRequirementRecord=$null
                     if([string]$resolvedVariableExpectation.type -in @('ValidationRequired','FailureRequired')){
-                        $requiredExpectations.Add([pscustomobject]@{controlId="dataset-variable:$name";optionId=[string]$resolvedVariableExpectation.expectationId;outcome=$resolvedVariableExpectation;satisfied=$false})
+                        $variableRequirementRecord=[pscustomobject]@{controlId="dataset-variable:$name";optionId=[string]$resolvedVariableExpectation.expectationId;outcome=$resolvedVariableExpectation;observations=(New-Object Collections.Generic.List[object])}
+                        $variableRequirementRecord.observations.Add([pscustomobject]@{observationId="dataset-variable:$name-completion";kind='Success';executed=$true;evidencePresent=$true;message='데이터셋 조건값 적용을 완료했습니다.';sourceCode='';source='dataset variable completion'})
+                        $requiredExpectations.Add($variableRequirementRecord)
                     }
                     if($resolvedVariableExpectation.queryShouldComplete -eq $true){
                         $queryRequiredExpectations.Add([pscustomobject]@{name=$name;outcome=$resolvedVariableExpectation})
@@ -2395,13 +2405,8 @@ for ($caseIndex = 0; $caseIndex -lt $cases.Count; $caseIndex++) {
                             throw "HTS_CONNECTION_LOST: 조건 입력 직후 연결 장애가 확인되어 사용자 판단 없이 실행을 중단했습니다. $([string]$variableConnectionDialogs[0].text)"
                         }
                         foreach($dialog in $variableDialogs){
-                            $judgment=Get-HtsDialogJudgment $dialog $mapOracle $resolvedVariableExpectation $caseErrorRegex
-                            Add-OracleEvent $oracleEvents $judgment 'dataset-variable' "dataset-variable:$name" ([string]$resolvedVariableExpectation.expectationId)
-                            foreach($required in @($requiredExpectations | Where-Object controlId -eq "dataset-variable:$name")){
-                                if($judgment.expectationSatisfied){$required.satisfied=$true}
-                            }
-                            if($judgment.isProductDefect){$errors.Add([string]$dialog.text)}
-                            elseif($judgment.requiresReview){$pendingReasons.Add("판정 기대값 미정: $([string]$dialog.text)")}
+                            $observation=Get-HtsDialogObservation $dialog $mapOracle $resolvedVariableExpectation $caseErrorRegex
+                            Add-OracleObservation $oracleEvents $observation 'dataset-variable' "dataset-variable:$name" ([string]$resolvedVariableExpectation.expectationId)
                         }
                         [void](Dismiss-HtsDialogs $main $secret)
                     }
@@ -2510,10 +2515,9 @@ for ($caseIndex = 0; $caseIndex -lt $cases.Count; $caseIndex++) {
                     $option = $planItem.option
                     $expectedOutcome=Get-RuleExpectedOutcome $option @($case.screen.expectedPopupPatterns)
                     foreach($pattern in @($expectedOutcome.messagePatterns)){if($pattern -and -not $executedExpectationPatterns.Contains([string]$pattern)){$executedExpectationPatterns.Add([string]$pattern)}}
-                    $expectationSatisfied=$false
                     $requiredExpectationRecord=$null
                     if([string]$expectedOutcome.type -in @('ValidationRequired','FailureRequired')){
-                        $requiredExpectationRecord=[pscustomobject]@{controlId=[string]$planItem.control.controlId;optionId=[string]$option.id;outcome=$expectedOutcome;satisfied=$false}
+                        $requiredExpectationRecord=[pscustomobject]@{controlId=[string]$planItem.control.controlId;optionId=[string]$option.id;outcome=$expectedOutcome;observations=(New-Object Collections.Generic.List[object])}
                         $requiredExpectations.Add($requiredExpectationRecord)
                     }
                     if($expectedOutcome.queryShouldComplete -eq $true){
@@ -2530,6 +2534,15 @@ for ($caseIndex = 0; $caseIndex -lt $cases.Count; $caseIndex++) {
                         }
                         $pendingCode = if ($PlanOnly) { "PLAN_ONLY" } else { [string]$planItem.errorCode }
                         $pendingOutput = if ($PlanOnly) { "계획 전용 실행이므로 조작하지 않았습니다." } else { [string]$planItem.control.pendingReason }
+                        $controlEvaluation = Invoke-HtsRawObservationEvaluation `
+                            $(if ($PlanOnly) { 'EvidenceMissing' } else { 'InfrastructureError' }) `
+                            $pendingOutput `
+                            $pendingCode `
+                            $expectedOutcome `
+                            $false `
+                            $false `
+                            'control-not-executed'
+                        $controlTestResult = $controlEvaluation.testResult
                         $controlTests.Add([pscustomobject]@{
                             scenarioId=$(if($scenarioMode){[string]$case.scenarioCase.scenarioId}else{''});scenarioTitle=$(if($scenarioMode){[string]$case.scenarioCase.scenarioTitle}else{''})
                             sourceTestCaseId=$(if($scenarioMode){[string]$case.scenarioCase.sourceTestCaseId}else{''});mapScreenCode=$(if($scenarioMode){[string]$planItem.mapScreenCode}else{''});stateContext=$(if($scenarioMode){[string]$planItem.stateContext}else{''});transactional=$(if($scenarioMode){[bool]$planItem.transactional}else{$false})
@@ -2538,8 +2551,8 @@ for ($caseIndex = 0; $caseIndex -lt $cases.Count; $caseIndex++) {
                             interactionStrategy=[string]$script:ruleCurrentInteractionStrategy;coordinateFocusUsed=$false;coordinateFocusVerified=$false
                             planItemId=[string]$planItem.planItemId; controlId=[string]$planItem.control.controlId; controlKind=[string]$planItem.control.controlKind
                             controlName=[string]$planItem.control.name; optionId=$(if ($option) {[string]$option.id} else {""}); inputValue=$(if ($option) {[string]$option.value} else {""})
-                            displayValue=$(if ($option) {[string]$option.displayValue} else {""}); status="PENDING"; queryTriggered=$false; errorDetected=$false
-                            expectedOutcomeType=[string]$expectedOutcome.type;expectationSatisfied=$false
+                            displayValue=$(if ($option) {[string]$option.displayValue} else {""}); status=[string]$controlTestResult.status; queryTriggered=$false; errorDetected=[bool]$controlTestResult.productDefectDetected
+                            expectedOutcomeType=[string]$expectedOutcome.type;expectationSatisfied=[bool]$controlTestResult.expectationSatisfied;testResult=$controlTestResult
                             expectedOutcomeSource=[string]$expectedOutcome.source;expectedOutcomeConfidence=[string]$expectedOutcome.confidence;expectedOutcomeEvidence=@($expectedOutcome.evidence)
                             automationEngine='미실행'
                             output=$pendingOutput; errorCode=$pendingCode; screenshotPath=""; elapsedMs=[int64]((Get-Date)-$planStarted).TotalMilliseconds
@@ -2657,15 +2670,11 @@ for ($caseIndex = 0; $caseIndex -lt $cases.Count; $caseIndex++) {
                                 if (-not [bool]$transactionSubmit.success) {
                                     $invoke.success = $false
                                     $invoke.errorCode = [string]$transactionSubmit.errorCode
-                                } else {
-                                    $expectationSatisfied = $true
                                 }
                             } else {
                                 foreach ($transactionDialog in $transactionDialogs) {
-                                    $transactionJudgment = Get-HtsDialogJudgment $transactionDialog $mapOracle $expectedOutcome $caseErrorRegex
-                                    Add-OracleEvent $oracleEvents $transactionJudgment 'transaction-confirmation' ([string]$planItem.control.controlId) ([string]$option.id)
-                                    if($transactionJudgment.isProductDefect){$errors.Add([string]$transactionDialog.text)}
-                                    elseif($transactionJudgment.requiresReview){$pendingReasons.Add("거래 제출 전 판정 필요: $([string]$transactionDialog.text)")}
+                                    $transactionObservation = Get-HtsDialogObservation $transactionDialog $mapOracle $expectedOutcome $caseErrorRegex
+                                    Add-OracleObservation $oracleEvents $transactionObservation 'transaction-confirmation' ([string]$planItem.control.controlId) ([string]$option.id)
                                 }
                                 $invoke.success = $false
                                 $invoke.errorCode = if ($eligibleTransactionDialogs.Count -gt 1) { 'TRANSACTION_CONFIRMATION_AMBIGUOUS' } else { 'TRANSACTION_CONFIRMATION_NOT_ELIGIBLE' }
@@ -2723,11 +2732,8 @@ for ($caseIndex = 0; $caseIndex -lt $cases.Count; $caseIndex++) {
                             throw "HTS_CONNECTION_LOST: 컨트롤 단계 직후 연결 장애가 확인되어 사용자 판단 없이 실행을 중단했습니다. $([string]$connectionDialogs[0].text)"
                         }
                         foreach ($dialog in $dialogsToRecord) {
-                            $judgment=Get-HtsDialogJudgment $dialog $mapOracle $expectedOutcome $caseErrorRegex
-                            Add-OracleEvent $oracleEvents $judgment 'control' ([string]$planItem.control.controlId) ([string]$option.id)
-                            if($judgment.expectationSatisfied){$expectationSatisfied=$true;if($requiredExpectationRecord){$requiredExpectationRecord.satisfied=$true}}
-                            if($judgment.isProductDefect){$errors.Add([string]$dialog.text)}
-                            elseif($judgment.requiresReview){$pendingReasons.Add("판정 기대값 미정: $([string]$dialog.text)")}
+                            $observation=Get-HtsDialogObservation $dialog $mapOracle $expectedOutcome $caseErrorRegex
+                            Add-OracleObservation $oracleEvents $observation 'control' ([string]$planItem.control.controlId) ([string]$option.id)
                         }
                         $nextScenarioAction = if ($scenarioMode -and $planIndex + 1 -lt $queue.Count) { [string]$queue[$planIndex + 1].scenarioAction } else { '' }
                         if ($nextScenarioAction -notin @('AssertPopup','Restore')) {
@@ -2799,11 +2805,8 @@ for ($caseIndex = 0; $caseIndex -lt $cases.Count; $caseIndex++) {
                                 throw "HTS_CONNECTION_LOST: 조회 직후 연결 장애가 확인되어 사용자 판단 없이 실행을 중단했습니다. $([string]$queryConnectionDialogs[0].text)"
                             }
                             foreach($dialog in $queryDialogs){
-                                $judgment=Get-HtsDialogJudgment $dialog $mapOracle $expectedOutcome $caseErrorRegex
-                                Add-OracleEvent $oracleEvents $judgment 'query-after-control' ([string]$planItem.control.controlId) ([string]$option.id)
-                                if($judgment.expectationSatisfied){$expectationSatisfied=$true;if($requiredExpectationRecord){$requiredExpectationRecord.satisfied=$true}}
-                                if($judgment.isProductDefect){$errors.Add([string]$dialog.text)}
-                                elseif($judgment.requiresReview){$pendingReasons.Add("판정 기대값 미정: $([string]$dialog.text)")}
+                                $observation=Get-HtsDialogObservation $dialog $mapOracle $expectedOutcome $caseErrorRegex
+                                Add-OracleObservation $oracleEvents $observation 'query-after-control' ([string]$planItem.control.controlId) ([string]$option.id)
                             }
                             [void](Dismiss-HtsDialogs $main $secret)
                         }
@@ -2861,10 +2864,20 @@ for ($caseIndex = 0; $caseIndex -lt $cases.Count; $caseIndex++) {
                         $automationIssues.Add("컨트롤 '$($planItem.control.name)'의 '$($option.displayValue)' 값은 조회 완료가 필요하지만 조회를 실행하지 못했습니다: QUERY_EXPECTATION_NOT_EXECUTED")
                         $autoPendingReasons.Add("$($planItem.control.controlKind) $($planItem.control.name): QUERY_EXPECTATION_NOT_EXECUTED")
                     }
-                    if ([string]$expectedOutcome.type -notin @('ValidationRequired','FailureRequired') -and $invoke.success -and -not $newErrors -and -not $queryExpectationIncomplete) {
-                        $expectationSatisfied = $true
-                    }
-                    $status = if ($unexpectedScreenClose -or $newErrors -or ($isAssertionStep -and -not $invoke.success)) { "FAIL" } elseif (-not $invoke.success -or $restorationFailed -or $queryExpectationIncomplete) { "PENDING" } else { "PASS" }
+                    $controlObservationKind = if ($unexpectedScreenClose -or $newErrors -or ($isAssertionStep -and -not $invoke.success)) { 'ProductFailure' } elseif (-not $invoke.success -or $restorationFailed -or $queryExpectationIncomplete) { 'EvidenceMissing' } else { 'Success' }
+                    $controlObservationCode = if (-not $invoke.success) {[string]$invoke.errorCode} elseif ($restorationFailed) {'TARGET_RESTORE_FAILED'} elseif ($queryExpectationIncomplete) {'QUERY_EXPECTATION_NOT_EXECUTED'} elseif ($unexpectedScreenClose) {'SCREEN_CLOSED_UNEXPECTEDLY'} elseif ($newErrors) {'PRODUCT_DEFECT_DETECTED'} else {''}
+                    $controlCompletionExpectation = [pscustomobject]@{ type='Success';expectationId=[string]$expectedOutcome.expectationId;messagePatterns=@();errorCodes=@();evidence=@('컨트롤 실행 완료 계약') }
+                    $controlEvaluation = Invoke-HtsRawObservationEvaluation `
+                        $controlObservationKind `
+                        ([string]$invoke.output) `
+                        $controlObservationCode `
+                        $controlCompletionExpectation `
+                        ([bool]($invoke.success -or $newErrors)) `
+                        ($controlObservationKind -ne 'EvidenceMissing') `
+                        'control-completion'
+                    $controlTestResult = $controlEvaluation.testResult
+                    if($requiredExpectationRecord){$requiredExpectationRecord.observations.Add(@($controlEvaluation.evaluationCase.observations)[0])}
+                    $status = [string]$controlTestResult.status
                     $shot = $assertedPopupScreenshot
                     if ($popupObservations.Count -gt $popupCountBefore) { $shot = [string]$popupObservations[$popupObservations.Count-1].screenshotPath }
                     $controlTests.Add([pscustomobject]@{
@@ -2877,13 +2890,13 @@ for ($caseIndex = 0; $caseIndex -lt $cases.Count; $caseIndex++) {
                         coordinateFocusVerified=$(if($invoke.PSObject.Properties.Name -contains 'coordinateFocusVerified'){[bool]$invoke.coordinateFocusVerified}else{$false})
                         planItemId=[string]$planItem.planItemId; controlId=[string]$planItem.control.controlId; controlKind=[string]$planItem.control.controlKind
                         controlName=[string]$planItem.control.name; optionId=[string]$option.id; inputValue=$(if ($planItem.control.controlKind -in @("Text","Date")) {[string]$option.value} else {""})
-                        displayValue=[string]$option.displayValue; status=$status; queryTriggered=$queryTriggered; errorDetected=$newErrors
-                        expectedOutcomeType=[string]$expectedOutcome.type;expectationSatisfied=$expectationSatisfied
+                        displayValue=[string]$option.displayValue; status=$status; queryTriggered=$queryTriggered; errorDetected=[bool]$controlTestResult.productDefectDetected
+                        expectedOutcomeType=[string]$expectedOutcome.type;expectationSatisfied=[bool]$controlTestResult.expectationSatisfied;testResult=$controlTestResult
                         expectedOutcomeSource=[string]$expectedOutcome.source;expectedOutcomeConfidence=[string]$expectedOutcome.confidence;expectedOutcomeEvidence=@($expectedOutcome.evidence)
                         automationEngine=$(if($invoke.PSObject.Properties.Name -contains 'automationEngine'){[string]$invoke.automationEngine}else{'Win32 fallback'})
                         bindingResolution=$(if($invoke.PSObject.Properties.Name -contains 'resolution'){$invoke.resolution}else{$null})
                         output=([string]$invoke.output + $(if($navigationHandled){' 연계 화면을 관찰·정리하고 원래 화면으로 복귀했습니다.'}elseif($screenReopened){' 화면을 다시 열어 다음 항목을 계속했습니다.'}else{''}))
-                        errorCode=$(if (-not $invoke.success) {[string]$invoke.errorCode} elseif ($restorationFailed) {'TARGET_RESTORE_FAILED'} elseif ($queryExpectationIncomplete) {'QUERY_EXPECTATION_NOT_EXECUTED'} elseif ($unexpectedScreenClose) {"SCREEN_CLOSED_UNEXPECTEDLY"} elseif ($newErrors) {"PRODUCT_DEFECT_DETECTED"} else {""})
+                        errorCode=[string]$controlTestResult.code
                         screenshotPath=$shot; elapsedMs=[int64]((Get-Date)-$planStarted).TotalMilliseconds
                     })
 
@@ -2931,7 +2944,9 @@ for ($caseIndex = 0; $caseIndex -lt $cases.Count; $caseIndex++) {
                 } elseif ($mapBehavior -and @($mapBehavior.stateControllerControls).Count -gt 0) {
                     Add-Action $actions 'rediscoverMapControls' 'PASS' ([string]$case.screen.screenNumber) '상태 변경마다 MAP 컨트롤을 다시 탐색했으며 추가 활성화된 컨트롤은 없었습니다.'
                 }
-                Add-Action $actions "executeControlOptions" $(if ($PlanOnly) {"PENDING"} elseif (@($controlTests | Where-Object status -eq "FAIL").Count -gt 0) {"FAIL"} elseif (@($controlTests | Where-Object status -eq "PENDING").Count -gt 0) {"PENDING"} else {"PASS"}) "content controls" "컨트롤 선택지 $($controlTests.Count)개를 계획 또는 실행했습니다."
+                $controlEvaluationDocument=[pscustomobject]@{schemaVersion='1.0';testPackId=[string]$testPack.testPackId;aggregateId="$($case.caseId)-controls";cases=@($script:currentResultEvaluationCases.ToArray())}
+                $controlEvaluationOutput=Invoke-RuleResultEvaluation -CliProject $cliProject -TestPackPath $resultEvaluationTestPackPath -EvaluationDocument $controlEvaluationDocument -WorkingDirectory $resultEvaluationWorkingDirectory -InvocationId 'case-controls'
+                Add-Action $actions "executeControlOptions" ([string]$controlEvaluationOutput.overallResult.status) "content controls" "컨트롤 선택지 $($controlTests.Count)개를 계획 또는 실행했습니다. $([string]$controlEvaluationOutput.overallResult.reason)"
             }
 
             if (-not $PlanOnly -and -not $scenarioMode) {
@@ -2961,10 +2976,13 @@ for ($caseIndex = 0; $caseIndex -lt $cases.Count; $caseIndex++) {
                             $mapQueryExecuted = $true
                         } catch {
                             $guardMessage=Protect-Text $_.Exception.Message $secret
+                            $queryExpectation = [pscustomobject]@{type='Success';expectationId="required-query-$queryIndex";messagePatterns=@();errorCodes=@();evidence=@('필수 조회 실행 계약')}
+                            $guardEvaluation = Invoke-HtsRawObservationEvaluation 'EvidenceMissing' $guardMessage 'INPUT_GUARD_BLOCKED' $queryExpectation $false $false 'required-query-guard'
+                            $guardTestResult = $guardEvaluation.testResult
                             $controlTests.Add([pscustomobject]@{
                                 planItemId="REQUIRED-QUERY-$queryIndex";controlId="REQUIRED-QUERY-$queryIndex";controlKind="Button";controlName='조회'
-                                optionId='click';inputValue='';displayValue='조회';status='PENDING';queryTriggered=$false;errorDetected=$false
-                                output="전경 안전 검증으로 필수 조회 입력을 차단했습니다: $guardMessage";errorCode='INPUT_GUARD_BLOCKED';screenshotPath='';elapsedMs=[int64]((Get-Date)-$queryStarted).TotalMilliseconds
+                                optionId='click';inputValue='';displayValue='조회';status=[string]$guardTestResult.status;queryTriggered=$false;errorDetected=[bool]$guardTestResult.productDefectDetected;testResult=$guardTestResult
+                                output="전경 안전 검증으로 필수 조회 입력을 차단했습니다: $guardMessage";errorCode=[string]$guardTestResult.code;screenshotPath='';elapsedMs=[int64]((Get-Date)-$queryStarted).TotalMilliseconds
                             })
                             Add-Action $actions 'invokeQuery' 'PENDING' '조회' '전경 안전 검증으로 필수 조회 입력을 차단했습니다.' 'INPUT_GUARD_BLOCKED'
                             $automationIssues.Add("필수 조회 입력 차단: $guardMessage")
@@ -2981,10 +2999,8 @@ for ($caseIndex = 0; $caseIndex -lt $cases.Count; $caseIndex++) {
                                 throw "HTS_CONNECTION_LOST: 필수 조회 직후 연결 장애가 확인되어 사용자 판단 없이 실행을 중단했습니다. $([string]$requiredQueryConnectionDialogs[0].text)"
                             }
                             foreach($dialog in $queryDialogs){
-                                $judgment=Get-HtsDialogJudgment $dialog $mapOracle $caseExpectedOutcome $caseErrorRegex
-                                Add-OracleEvent $oracleEvents $judgment 'required-query'
-                                if($judgment.isProductDefect){$errors.Add([string]$dialog.text)}
-                                elseif($judgment.requiresReview){$pendingReasons.Add("판정 기대값 미정: $([string]$dialog.text)")}
+                                $observation=Get-HtsDialogObservation $dialog $mapOracle $caseExpectedOutcome $caseErrorRegex
+                                Add-OracleObservation $oracleEvents $observation 'required-query'
                             }
                             [void](Dismiss-HtsDialogs $main $secret)
                         }
@@ -3014,23 +3030,31 @@ for ($caseIndex = 0; $caseIndex -lt $cases.Count; $caseIndex++) {
                             $queryAlive=Test-HtsRequestedScreen $screen $requestedScreenNumber
                             Add-Action $actions 'restoreAfterRequiredQueryTransition' $(if($queryAlive){'PASS'}else{'PENDING'}) $requestedScreenNumber '필수 조회 후 번호 없는 콘텐츠 전환을 기록하고 대상 화면을 다시 열었습니다.' $(if($queryAlive){''}else{'TARGET_RESTORE_FAILED'})
                         }
-                        $queryStatus=if($queryAlive){"PASS"}elseif($queryNavigationHandled){"PENDING"}else{"FAIL"}
+                        $queryObservationKind=if($queryAlive){'Success'}elseif($queryNavigationHandled){'EvidenceMissing'}else{'ProductFailure'}
+                        $queryObservationCode=if($queryAlive){''}elseif($queryNavigationHandled){'TARGET_RESTORE_FAILED'}else{'SCREEN_CLOSED_UNEXPECTEDLY'}
                         $queryName=if($queryControl.rawTitle){[string]$queryControl.rawTitle}elseif($tabOrderQueryControl){[string]$tabOrderQueryControl.name}else{"조회"}
+                        $queryExpectation = [pscustomobject]@{type='Success';expectationId="required-query-$queryIndex";messagePatterns=@();errorCodes=@();evidence=@('필수 조회 실행 계약')}
+                        $queryEvaluation = Invoke-HtsRawObservationEvaluation $queryObservationKind '활성화된 조회 버튼을 필수 단계에서 실제 클릭했습니다.' $queryObservationCode $queryExpectation $true ($queryObservationKind -ne 'EvidenceMissing') 'required-query'
+                        $queryTestResult = $queryEvaluation.testResult
+                        $queryStatus = [string]$queryTestResult.status
                         $controlTests.Add([pscustomobject]@{
                             planItemId="REQUIRED-QUERY-$queryIndex";controlId="REQUIRED-QUERY-$queryIndex";controlKind="Button";controlName=$queryName
-                            optionId="click";inputValue="";displayValue=$queryName;status=$queryStatus;queryTriggered=$true;errorDetected=($queryStatus -eq 'FAIL')
+                            optionId="click";inputValue="";displayValue=$queryName;status=$queryStatus;queryTriggered=$true;errorDetected=[bool]$queryTestResult.productDefectDetected;testResult=$queryTestResult
                             automationEngine=$queryActionEngine
-                            output="활성화된 조회 버튼을 필수 단계에서 실제 클릭했습니다.";errorCode=$(if($queryAlive){""}elseif($queryNavigationHandled){'TARGET_RESTORE_FAILED'}else{"SCREEN_CLOSED_UNEXPECTEDLY"});screenshotPath="";elapsedMs=[int64]((Get-Date)-$queryStarted).TotalMilliseconds
+                            output="활성화된 조회 버튼을 필수 단계에서 실제 클릭했습니다.";errorCode=[string]$queryTestResult.code;screenshotPath="";elapsedMs=[int64]((Get-Date)-$queryStarted).TotalMilliseconds
                         })
                         Add-Action $actions "invokeQuery" $queryStatus $queryName "활성화된 조회 버튼을 필수 단계에서 실제 클릭했습니다." $(if($queryAlive){""}elseif($queryNavigationHandled){'TARGET_RESTORE_FAILED'}else{"SCREEN_CLOSED_UNEXPECTEDLY"})
                         if (-not $queryAlive -and -not $queryNavigationHandled) { $errors.Add("조회 버튼 클릭 후 [$requestedScreenNumber] 화면이 예기치 않게 닫혔습니다."); break }
                     }
-                } elseif (@($controlTests | Where-Object { $_.controlKind -eq 'Button' -and $_.controlName -eq '조회(탭오더)' -and $_.status -eq 'PASS' }).Count -gt 0) {
-                    $completedTabQueries=@($controlTests | Where-Object { $_.controlKind -eq 'Button' -and $_.controlName -eq '조회(탭오더)' -and $_.status -eq 'PASS' }).Count
+                } elseif (@($controlTests | Where-Object { $_.controlKind -eq 'Button' -and $_.controlName -eq '조회(탭오더)' -and $_.queryTriggered -and -not $_.errorDetected }).Count -gt 0) {
+                    $completedTabQueries=@($controlTests | Where-Object { $_.controlKind -eq 'Button' -and $_.controlName -eq '조회(탭오더)' -and $_.queryTriggered -and -not $_.errorDetected }).Count
+                    $queryHistoryExpectation = [pscustomobject]@{type='Success';expectationId='required-query-history';messagePatterns=@();errorCodes=@();evidence=@('탭오더 조회 실행 이력')}
+                    $queryHistoryEvaluation = Invoke-HtsRawObservationEvaluation 'Success' "탭오더 조회 버튼 $completedTabQueries개 실행 이력" '' $queryHistoryExpectation $true $true 'required-query-history'
+                    $queryHistoryTestResult = $queryHistoryEvaluation.testResult
                     $controlTests.Add([pscustomobject]@{
                         planItemId='REQUIRED-QUERY-HISTORY';controlId='REQUIRED-QUERY-HISTORY';controlKind='Button';controlName='조회(탭오더)'
-                        optionId='verified';inputValue='';displayValue="탭오더 조회 버튼 $completedTabQueries개";status='PASS';queryTriggered=$true;errorDetected=$false
-                        output="탭오더 순회 중 식별된 활성 조회 버튼 $completedTabQueries개를 실제 클릭했습니다.";errorCode='';screenshotPath='';elapsedMs=0
+                        optionId='verified';inputValue='';displayValue="탭오더 조회 버튼 $completedTabQueries개";status=[string]$queryHistoryTestResult.status;queryTriggered=$true;errorDetected=[bool]$queryHistoryTestResult.productDefectDetected;testResult=$queryHistoryTestResult
+                        output="탭오더 순회 중 식별된 활성 조회 버튼 $completedTabQueries개를 실제 클릭했습니다.";errorCode=[string]$queryHistoryTestResult.code;screenshotPath='';elapsedMs=0
                     })
                     Add-Action $actions 'invokeQuery' 'PASS' '탭오더 조회 이력' "탭오더 순회 중 식별된 활성 조회 버튼 $completedTabQueries개를 실제 클릭했습니다."
                     $mapQueryExecuted = $true
@@ -3072,25 +3096,19 @@ for ($caseIndex = 0; $caseIndex -lt $cases.Count; $caseIndex++) {
                 throw "HTS_CONNECTION_LOST: 케이스 종료 전 연결 장애가 확인되어 사용자 판단 없이 실행을 중단했습니다. $([string]$finalConnectionDialogs[0].text)"
             }
             foreach ($dialog in $finalDialogs) {
-                $judgment=Get-HtsDialogJudgment $dialog $mapOracle $caseExpectedOutcome $caseErrorRegex
-                Add-OracleEvent $oracleEvents $judgment 'final-dialog'
-                if($judgment.isProductDefect){$errors.Add([string]$dialog.text)}
-                elseif($judgment.requiresReview){$pendingReasons.Add("판정 기대값 미정: $([string]$dialog.text)")}
+                $observation=Get-HtsDialogObservation $dialog $mapOracle $caseExpectedOutcome $caseErrorRegex
+                Add-OracleObservation $oracleEvents $observation 'final-dialog'
             }
         }
         $windowErrors = @(Get-ExplicitWindowErrors $main $beforeErrorTexts $caseErrorRegex $secret $mapOracle)
         $logErrors = @(Get-LogErrors $logBefore $caseErrorRegex $secret $mapOracle)
         foreach ($message in $windowErrors) {
-            $judgment=Get-HtsSignalJudgment ([string]$message) $mapOracle $caseExpectedOutcome $caseErrorRegex
-            Add-OracleEvent $oracleEvents $judgment 'window-text'
-            foreach($required in $requiredExpectations.ToArray()){if(Test-ExpectedSignal ([string]$message) ([string]$judgment.code) $required.outcome){$required.satisfied=$true}}
-            if($judgment.isProductDefect){$errors.Add([string]$message)}elseif($judgment.requiresReview){$pendingReasons.Add("판정 기대값 미정: $message")}
+            $observation=Get-HtsSignalObservation ([string]$message) $mapOracle $caseExpectedOutcome $caseErrorRegex
+            Add-OracleObservation $oracleEvents $observation 'window-text'
         }
         foreach ($message in $logErrors) {
-            $judgment=Get-HtsSignalJudgment ([string]$message) $mapOracle $caseExpectedOutcome $caseErrorRegex
-            Add-OracleEvent $oracleEvents $judgment 'log'
-            foreach($required in $requiredExpectations.ToArray()){if(Test-ExpectedSignal ([string]$message) ([string]$judgment.code) $required.outcome){$required.satisfied=$true}}
-            if($judgment.isProductDefect){$errors.Add([string]$message)}elseif($judgment.requiresReview){$pendingReasons.Add("판정 기대값 미정: $message")}
+            $observation=Get-HtsSignalObservation ([string]$message) $mapOracle $caseExpectedOutcome $caseErrorRegex
+            Add-OracleObservation $oracleEvents $observation 'log'
         }
         # Windows PowerShell 5.1은 빈 제네릭 List<object>를 @()로 감쌀 때 바인더 예외를 낼 수 있어 배열로 명시 변환한다.
         foreach($queryRequired in $queryRequiredExpectations.ToArray()){
@@ -3098,15 +3116,57 @@ for ($caseIndex = 0; $caseIndex -lt $cases.Count; $caseIndex++) {
                 $pendingReasons.Add("입력 또는 시나리오 단계 '$([string]$queryRequired.name)'의 기대 계약은 조회 완료가 필요하지만 조회를 실행하지 못했습니다: QUERY_EXPECTATION_NOT_EXECUTED")
             }
         }
-        foreach($required in @($requiredExpectations.ToArray() | Where-Object {-not $_.satisfied})){
-            $errors.Add("기대 반응을 관찰하지 못했습니다: $([string]$required.outcome.type)/$([string]$required.controlId)/$([string]$required.optionId)")
-            $oracleEvents.Add([pscustomobject]@{eventKey="missing|$([string]$required.controlId)|$([string]$required.optionId)";stage='expectation';controlId=[string]$required.controlId;optionId=[string]$required.optionId;eventType='ExpectedOutcomeMissing';disposition='Unexpected';expectedOutcomeType=[string]$required.outcome.type;expectedOutcomeSource=[string]$required.outcome.source;expectedOutcomeConfidence=[string]$required.outcome.confidence;expectedOutcomeEvidence=@($required.outcome.evidence);expectationId=[string]$required.outcome.expectationId;source='기대 결과';sourceCode='EXPECTED_OUTCOME_NOT_OBSERVED';message='정의한 기대 반응을 관찰하지 못했습니다.';productDefect=$true;requiresReview=$false;detectedAt=(Get-Date).ToString('o')})
+        $signalGroupEvaluationCases=New-Object Collections.Generic.List[object]
+        $signalGroupsByCaseId=@{}
+        foreach($signalGroupKey in @($script:currentSignalEvaluationGroups.Keys | Sort-Object)){
+            $signalGroup=$script:currentSignalEvaluationGroups[$signalGroupKey]
+            $script:resultEvaluationSequence++
+            $signalGroupCaseId="signal-group-{0:D6}" -f $script:resultEvaluationSequence
+            $signalGroupCase=[pscustomobject]@{caseId=$signalGroupCaseId;executed=$true;expectedResult=$signalGroup.expectedResult;observations=@($signalGroup.observations.ToArray())}
+            $signalGroupEvaluationCases.Add($signalGroupCase)
+            $script:currentResultEvaluationCases.Add($signalGroupCase)
+            $signalGroupsByCaseId[$signalGroupCaseId]=$signalGroup
+        }
+        if($signalGroupEvaluationCases.Count -gt 0){
+            $signalGroupEvaluationDocument=[pscustomobject]@{schemaVersion='1.0';testPackId=[string]$testPack.testPackId;aggregateId="$($case.caseId)-signals";cases=@($signalGroupEvaluationCases.ToArray())}
+            $signalGroupEvaluationOutput=Invoke-RuleResultEvaluation -CliProject $cliProject -TestPackPath $resultEvaluationTestPackPath -EvaluationDocument $signalGroupEvaluationDocument -WorkingDirectory $resultEvaluationWorkingDirectory -InvocationId 'signal-groups'
+            foreach($signalTestResult in @($signalGroupEvaluationOutput.results)){
+                $signalGroup=$signalGroupsByCaseId[[string]$signalTestResult.caseId]
+                $sourceObservation=$signalGroup.observation
+                $oracleEvents.Add([pscustomobject]@{eventKey="evaluation|$([string]$signalTestResult.caseId)";stage=[string]$signalGroup.stage;controlId=[string]$signalGroup.controlId;optionId=[string]$signalGroup.optionId;eventType='SignalEvaluation';disposition=[string]$signalTestResult.disposition;expectedOutcomeType=[string]$sourceObservation.expectedOutcomeType;expectedOutcomeSource=[string]$sourceObservation.expectedOutcomeSource;expectedOutcomeConfidence=[string]$sourceObservation.expectedOutcomeConfidence;expectedOutcomeEvidence=@($sourceObservation.expectedOutcomeEvidence);expectationId=[string]$sourceObservation.expectationId;source='ResultEvaluator';sourceCode=[string]$signalTestResult.code;evaluationCode=[string]$signalTestResult.code;testStatus=[string]$signalTestResult.status;message=[string]$signalTestResult.reason;productDefect=[bool]$signalTestResult.productDefectDetected;requiresReview=[bool]$signalTestResult.requiresReview;testResult=$signalTestResult;detectedAt=(Get-Date).ToString('o')})
+            }
+        }
+        $requiredEvaluationCases=New-Object Collections.Generic.List[object]
+        $requiredRecordsByCaseId=@{}
+        foreach($required in $requiredExpectations.ToArray()){
+            $script:resultEvaluationSequence++
+            $requiredCaseId="required-expectation-{0:D6}" -f $script:resultEvaluationSequence
+            $requiredEvaluationCase=[pscustomobject]@{
+                caseId=$requiredCaseId;executed=$true
+                expectedResult=[pscustomobject]@{
+                    expectationId=[string]$required.outcome.expectationId;type=[string]$required.outcome.type
+                    description=@($required.outcome.evidence) -join '; ';messagePatterns=@($required.outcome.messagePatterns);errorCodes=@($required.outcome.errorCodes)
+                }
+                observations=@($required.observations.ToArray())
+            }
+            $requiredEvaluationCases.Add($requiredEvaluationCase)
+            $script:currentResultEvaluationCases.Add($requiredEvaluationCase)
+            $requiredRecordsByCaseId[$requiredCaseId]=$required
+        }
+        if($requiredEvaluationCases.Count -gt 0){
+            $requiredEvaluationDocument=[pscustomobject]@{schemaVersion='1.0';testPackId=[string]$testPack.testPackId;aggregateId="$($case.caseId)-required-expectations";cases=@($requiredEvaluationCases.ToArray())}
+            $requiredEvaluationOutput=Invoke-RuleResultEvaluation -CliProject $cliProject -TestPackPath $resultEvaluationTestPackPath -EvaluationDocument $requiredEvaluationDocument -WorkingDirectory $resultEvaluationWorkingDirectory -InvocationId 'required-expectations'
+            foreach($requiredTestResult in @($requiredEvaluationOutput.results)){
+                $required=$requiredRecordsByCaseId[[string]$requiredTestResult.caseId]
+                $requiredMessage="필수 기대 반응 평가: $([string]$required.outcome.type)/$([string]$required.controlId)/$([string]$required.optionId)"
+                $oracleEvents.Add([pscustomobject]@{eventKey="required|$([string]$required.controlId)|$([string]$required.optionId)";stage='expectation';controlId=[string]$required.controlId;optionId=[string]$required.optionId;eventType='ExpectedOutcomeEvaluation';disposition=[string]$requiredTestResult.disposition;expectedOutcomeType=[string]$required.outcome.type;expectedOutcomeSource=[string]$required.outcome.source;expectedOutcomeConfidence=[string]$required.outcome.confidence;expectedOutcomeEvidence=@($required.outcome.evidence);expectationId=[string]$required.outcome.expectationId;source='ResultEvaluator';sourceCode=[string]$requiredTestResult.code;evaluationCode=[string]$requiredTestResult.code;testStatus=[string]$requiredTestResult.status;message=$requiredMessage;productDefect=[bool]$requiredTestResult.productDefectDetected;requiresReview=[bool]$requiredTestResult.requiresReview;testResult=$requiredTestResult;detectedAt=(Get-Date).ToString('o')})
+            }
         }
         $currentMain = Get-WindowInfo ([IntPtr][Int64]$main.hwnd)
         if ($currentMain.hung) { $errors.Add("HTS 메인 창이 응답하지 않습니다.") }
-        $reviewEventCount=@($oracleEvents.ToArray() | Where-Object requiresReview).Count
-        $expectedEventCount=@($oracleEvents.ToArray() | Where-Object disposition -eq 'Expected').Count
-        Add-Action $actions "evaluateExplicitErrors" $(if ($errors.Count -gt 0) { "FAIL" } elseif($reviewEventCount -gt 0) {"PENDING"} else { "PASS" }) "popup/process/log" $(if ($errors.Count -gt 0) { "제품 결함 신호 $($errors.Count)개를 감지했습니다." } elseif($reviewEventCount -gt 0) {"기대 결과가 없어 판정 보류한 이벤트 $reviewEventCount개를 기록했습니다."} else { "제품 결함 신호가 없고 기대 반응 $expectedEventCount개를 정상 관찰했습니다." })
+        $signalEvaluationDocument=[pscustomobject]@{schemaVersion='1.0';testPackId=[string]$testPack.testPackId;aggregateId="$($case.caseId)-signals";cases=@($script:currentResultEvaluationCases.ToArray())}
+        $signalEvaluationOutput=Invoke-RuleResultEvaluation -CliProject $cliProject -TestPackPath $resultEvaluationTestPackPath -EvaluationDocument $signalEvaluationDocument -WorkingDirectory $resultEvaluationWorkingDirectory -InvocationId 'case-signals'
+        Add-Action $actions "evaluateExplicitErrors" ([string]$signalEvaluationOutput.overallResult.status) "popup/process/log" ([string]$signalEvaluationOutput.overallResult.reason)
     } catch {
         $executorException = $true
         # 예외 원문만으로는 PowerShell 바인딩 오류 위치를 알 수 없으므로 형식·행·스택을 실행 증거에 남긴다.
@@ -3178,7 +3238,30 @@ for ($caseIndex = 0; $caseIndex -lt $cases.Count; $caseIndex++) {
     }
     if ($PlanOnly -and $pendingReasons.Count -eq 0) { $pendingReasons.Add("계획 전용 실행") }
     $ended = Get-Date
-    $status = if ($externalInterruption -or $executorException -or $automationContractFailure) { "ERROR" } elseif ($errors.Count -gt 0) { "FAIL" } elseif ($pendingReasons.Count -gt 0) { "PENDING" } else { "PASS" }
+    # 실행기는 사실만 Observation으로 기록하고 최종 상태는 Core ResultEvaluator 출력에서 복사한다.
+    $actualCaseActionsExecuted = -not $PlanOnly -and (([int]$script:flaUiActionAttempts -gt $flaUiActionAttemptsBeforeCase) -or $script:currentResultEvaluationCases.Count -gt 0)
+    $completionObservationKind = if ($externalInterruption -or $executorException -or $automationContractFailure) { 'InfrastructureError' } elseif ($errors.Count -gt 0) { 'ProductFailure' } elseif ($pendingReasons.Count -gt 0) { 'EvidenceMissing' } else { 'Success' }
+    $completionObservationCode = if ($externalInterruption) { 'HTS_CONNECTION_LOST' } elseif ($automationContractFailure -and $automationContractErrorCode) { $automationContractErrorCode } elseif ($executorException) { 'EXECUTOR_EXCEPTION' } elseif ($screenOpenFailure) { 'SCREEN_NOT_VISIBLE' } elseif ($errors.Count -gt 0) { 'PRODUCT_DEFECT_DETECTED' } elseif ($existingScreenRequiredMissing) { 'EXISTING_SCREEN_REQUIRED' } elseif ($pendingReasons.Count -gt 0) { 'PRECONDITION_PENDING' } else { '' }
+    $completionMessage = if ($errors.Count -gt 0) { @($errors | Select-Object -Unique) -join ' | ' } elseif ($pendingReasons.Count -gt 0) { @($pendingReasons | Select-Object -Unique) -join ' | ' } else { '케이스 실행 및 증거 수집을 완료했습니다.' }
+    $completionExpectation = [pscustomobject]@{
+        type='Success';expectationId="case-completion:$($case.caseId)";messagePatterns=@();errorCodes=@()
+        evidence=@($(if($scenarioMode){[string]$case.scenarioCase.expectedResult}else{'케이스 실행 완료 계약'}))
+    }
+    $completionEvaluation = Invoke-HtsRawObservationEvaluation `
+        $completionObservationKind `
+        $completionMessage `
+        $completionObservationCode `
+        $completionExpectation `
+        $actualCaseActionsExecuted `
+        ($completionObservationKind -ne 'EvidenceMissing') `
+        'case-completion'
+    $caseEvaluationDocument = [pscustomobject]@{
+        schemaVersion='1.0';testPackId=[string]$testPack.testPackId
+        aggregateId=[string]$case.caseId;cases=@($script:currentResultEvaluationCases.ToArray())
+    }
+    $caseEvaluationOutput = Invoke-RuleResultEvaluation -CliProject $cliProject -TestPackPath $resultEvaluationTestPackPath -EvaluationDocument $caseEvaluationDocument -WorkingDirectory $resultEvaluationWorkingDirectory -InvocationId ("case-{0}" -f $case.caseId)
+    $caseTestResult = $caseEvaluationOutput.overallResult
+    $status = [string]$caseTestResult.status
     $safeVariables = [ordered]@{}
     foreach ($name in @($case.variables.Keys | Sort-Object)) {
         $dimension = @($dataset.variables | Where-Object { $_.name -eq $name } | Select-Object -First 1)
@@ -3195,13 +3278,14 @@ for ($caseIndex = 0; $caseIndex -lt $cases.Count; $caseIndex++) {
         logicalPlanId=$(if($scenarioMode){[string]$scenarioPlan.planId}else{''});physicalPlanId=$(if($physicalPlan){[string]$physicalPlan.physicalPlanId}else{''})
         screenNumber=[string]$case.screen.screenNumber; screenName=[string]$case.screen.screenName; inputMode=$(if ($inputMode -eq "Explicit") { "데이터셋 명시 입력" } else { "화면 기본값" })
         accountId=[string]$case.account.id; accountMasked=(Get-MaskedAccount ([string]$case.account.accountNumber)); accountFingerprint=(Get-AccountFingerprint ([string]$case.account.accountNumber)); accountOwner=[string]$case.account.owner
-        inputVariables=$safeVariables; status=$status; errorDetected=($errors.Count -gt 0);productDefectDetected=(-not $externalInterruption -and -not $executorException -and -not $automationContractFailure -and $errors.Count -gt 0)
+        inputVariables=$safeVariables; status=$status; errorDetected=($errors.Count -gt 0);productDefectDetected=[bool]$caseTestResult.productDefectDetected
+        actualScenarioActionsExecuted=[bool]$actualCaseActionsExecuted;testResult=$caseTestResult;testResults=@($caseEvaluationOutput.results)
         automationContractFailure=[bool]$automationContractFailure;externalInterruption=[bool]$externalInterruption
-        errorCode=if ($externalInterruption) { "HTS_CONNECTION_LOST" } elseif ($automationContractFailure -and $automationContractErrorCode) { $automationContractErrorCode } elseif ($executorException) { "EXECUTOR_EXCEPTION" } elseif ($screenOpenFailure) { "SCREEN_NOT_VISIBLE" } elseif ($errors.Count -gt 0) { "PRODUCT_DEFECT_DETECTED" } elseif ($existingScreenRequiredMissing) { "EXISTING_SCREEN_REQUIRED" } elseif ($pendingReasons.Count -gt 0) { "PRECONDITION_PENDING" } else { "" }
+        errorCode=[string]$caseTestResult.code
         errorMessage=Protect-Text (@($errors | Select-Object -Unique) -join " | ") $secret
         executorDiagnostic=$executorDiagnostic
         automationIssues=@($automationIssues | Select-Object -Unique)
-        outputSummary=if ($externalInterruption) { "HTS 연결 장애를 감지해 사용자 판단이 필요한 상태로 중단했습니다." } elseif ($automationContractFailure) { "물리 바인딩 또는 실행 시점 컨트롤 계약 불일치로 중단했습니다." } elseif ($executorException) { "자동화 실행기 예외를 감지했습니다." } elseif ($screenOpenFailure) { "대상 화면 열기 실패를 감지했습니다." } elseif ($errors.Count -gt 0) { "제품 결함으로 판정한 HTS 오류를 감지했습니다." } elseif ($pendingReasons.Count -gt 0) { "PENDING: " + ($pendingReasons -join ", ") } else { "제품 결함은 없으며 기대한 입력 검증·자료 없음·경고는 정상 이벤트로 분리했습니다." }
+        outputSummary=[string]$caseTestResult.reason
         screenshotPath=if ($screenshot) { Get-RelativeFilePath $ReportDir $screenshot } else { "" }
         actions=$actions.ToArray()
         discoveredControls=@($discoveredControls | ForEach-Object {
@@ -3254,12 +3338,15 @@ for ($caseIndex = 0; $caseIndex -lt $cases.Count; $caseIndex++) {
     $results.Add($resultRow)
     $checkpointResults=@($results.ToArray())
     ConvertTo-Json -InputObject $checkpointResults -Depth 12 | Set-Content -LiteralPath (Join-Path $ReportDir "case-results.json") -Encoding UTF8
+    $checkpointEvaluationDocument=[pscustomobject]@{schemaVersion='1.0';testPackId=[string]$testPack.testPackId;aggregateId="$runId-checkpoint";cases=@();completedResults=@($checkpointResults | ForEach-Object {$_.testResult})}
+    $checkpointEvaluationOutput=Invoke-RuleResultEvaluation -CliProject $cliProject -TestPackPath $resultEvaluationTestPackPath -EvaluationDocument $checkpointEvaluationDocument -WorkingDirectory $resultEvaluationWorkingDirectory -InvocationId 'checkpoint'
+    $checkpointResultSummary=$checkpointEvaluationOutput.summary
     [pscustomobject]@{
         runId=$runId;completed=$checkpointResults.Count;total=$cases.Count;lastCaseId=$case.caseId;lastScreenNumber=[string]$case.screen.screenNumber
-        pass=@($checkpointResults|Where-Object status -eq 'PASS').Count;fail=@($checkpointResults|Where-Object status -eq 'FAIL').Count
-        error=@($checkpointResults|Where-Object status -eq 'ERROR').Count;pending=@($checkpointResults|Where-Object status -eq 'PENDING').Count;updatedAt=(Get-Date).ToString('o')
+        pass=[int]$checkpointResultSummary.pass;fail=[int]$checkpointResultSummary.fail
+        error=[int]$checkpointResultSummary.error;pending=[int]$checkpointResultSummary.pending;updatedAt=(Get-Date).ToString('o')
     } | ConvertTo-Json -Depth 5 | Set-Content -LiteralPath (Join-Path $ReportDir "checkpoint-summary.json") -Encoding UTF8
-    if ($dataset.executionPolicy.stopOnFirstError -and $errors.Count -gt 0) { break }
+    if ($dataset.executionPolicy.stopOnFirstError -and [string]$caseTestResult.status -in @('FAIL','ERROR')) { break }
 }
 
 $resultArray = $results.ToArray()
@@ -3270,17 +3357,21 @@ $controlPlanRows = @($resultArray | ForEach-Object {
 # 화면이 한 개여도 소비자 스키마의 RuntimeControlPlanRow[] 계약이 유지되도록 파이프라인 직렬화를 피한다.
 ConvertTo-Json -InputObject $controlPlanRows -Depth 12 | Set-Content -LiteralPath (Join-Path $ReportDir "control-plan.json") -Encoding UTF8
 $inputAuditRows=if(Test-Path -LiteralPath $script:inputBoundaryAuditPath){@([IO.File]::ReadAllLines($script:inputBoundaryAuditPath,[Text.Encoding]::UTF8) | Where-Object {$_} | ForEach-Object {$_ | ConvertFrom-Json})}else{@()}
-$summaryStatus = if (@($resultArray | Where-Object status -eq "ERROR").Count -gt 0) { "ERROR" } elseif (@($resultArray | Where-Object status -eq "FAIL").Count -gt 0) { "FAIL" } elseif (@($resultArray | Where-Object status -eq "PENDING").Count -gt 0) { "PENDING" } else { "PASS" }
+$runEvaluationDocument=[pscustomobject]@{schemaVersion='1.0';testPackId=[string]$testPack.testPackId;aggregateId=$runId;cases=@();completedResults=@($resultArray | ForEach-Object {$_.testResult})}
+$runEvaluationOutput=Invoke-RuleResultEvaluation -CliProject $cliProject -TestPackPath $resultEvaluationTestPackPath -EvaluationDocument $runEvaluationDocument -WorkingDirectory $resultEvaluationWorkingDirectory -InvocationId 'run-summary'
+$runEvaluationOutput | ConvertTo-Json -Depth 12 | Set-Content -LiteralPath (Join-Path $ReportDir 'test-results.json') -Encoding UTF8
+$runResultSummary=$runEvaluationOutput.summary
+$summaryStatus=[string]$runEvaluationOutput.overallResult.status
 [pscustomobject]@{
-    runId=$runId; datasetId=[string]$dataset.datasetId; datasetPath=$datasetFullPath; targetProfileId=$targetContext.ProfileId; targetDisplayName=$targetContext.DisplayName; status=$summaryStatus; total=$resultArray.Count
-    pass=@($resultArray | Where-Object status -eq "PASS").Count; fail=@($resultArray | Where-Object status -eq "FAIL").Count
-    error=@($resultArray | Where-Object status -eq "ERROR").Count; pending=@($resultArray | Where-Object status -eq "PENDING").Count
+    runId=$runId; testPackId=[string]$testPack.testPackId;testPackPath=$resolvedTestPackPath;datasetId=[string]$dataset.datasetId; datasetPath=[string]$testPack.datasetSource; targetProfileId=$targetContext.ProfileId; targetDisplayName=$targetContext.DisplayName; status=$summaryStatus; total=$resultArray.Count
+    pass=[int]$runResultSummary.pass; fail=[int]$runResultSummary.fail
+    error=[int]$runResultSummary.error; pending=[int]$runResultSummary.pending
     dryRun=$false; explicitErrorsDetected=@($resultArray | Where-Object productDefectDetected).Count
     automationEngine='FlaUI.UIA3';automationEngineVersion='5.0.0'
     flaUiDiscoveryCalls=$script:flaUiDiscoveryCalls;flaUiElementsDiscovered=$script:flaUiElementsDiscovered
     flaUiActionAttempts=$script:flaUiActionAttempts;flaUiActionSuccesses=$script:flaUiActionSuccesses
     flaUiFallbackRequests=$script:flaUiFallbackRequests;flaUiFallbackReasons=@($script:flaUiFallbackReasons)
-    finishedAt=(Get-Date).ToString("o"); executionMode=$(if ($PlanOnly) {"계획 전용"} elseif($SubmitTransactionalDialogs){"승인된 테스트계좌 거래 제출"} elseif($scenarioMode){"승인된 시나리오 기반 조작"} else {"대상 화면 규칙 기반 전체 조작"}); inputMode="화면 기본값 또는 데이터셋 명시 입력"; planner="결정론적 규칙"
+    finishedAt=(Get-Date).ToString("o"); executionMode=$(if ($PlanOnly) {"계획 전용"} elseif($SubmitTransactionalDialogs){"승인된 테스트계좌 거래 제출"} elseif($scenarioMode){"승인된 시나리오 기반 조작"} else {"대상 화면 규칙 기반 전체 조작"}); inputMode="화면 기본값 또는 데이터셋 명시 입력"; planner=[string]$testPack.generatorVersion
     scenarioMode=[bool]$scenarioMode;logicalPlanId=$(if($scenarioMode){[string]$scenarioPlan.planId}else{''});physicalPlanId=$(if($physicalPlan){[string]$physicalPlan.physicalPlanId}else{''})
     scenarioGenerationMode=$(if($scenarioMode){[string]$scenarioPlan.scenarioGenerationMode}else{''});scenarioGenerator=$(if($scenarioMode){[string]$scenarioPlan.scenarioGenerator}else{''});scenarioGeneratorVersion=$(if($scenarioMode){[string]$scenarioPlan.scenarioGeneratorVersion}else{''});runtimeDiscoveryUsed=$(if($scenarioMode){[bool]$scenarioPlan.runtimeDiscoveryUsed}else{$false})
     scenarioCount=$(if($scenarioMode){@($resultArray.scenarioId | Sort-Object -Unique).Count}else{0});scenarioStepTests=$(if($scenarioMode){@($resultArray | ForEach-Object {@($_.controlTests | Where-Object scenarioStepId).Count} | Measure-Object -Sum).Sum}else{0})

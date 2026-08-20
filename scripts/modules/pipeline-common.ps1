@@ -73,14 +73,20 @@ function Get-RuleTargetContext(
     [string]$RootPath,
     [string]$DatasetPath,
     [string]$ScreensCsv = '',
-    [string]$InstallationRootOverride = '') {
-    $datasetFullPath = Resolve-RulePath $RootPath $DatasetPath
-    if (-not (Test-Path -LiteralPath $datasetFullPath -PathType Leaf)) {
-        throw "대상 데이터셋을 찾을 수 없습니다: $datasetFullPath"
+    [string]$InstallationRootOverride = '',
+    $DatasetObject = $null,
+    [string]$SourceLabel = '') {
+    if ($null -eq $DatasetObject) {
+        $datasetFullPath = Resolve-RulePath $RootPath $DatasetPath
+        if (-not (Test-Path -LiteralPath $datasetFullPath -PathType Leaf)) {
+            throw "대상 데이터셋을 찾을 수 없습니다: $datasetFullPath"
+        }
+        # 데이터셋 파일을 직접 받는 도구용 호환 경로다. Runner는 Get-RuleTestPackContext만 사용한다.
+        $dataset = Get-Content -LiteralPath $datasetFullPath -Raw -Encoding UTF8 | ConvertFrom-Json
+    } else {
+        $datasetFullPath = $SourceLabel
+        $dataset = $DatasetObject
     }
-
-    # 데이터셋은 화면 범위뿐 아니라 창·MAP·실행 라벨을 함께 소유한다.
-    $dataset = Get-Content -LiteralPath $datasetFullPath -Raw -Encoding UTF8 | ConvertFrom-Json
     $profile = $dataset.targetProfile
     if (-not $profile) {
         throw 'targetProfile이 없는 구형 데이터셋입니다. 범용 실행을 위해 데이터셋을 schemaVersion 2.0으로 변환하세요.'
@@ -163,4 +169,24 @@ function Get-RuleTargetContext(
         MapFamilyFiles = @($profile.map.familyFiles | ForEach-Object { [string]$_ } | Where-Object { $_ })
         TargetScreens = @($targetScreens)
     }
+}
+
+# 승인 TestPack의 내장 datasetSnapshot으로 대상 컨텍스트를 만들며 원본 Dataset 파일은 열지 않는다.
+function Get-RuleTestPackContext(
+    [string]$RootPath,
+    [string]$TestPackPath,
+    [string]$ScreensCsv = '',
+    [string]$InstallationRootOverride = '') {
+    $testPackFullPath = Resolve-RulePath $RootPath $TestPackPath
+    if (-not (Test-Path -LiteralPath $testPackFullPath -PathType Leaf)) {
+        throw "TestPack을 찾을 수 없습니다: $testPackFullPath"
+    }
+    $testPack = Get-Content -LiteralPath $testPackFullPath -Raw -Encoding UTF8 | ConvertFrom-Json
+    if ([string]$testPack.schemaVersion -ne '1.0') { throw "지원하지 않는 TestPack schemaVersion입니다: $([string]$testPack.schemaVersion)" }
+    if ([string]$testPack.approval.status -ne 'Approved') { throw 'Runner는 Approved TestPack만 읽을 수 있습니다.' }
+    if (-not $testPack.datasetSnapshot) { throw 'TestPack에 datasetSnapshot이 없습니다.' }
+    $context = Get-RuleTargetContext $RootPath '' $ScreensCsv $InstallationRootOverride $testPack.datasetSnapshot $testPackFullPath
+    $context | Add-Member -NotePropertyName TestPackPath -NotePropertyValue $testPackFullPath -Force
+    $context | Add-Member -NotePropertyName TestPack -NotePropertyValue $testPack -Force
+    return $context
 }

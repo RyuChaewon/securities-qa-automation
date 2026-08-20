@@ -6,6 +6,8 @@
 
 ## 판정 입력
 
+판정의 단일 소스는 `HtsQa.Core/Evaluation/ResultEvaluator`다. PowerShell 실행기는 원시 `Observation`을 만들고, CLI `evaluate-results --test-pack <path> --observations <path> --output <path>`가 `ExpectedResult`와 `EvaluationPolicy`를 함께 전달해 완성된 `TestResult`를 생성한다. reporter는 이 `TestResult`와 Core가 만든 집계 결과만 소비한다.
+
 판정기는 다음 세 정보를 함께 사용한다.
 
 1. 관찰 이벤트: 팝업, 화면에 새로 나타난 문구, 신규 로그 행, 화면 미생성·종료·무응답
@@ -58,7 +60,7 @@
 | `ObservationOnly` | 반응을 기록하되 비시스템 이벤트는 자동 결함 판정하지 않음 |
 | `Unspecified` | 입력 의도가 없어 비시스템 이벤트 발생 시 검토 필요 |
 
-`messagePatterns`와 `errorCodes`가 있으면 실제 관찰 내용이 그중 하나와 일치해야 기대 반응으로 인정한다. 시스템 실패는 `ValidationAllowed`, `NoDataAllowed`, `WarningAllowed`, `ObservationOnly`로 숨길 수 없다.
+`messagePatterns`와 `errorCodes`가 있으면 수집된 관련 업무 이벤트가 모두 그중 하나와 일치해야 기대 반응으로 인정한다. 일부 이벤트만 일치하고 다른 이벤트가 불일치해도 PASS로 승격하지 않는다. 시스템 실패는 `ValidationAllowed`, `NoDataAllowed`, `WarningAllowed`, `ObservationOnly`로 숨길 수 없다.
 
 ## 최종 판정표
 
@@ -77,9 +79,38 @@
 | 접속 해제·재접속 선택이 필요한 연결 장애 | 모든 계약 | `ERROR` | `HTS_CONNECTION_LOST` |
 | `queryShouldComplete: true`이나 조회 미실행 | 모든 계약 | `PENDING` | `QUERY_EXPECTATION_NOT_EXECUTED` |
 | 실행기 내부 예외 | 모든 계약 | `ERROR` | `EXECUTOR_EXCEPTION` |
-| 오류 신호 없음과 필수 조작 완료 | `Success` 또는 허용 계약 | `PASS` | 오류 코드 없음 |
+| 오류 신호 없음과 필수 조작 완료 | `Success` 또는 허용 계약 | `PASS` | `EXPECTED_SUCCESS` |
+| 실제 조작 미실행 | 모든 계약 | `PENDING` | `NOT_EXECUTED` |
+| 실행 증거 없음 | 모든 계약 | `PENDING` | `EVIDENCE_MISSING` |
+| 관찰 전용 결과 | `ObservationOnly` | `PENDING` | `OBSERVATION_RECORDED` |
+| 내부 미정 기대값 | `TODO_INTERNAL` / `UNRESOLVED` | `PENDING` | `UNRESOLVED_EXPECTATION` |
 
 `PASS`는 실행한 조작과 정의된 반응 계약의 충족만 뜻한다. 조회 결과 금액·수량 등 업무 값의 정합성은 별도 오라클 없이는 보증하지 않는다.
+
+## 호환 필드와 canonical 필드
+
+`case-results.json`의 기존 `status`, `errorCode`, `outputSummary`, `productDefectDetected`는 외부 소비자 호환을 위해 유지한다. 값은 각각 Core가 생성한 `testResult.status`, `testResult.code`, `testResult.reason`, `testResult.productDefectDetected`에서 복사한다. 새 canonical 필드는 다음과 같다.
+
+| 필드 | 책임 |
+|---|---|
+| `testResult` | reporter가 소비할 케이스 집계 `TestResult` |
+| `testResults` | 신호·컨트롤·완료 관찰별 하위 `TestResult` |
+| `test-results.json` | 전체 하위 결과, `summary`, `overallResult` |
+| `actualScenarioActionsExecuted` | 실제 FlaUI 동작 또는 관찰이 있었는지 나타내며 예외가 발생해도 앞선 실행 기록을 보존 |
+
+액션 배열의 `status`는 클릭·복원·수집 같은 원시 실행 단계 상태다. 테스트 판정 계약은 `testResult.status`다.
+
+## 기존 운영 판정과 변경점
+
+characterization test가 고정한 기존 C# 정책을 canonical 기준으로 유지하고, PowerShell만 더 낙관적이었던 경우를 보수적으로 정렬했다.
+
+| 입력 | 기존 C# | 기존 PowerShell | ResultEvaluator |
+|---|---|---|---|
+| `ValidationAllowed`, matcher 불일치 | `FAIL` / `Defect` | `PASS` / `Expected` | `FAIL` / `EXPECTED_MATCHER_MISMATCH` |
+| `ObservationOnly`, 입력 검증 관찰 | `Observed` | `PASS` / `Expected` | `PENDING` / `OBSERVATION_RECORDED` |
+| `ValidationRequired`, matcher 일치 | `PASS` | `PASS` | `PASS` |
+| `Unspecified`, 입력 검증 | 검토 필요 | 검토 필요 | `PENDING` / `OUTCOME_EXPECTATION_REQUIRED` |
+| 시스템 실패 + 허용 계약 | `FAIL` | `FAIL` | `FAIL` / `PRODUCT_FAILURE_DETECTED` |
 
 ## 과거 종목코드 판정 정정
 
