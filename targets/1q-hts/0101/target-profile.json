@@ -1,0 +1,139 @@
+{
+  "id": "1q-hts-0101",
+  "displayName": "1Q HTS 0101 국내주식 매수주문",
+  "runLabel": "0101-tc",
+  "screenIdPattern": "^[0-9]{4}$",
+  "window": {
+    "className": "_HanaFiveProClass",
+    "titlePrefix": "1Q HTS"
+  },
+  "map": {
+    "installationRoot": "C:\\1QHTS",
+    "screenDirectory": "screen",
+    "filePattern": "",
+    "familyFiles": [
+      "ht010100.map",
+      "ht010101.map",
+      "ht010102.map",
+      "ht010103.map",
+      "ht010104.map",
+      "ht010105.map",
+      "ht010106.map",
+      "ht010107.map",
+      "ht010108.map",
+      "ht010109.map",
+      "ht01010h.map",
+      "ht010110.map",
+      "ht010111.map",
+      "ht010112.map",
+      "ht010113.map",
+      "ht010114.map",
+      "ht010115.map",
+      "ht010116.map",
+      "ht010199.map"
+    ],
+    "initiallyActiveMapScreenCodes": ["HT010115", "HT010103"]
+  },
+  "adapter": {
+    "schemaVersion": "1.0",
+    "id": "1q-hts-0101",
+    "screenIds": ["0101"],
+    "navigation": [
+      { "screenId": "0101", "menuId": "0101" }
+    ],
+    "automationIds": [
+      { "semanticId": "primaryStateSelector", "value": "TAB_Ord" },
+      { "semanticId": "primaryAction", "value": "BTN_Ord_Buy" },
+      { "semanticId": "secondaryAction", "value": "BTN_Ord_Sell" },
+      { "semanticId": "amendAction", "value": "BTN_Ord_Mod" },
+      { "semanticId": "cancelAction", "value": "BTN_Ord_Can" }
+    ],
+    "statefulControls": [
+      {
+        "semanticId": "primaryModeSelector",
+        "screenId": "0101",
+        "mapScreenCode": "HT010115",
+        "logicalName": "TAB_Ord",
+        "stateContextPattern": "^order-tab:(buy|sell|modify-cancel|any)$",
+        "coordinateSpace": "boundControlClient",
+        "defaultValue": "0",
+        "y": 11,
+        "options": [
+          {
+            "id": "buy",
+            "value": "0",
+            "displayValue": "매수",
+            "stateContext": "order-tab:buy",
+            "x": 28,
+            "verificationControls": ["BTN_Ord_Buy"],
+            "commandControls": ["BTN_Ord_Buy"]
+          },
+          {
+            "id": "sell",
+            "value": "1",
+            "displayValue": "매도",
+            "stateContext": "order-tab:sell",
+            "x": 78,
+            "verificationControls": ["BTN_Ord_Sell"],
+            "commandControls": ["BTN_Ord_Sell"]
+          },
+          {
+            "id": "modify-cancel",
+            "value": "2",
+            "displayValue": "정정/취소",
+            "stateContext": "order-tab:modify-cancel",
+            "x": 148,
+            "verificationControls": ["BTN_Ord_Mod", "BTN_Ord_Can"],
+            "commandControls": ["BTN_Ord_Mod", "BTN_Ord_Can"]
+          }
+        ]
+      }
+    ],
+    "transactionalDialogs": {
+      "confirmationClassification": "확인 요청",
+      "fallbackMessagePattern": "주문|정정|취소|전송",
+      "positiveButtonPattern": "^(확인|예|Yes|주문|주문전송|전송|매수주문|매도주문|정정주문|취소주문)$",
+      "priorityButtonPattern": "^(매수주문|매도주문|정정주문|취소주문)$",
+      "commands": [
+        { "logicalName": "BTN_Ord_Buy", "messagePattern": "매수|주문" },
+        { "logicalName": "BTN_Ord_Sell", "messagePattern": "매도|주문" },
+        { "logicalName": "BTN_Ord_Mod", "messagePattern": "정정|주문" },
+        { "logicalName": "BTN_Ord_Can", "messagePattern": "취소\\s*주문|주문\\s*취소|취소" }
+      ]
+    },
+    "mapHosts": [
+      {
+        "screenId": "0101",
+        "mapScreenCode": "HT010115",
+        "containerScreenCode": "HT010100",
+        "hostRole": "upperContent",
+        "mapOriginX": 0,
+        "mapOriginY": 0,
+        "clipMapHeight": 320,
+        "scale": 1.0,
+        "matchTolerancePx": 8,
+        "maxDimensionDeltaPx": 12,
+        "allowOwnerDrawnKindOverride": true
+      },
+      {
+        "screenId": "0101",
+        "mapScreenCode": "HT010103",
+        "containerScreenCode": "HT010100",
+        "hostRole": "selectedTabContent",
+        "tabIndex": 0,
+        "mapOriginX": 0,
+        "mapOriginY": 0,
+        "scale": 1.0,
+        "matchTolerancePx": 8,
+        "maxDimensionDeltaPx": 12,
+        "allowOwnerDrawnKindOverride": true
+      }
+    ],
+    "import": {
+      "candidateSheetNames": ["0101_TC", "전체TC"],
+      "requiredMapFamilyCount": 19,
+      "activeStateMapScreenCode": "HT010115",
+      "runtimeMapAliases": { "HT010101": "HT010115" }
+    }
+  }
+}

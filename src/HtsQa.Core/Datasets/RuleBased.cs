@@ -189,6 +189,7 @@ public sealed record RuleTargetProfile
     public string ScreenIdPattern { get; init; } = "^[0-9]{4}$";
     public RuleTargetWindowProfile Window { get; init; } = new();
     public RuleTargetMapProfile Map { get; init; } = new();
+    public RuleTargetAdapterProfile? Adapter { get; init; }
 }
 
 public sealed record RuleLocatorStrategy
@@ -497,6 +498,7 @@ public sealed class RuleDatasetValidator
             issues.Add(new("RULE.MAP_ROOT_REQUIRED", "targetProfile.map.installationRoot is required when MAP baseline is enabled.", Field: "targetProfile.map.installationRoot"));
         if (dataset.AutoExploration.MapBaseline.Enabled && string.IsNullOrWhiteSpace(dataset.TargetProfile.Map.ScreenDirectory))
             issues.Add(new("RULE.MAP_SCREEN_DIR_REQUIRED", "targetProfile.map.screenDirectory is required when MAP baseline is enabled.", Field: "targetProfile.map.screenDirectory"));
+        issues.AddRange(RuleTargetAdapterValidator.Validate(dataset.TargetProfile, dataset.Screens.Select(x => x.ScreenNumber)));
 
         // 계좌 입력이 없는 화면군은 accounts를 생략할 수 있으며 실행기가 기본 컨텍스트 한 건을 만든다.
         if (dataset.Screens.Length == 0)
