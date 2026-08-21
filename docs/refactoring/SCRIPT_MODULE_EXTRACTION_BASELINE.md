@@ -323,3 +323,8 @@ target rule adapter
 - `hts-runtime-context.ps1`이 target window 규칙, 화면/MAP 정규식, 초기 MAP 목록, 포인터 표시·대기 정책과 마지막 텍스트 입력 엔진을 실행별로 소유한다.
 - 관련 helper는 `RuntimeContext`를 명시적으로 받으며 orchestration의 `$script:` 참조는 0개다.
 - 독립 context 두 개를 만든 회귀 테스트로 정규식·입력 정책·텍스트 엔진 증거가 실행 간 공유되지 않음을 확인했다.
+
+### Session 잔여 helper 이동
+
+- `Get-WindowInfo`, `Get-TopWindows`, `Get-ChildWindows`를 orchestration에서 `hts-session.ps1`로 이동했다.
+- 함수명과 반환 객체 형태는 유지했으며 Session 모듈은 평가·리포트 로직을 포함하지 않는다.

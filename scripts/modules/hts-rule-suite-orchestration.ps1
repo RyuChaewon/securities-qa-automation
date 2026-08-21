@@ -455,49 +455,10 @@ function Get-FlaUiActionableControls($Screen) {
 # 공통 창·입력 유틸리티: 민감정보 보호와 모든 물리 입력의 HTS 경계 검사를 담당한다.
 
 # 단일 HWND의 소유 관계, 상태, 제목, 클래스와 화면 좌표를 같은 형태의 객체로 읽는다.
-function Get-WindowInfo([IntPtr]$Hwnd) {
-    [uint32]$windowPid = 0
-    [void][TargetRuleNative]::GetWindowThreadProcessId($Hwnd, [ref]$windowPid)
-    $title = New-Object Text.StringBuilder 1024
-    $class = New-Object Text.StringBuilder 512
-    [void][TargetRuleNative]::GetWindowText($Hwnd, $title, $title.Capacity)
-    [void][TargetRuleNative]::GetClassName($Hwnd, $class, $class.Capacity)
-    $rect = New-Object TargetRuleNative+RECT
-    [void][TargetRuleNative]::GetWindowRect($Hwnd, [ref]$rect)
-    [pscustomobject]@{
-        hwnd = $Hwnd.ToInt64()
-        parent = ([TargetRuleNative]::GetParent($Hwnd)).ToInt64()
-        owner = ([TargetRuleNative]::GetWindow($Hwnd, 4)).ToInt64()
-        pid = [int]$windowPid
-        visible = [TargetRuleNative]::IsWindowVisible($Hwnd)
-        enabled = [TargetRuleNative]::IsWindowEnabled($Hwnd)
-        hung = [TargetRuleNative]::IsHungAppWindow($Hwnd)
-        className = $class.ToString()
-        rawTitle = $title.ToString()
-        style = [TargetRuleNative]::GetStyle($Hwnd)
-        rect = [pscustomobject]@{
-            left = $rect.Left; top = $rect.Top; right = $rect.Right; bottom = $rect.Bottom
-            width = $rect.Right - $rect.Left; height = $rect.Bottom - $rect.Top
-        }
-    }
-}
 
 # 현재 데스크톱의 최상위 창을 동일한 WindowInfo 객체 배열로 수집한다.
-function Get-TopWindows {
-    $rows = New-Object Collections.Generic.List[object]
-    [void][TargetRuleNative]::EnumWindows({ param($h, $l) $rows.Add((Get-WindowInfo $h)); return $true }, [IntPtr]::Zero)
-    $rows
-}
 
 # 지정 부모 아래의 네이티브 자식 HWND를 재귀 열거한다.
-function Get-ChildWindows([Int64]$ParentHwnd) {
-    $rows = New-Object Collections.Generic.List[object]
-    [void][TargetRuleNative]::EnumChildWindows([IntPtr]$ParentHwnd, { param($h, $l) $rows.Add((Get-WindowInfo $h)); return $true }, [IntPtr]::Zero)
-    for ($index=0; $index -lt $rows.Count; $index++) {
-        $rows[$index] | Add-Member -NotePropertyName enumerationIndex -NotePropertyValue $index -Force
-    }
-    $rows
-}
 
 # 메인 상단의 화면 ID 입력칸 후보를 위치와 현재 값 형식으로 정렬한다.
 function Find-ScreenNumberEdit($RuntimeContext, $Main) {

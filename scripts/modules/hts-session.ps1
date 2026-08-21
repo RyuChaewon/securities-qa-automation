@@ -158,3 +158,46 @@ function Wait-HtsMainWindow {
     }
     throw "HTS 메인 창이 제한 시간 안에 복구되지 않았습니다. $lastMessage"
 }
+
+# Native window snapshot helpers used by Session dependencies.
+function Get-WindowInfo([IntPtr]$Hwnd) {
+    [uint32]$windowPid = 0
+    [void][TargetRuleNative]::GetWindowThreadProcessId($Hwnd, [ref]$windowPid)
+    $title = New-Object Text.StringBuilder 1024
+    $class = New-Object Text.StringBuilder 512
+    [void][TargetRuleNative]::GetWindowText($Hwnd, $title, $title.Capacity)
+    [void][TargetRuleNative]::GetClassName($Hwnd, $class, $class.Capacity)
+    $rect = New-Object TargetRuleNative+RECT
+    [void][TargetRuleNative]::GetWindowRect($Hwnd, [ref]$rect)
+    [pscustomobject]@{
+        hwnd = $Hwnd.ToInt64()
+        parent = ([TargetRuleNative]::GetParent($Hwnd)).ToInt64()
+        owner = ([TargetRuleNative]::GetWindow($Hwnd, 4)).ToInt64()
+        pid = [int]$windowPid
+        visible = [TargetRuleNative]::IsWindowVisible($Hwnd)
+        enabled = [TargetRuleNative]::IsWindowEnabled($Hwnd)
+        hung = [TargetRuleNative]::IsHungAppWindow($Hwnd)
+        className = $class.ToString()
+        rawTitle = $title.ToString()
+        style = [TargetRuleNative]::GetStyle($Hwnd)
+        rect = [pscustomobject]@{
+            left = $rect.Left; top = $rect.Top; right = $rect.Right; bottom = $rect.Bottom
+            width = $rect.Right - $rect.Left; height = $rect.Bottom - $rect.Top
+        }
+    }
+}
+
+function Get-TopWindows {
+    $rows = New-Object Collections.Generic.List[object]
+    [void][TargetRuleNative]::EnumWindows({ param($h, $l) $rows.Add((Get-WindowInfo $h)); return $true }, [IntPtr]::Zero)
+    $rows
+}
+
+function Get-ChildWindows([Int64]$ParentHwnd) {
+    $rows = New-Object Collections.Generic.List[object]
+    [void][TargetRuleNative]::EnumChildWindows([IntPtr]$ParentHwnd, { param($h, $l) $rows.Add((Get-WindowInfo $h)); return $true }, [IntPtr]::Zero)
+    for ($index=0; $index -lt $rows.Count; $index++) {
+        $rows[$index] | Add-Member -NotePropertyName enumerationIndex -NotePropertyValue $index -Force
+    }
+    $rows
+}

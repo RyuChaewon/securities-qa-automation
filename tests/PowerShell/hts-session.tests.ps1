@@ -98,5 +98,10 @@ Assert-Throws { Invoke-FlaUiBridgeRequest -Context $emptyContext -Request $reque
 $sessionSource = Get-Content -LiteralPath (Join-Path $root 'scripts\modules\hts-session.ps1') -Raw -Encoding UTF8
 Assert-True ($sessionSource -notmatch '\$script:') 'session module has no script-scoped mutable state'
 Assert-True ($sessionSource -notmatch 'ResultEvaluator|TestResult|Set-Content|Add-Content|Export-Rule') 'session module has no evaluation or reporting logic'
+foreach ($name in @('Get-WindowInfo','Get-TopWindows','Get-ChildWindows')) {
+    Assert-True ($sessionSource -match "function $name") "session owns $name"
+}
+$orchestrationSource = Get-Content -LiteralPath (Join-Path $root 'scripts\modules\hts-rule-suite-orchestration.ps1') -Raw -Encoding UTF8
+Assert-True ($orchestrationSource -notmatch 'function Get-WindowInfo|function Get-TopWindows|function Get-ChildWindows') 'orchestration no longer defines native session snapshots'
 
 Write-Output "HTS_SESSION_TESTS=PASS assertions=$script:assertions"
