@@ -384,3 +384,10 @@ target rule adapter
 - Dataset, TestPack, 화면·case 선택, PlanOnly와 실행 가능 case 목록은 `HtsExecutionCaseContext`로 명시적으로 전달한다.
 - Binding은 원본 Dataset 조합을 생성하지 않고 TestPack case 순서와 CaseId를 그대로 보존한다.
 - 이 이동 후 `hts-rule-suite-orchestration.ps1`의 AST 함수 정의 수는 0이며, 파일은 context 조립과 단계 호출 순서만 담당한다.
+
+### Native 초기화 분리
+
+- Win32 P/Invoke 선언을 `hts-native.ps1`의 idempotent `Initialize-HtsNativeInterop` 함수로 이동했다.
+- orchestration은 Approved TestPack 검증과 dry-run 반환 이후에만 네이티브 계약을 초기화한다.
+- orchestration의 mutable Win32 상수 변수를 제거하고 실제 호출 지점에 고정된 계약값을 사용한다.
+- 정적 네이티브 계약 컴파일만 검증했으며 user32 입력·창 제어 함수와 실제 HTS는 실행하지 않았다.
