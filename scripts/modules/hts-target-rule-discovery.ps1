@@ -5,74 +5,56 @@
 .OUTPUTS 발견 컨트롤, 탭 순서와 MAP 결합 결과 객체.
 .NOTES UI 동작, 결과 판정과 리포트 생성은 수행하지 않는다.
 #>
-$script:CB_GETCOUNT = 0x0146
-$script:CB_GETLBTEXT = 0x0148
-$script:CB_GETLBTEXTLEN = 0x0149
-$script:CB_GETCURSEL = 0x0147
-$script:CB_SETCURSEL = 0x014E
-$script:CB_SHOWDROPDOWN = 0x014F
-$script:CB_GETITEMHEIGHT = 0x0154
-$script:LB_GETCOUNT = 0x018B
-$script:LB_GETTEXT = 0x0189
-$script:LB_GETTEXTLEN = 0x018A
-$script:LB_GETCURSEL = 0x0188
-$script:LB_GETTOPINDEX = 0x018E
-$script:LB_SETTOPINDEX = 0x0197
-$script:LB_GETITEMHEIGHT = 0x01A1
-$script:BM_GETCHECK = 0x00F0
-$script:BM_SETCHECK = 0x00F1
-$script:BM_CLICK = 0x00F5
-$script:BST_UNCHECKED = 0
-$script:BST_CHECKED = 1
-$script:TCM_GETITEMCOUNT = 0x1304
-$script:TCM_GETCURSEL = 0x130B
-$script:TCM_SETCURSEL = 0x130C
-$script:TBM_GETPOS = 0x0400
-$script:TBM_GETRANGEMIN = 0x0401
-$script:TBM_GETRANGEMAX = 0x0402
-$script:UDM_GETPOS = 0x0468
-$script:LVM_GETITEMCOUNT = 0x1004
-$script:WS_TABSTOP = 0x00010000
-
-# 초기화 및 MAP 결합: 실행별 설정과 좌표 변환 캐시를 준비하고 MAP logicalName을 런타임 위치에 맞춘다.
-function Initialize-RuleControlExploration([string]$RootPath, $Dataset, $MapCatalog = $null) {
-    $script:ruleRoot = $RootPath
-    $script:ruleDataset = $Dataset
-    $script:ruleRegionConfig = $null
-    $script:ruleActualTabOrderCache = @{}
-    $script:ruleMapCatalog = $MapCatalog
-    $script:ruleMapTransformCache = @{}
-    $script:ruleOrderTabStateByScreenMap = @{}
-    $script:ruleActiveMapScreenCodes = @($Dataset.targetProfile.map.initiallyActiveMapScreenCodes | ForEach-Object {
+# 실행별 TargetRule 상태를 한 객체에 격리한다. 모듈 로드 시 mutable 상태를 만들지 않는다.
+function New-HtsTargetRuleContext([string]$RootPath, $Dataset, $MapCatalog = $null, $Dependencies = $null) {
+    $regionConfig = $null
+    $orderTabStateByScreenMap = @{}
+    $activeMapScreenCodes = @($Dataset.targetProfile.map.initiallyActiveMapScreenCodes | ForEach-Object {
         ([string]$_).Trim().ToUpperInvariant()
     } | Where-Object { $_ } | Select-Object -Unique)
     $configuredStrategy = [string]$Dataset.autoExploration.interactionStrategy
-    $script:ruleCurrentInteractionStrategy = if ($configuredStrategy) { $configuredStrategy } else { 'RuntimeTabOrder' }
+    $interactionStrategy = if ($configuredStrategy) { $configuredStrategy } else { 'RuntimeTabOrder' }
     $regionFile = [string]$Dataset.autoExploration.contentRegionFile
     if ($regionFile) {
         $regionPath = if ([IO.Path]::IsPathRooted($regionFile)) { $regionFile } else { Join-Path $RootPath $regionFile }
         if (Test-Path -LiteralPath $regionPath) {
-            $script:ruleRegionConfig = Get-Content -LiteralPath $regionPath -Raw -Encoding UTF8 | ConvertFrom-Json
-            foreach ($screenProperty in @($script:ruleRegionConfig.screens.PSObject.Properties)) {
+            $regionConfig = Get-Content -LiteralPath $regionPath -Raw -Encoding UTF8 | ConvertFrom-Json
+            foreach ($screenProperty in @($regionConfig.screens.PSObject.Properties)) {
                 foreach ($orderTab in @($screenProperty.Value.orderTabs)) {
                     if (-not [string]::IsNullOrWhiteSpace([string]$orderTab.defaultValue)) {
-                        $script:ruleOrderTabStateByScreenMap["$([string]$screenProperty.Name)|$(([string]$orderTab.mapScreenCode).ToUpperInvariant())"] = [string]$orderTab.defaultValue
+                        $orderTabStateByScreenMap["$([string]$screenProperty.Name)|$(([string]$orderTab.mapScreenCode).ToUpperInvariant())"] = [string]$orderTab.defaultValue
                     }
                 }
             }
         }
     }
+
+    [pscustomobject]@{
+        RootPath = $RootPath
+        Dataset = $Dataset
+        RegionConfig = $regionConfig
+        MapCatalog = $MapCatalog
+        MapTransformCache = @{}
+        ActualTabOrderCache = @{}
+        OrderTabStateByScreenMap = $orderTabStateByScreenMap
+        ActiveMapScreenCodes = $activeMapScreenCodes
+        CurrentInteractionStrategy = $interactionStrategy
+        FastScenarioDiscovery = $false
+        LastLiveControlResolution = [pscustomobject]@{success=$false;errorCode='CONTROL_STALE';mode='Unresolved';candidateCount=0;evidence=@()}
+        LastTextAutomationEngine = '미실행'
+        Dependencies = $Dependencies
+    }
 }
 
 # 현재 화면 ID에 속한 컨테이너/탭 MAP 전체를 반환한다.
-function Get-RuleMapScreenModels([string]$ScreenNumber) {
-    if (-not $script:ruleMapCatalog -or -not $script:ruleMapCatalog.screens) { return $null }
-    @($script:ruleMapCatalog.screens | Where-Object { [string]$_.screenNumber -eq $ScreenNumber } | Sort-Object screenCode)
+function Get-RuleMapScreenModels($Context, [string]$ScreenNumber) {
+    if (-not $Context.MapCatalog -or -not $Context.MapCatalog.screens) { return $null }
+    @($Context.MapCatalog.screens | Where-Object { [string]$_.screenNumber -eq $ScreenNumber } | Sort-Object screenCode)
 }
 
 # 시나리오가 지정한 내부 화면코드를 우선해 한 MAP을 선택한다.
-function Get-RuleMapScreenModel([string]$ScreenNumber, [string]$MapScreenCode = '') {
-    $models = @(Get-RuleMapScreenModels $ScreenNumber)
+function Get-RuleMapScreenModel($Context, [string]$ScreenNumber, [string]$MapScreenCode = '') {
+    $models = @(Get-RuleMapScreenModels $Context $ScreenNumber)
     if ($MapScreenCode) {
         $match = @($models | Where-Object { [string]$_.screenCode -eq $MapScreenCode } | Select-Object -First 1)
         if ($match.Count -gt 0) { return $match[0] }
@@ -139,10 +121,10 @@ function Test-RuleOrderTabContext([string]$StateContext) {
 
 # owner-drawn 주문 탭은 네이티브 TCM_* 메시지를 지원하지 않으므로 대상 프로필의
 # 실측 탭 헤더와 탭별 검증 컨트롤을 사용한다.
-function Get-RuleOrderTabProfile([string]$ScreenNumber, [string]$MapScreenCode, [string]$LogicalName) {
-    if (-not $script:ruleRegionConfig -or -not $script:ruleRegionConfig.screens -or
-        -not ($script:ruleRegionConfig.screens.PSObject.Properties.Name -contains $ScreenNumber)) { return $null }
-    @($script:ruleRegionConfig.screens.$ScreenNumber.orderTabs | Where-Object {
+function Get-RuleOrderTabProfile($Context, [string]$ScreenNumber, [string]$MapScreenCode, [string]$LogicalName) {
+    if (-not $Context.RegionConfig -or -not $Context.RegionConfig.screens -or
+        -not ($Context.RegionConfig.screens.PSObject.Properties.Name -contains $ScreenNumber)) { return $null }
+    @($Context.RegionConfig.screens.$ScreenNumber.orderTabs | Where-Object {
         [string]::Equals([string]$_.mapScreenCode,$MapScreenCode,[StringComparison]::OrdinalIgnoreCase) -and
         [string]::Equals([string]$_.controlLogicalName,$LogicalName,[StringComparison]::OrdinalIgnoreCase)
     } | Select-Object -First 1)[0]
@@ -153,14 +135,14 @@ function Get-RuleOrderTabItem($Profile, $Option) {
     @($Profile.items | Where-Object { [string]$_.value -eq [string]$Option.value } | Select-Object -First 1)[0]
 }
 
-function Set-RuleOrderTabState([string]$ScreenNumber, [string]$MapScreenCode, [string]$Value) {
-    if (-not $script:ruleOrderTabStateByScreenMap) { $script:ruleOrderTabStateByScreenMap = @{} }
-    $script:ruleOrderTabStateByScreenMap["$ScreenNumber|$($MapScreenCode.ToUpperInvariant())"] = $Value
+function Set-RuleOrderTabState($Context, [string]$ScreenNumber, [string]$MapScreenCode, [string]$Value) {
+    if (-not $Context.OrderTabStateByScreenMap) { $Context.OrderTabStateByScreenMap = @{} }
+    $Context.OrderTabStateByScreenMap["$ScreenNumber|$($MapScreenCode.ToUpperInvariant())"] = $Value
 }
 
-function Get-RuleOrderTabState([string]$ScreenNumber, [string]$MapScreenCode) {
-    if (-not $script:ruleOrderTabStateByScreenMap) { return '' }
-    [string]$script:ruleOrderTabStateByScreenMap["$ScreenNumber|$($MapScreenCode.ToUpperInvariant())"]
+function Get-RuleOrderTabState($Context, [string]$ScreenNumber, [string]$MapScreenCode) {
+    if (-not $Context.OrderTabStateByScreenMap) { return '' }
+    [string]$Context.OrderTabStateByScreenMap["$ScreenNumber|$($MapScreenCode.ToUpperInvariant())"]
 }
 
 # 이름·역할·종류 일치도를 좌표 거리와 별개인 의미 점수로 계산한다.
@@ -178,18 +160,18 @@ function Get-RuleMapSemanticScore($MapControl, $RuntimeControl) {
 }
 
 # MAP family의 각 내부 화면을 현재 컨테이너의 실제 호스트 영역에 고정한다.
-function Get-RuleMapHostPolicy([string]$ScreenNumber, [string]$MapScreenCode) {
-    if (-not $script:ruleRegionConfig -or -not $script:ruleRegionConfig.screens -or
-        -not ($script:ruleRegionConfig.screens.PSObject.Properties.Name -contains $ScreenNumber)) { return $null }
-    $screenPolicy = $script:ruleRegionConfig.screens.$ScreenNumber
+function Get-RuleMapHostPolicy($Context, [string]$ScreenNumber, [string]$MapScreenCode) {
+    if (-not $Context.RegionConfig -or -not $Context.RegionConfig.screens -or
+        -not ($Context.RegionConfig.screens.PSObject.Properties.Name -contains $ScreenNumber)) { return $null }
+    $screenPolicy = $Context.RegionConfig.screens.$ScreenNumber
     @($screenPolicy.mapHosts | Where-Object {
         [string]::Equals(([string]$_.mapScreenCode).Trim(),$MapScreenCode,[StringComparison]::OrdinalIgnoreCase)
     } | Select-Object -First 1)[0]
 }
 
 # 설정된 hostRole을 화면의 대형 owner-drawn 컨테이너와 선택 탭으로 재식별한다.
-function Get-RuleConfiguredMapHostTransform($Screen, $MapModel, $RuntimeControls) {
-    $hostPolicy = Get-RuleMapHostPolicy ([string]$MapModel.screenNumber) ([string]$MapModel.screenCode)
+function Get-RuleConfiguredMapHostTransform($Context, $Screen, $MapModel, $RuntimeControls) {
+    $hostPolicy = Get-RuleMapHostPolicy $Context ([string]$MapModel.screenNumber) ([string]$MapModel.screenCode)
     if (-not $hostPolicy) { return $null }
 
     $runtimeRows = @($RuntimeControls | Where-Object { $_.relativeRect -and [Int64]$_.hwnd -ne 0 })
@@ -269,19 +251,19 @@ function Get-RuleMapGeometry($MapControl, $RuntimeControl, $Transform) {
 }
 
 # MAP 디자인 좌표를 현재 DPI·창 크기의 물리 좌표로 옮기는 스케일과 오프셋을 구한다.
-function Get-RuleMapTransform($Screen, $MapModel, $RuntimeControls) {
+function Get-RuleMapTransform($Context, $Screen, $MapModel, $RuntimeControls) {
     $cacheKey = "$($Screen.hwnd)|$($MapModel.sourceSha256)"
-    if ($script:ruleMapTransformCache.ContainsKey($cacheKey)) { return $script:ruleMapTransformCache[$cacheKey] }
+    if ($Context.MapTransformCache.ContainsKey($cacheKey)) { return $Context.MapTransformCache[$cacheKey] }
     $mapControls = @($MapModel.controls | Where-Object isActionable)
     $runtimeControls = @($RuntimeControls | Where-Object { $_.relativeRect -and [Int64]$_.hwnd -ne 0 })
-    $configuredHost = Get-RuleConfiguredMapHostTransform $Screen $MapModel $runtimeControls
+    $configuredHost = Get-RuleConfiguredMapHostTransform $Context $Screen $MapModel $runtimeControls
     if ($configuredHost) {
-        $script:ruleMapTransformCache[$cacheKey] = $configuredHost
+        $Context.MapTransformCache[$cacheKey] = $configuredHost
         return $configuredHost
     }
-    $configuredTolerance = [int]$script:ruleDataset.autoExploration.mapBaseline.matchTolerancePx
+    $configuredTolerance = [int]$Context.Dataset.autoExploration.mapBaseline.matchTolerancePx
     $tolerance = if ($configuredTolerance -gt 0) { $configuredTolerance } else { 36 }
-    if ($script:ruleFastScenarioDiscovery) {
+    if ($Context.FastScenarioDiscovery) {
         $scale = 1.0
         if ([int]$MapModel.designWidth -gt 0) {
             $widthScale = [double]$Screen.rect.width / [double]$MapModel.designWidth
@@ -303,7 +285,7 @@ function Get-RuleMapTransform($Screen, $MapModel, $RuntimeControls) {
             maxDimensionDeltaPx = 0
             allowOwnerDrawnKindOverride = $false
         }
-        $script:ruleMapTransformCache[$cacheKey] = $fastTransform
+        $Context.MapTransformCache[$cacheKey] = $fastTransform
         return $fastTransform
     }
     $scales = New-Object Collections.Generic.List[double]
@@ -375,7 +357,7 @@ function Get-RuleMapTransform($Screen, $MapModel, $RuntimeControls) {
             }
         }
     }
-    $script:ruleMapTransformCache[$cacheKey]=$best
+    $Context.MapTransformCache[$cacheKey]=$best
     $best
 }
 
@@ -492,7 +474,7 @@ function Set-RuleInferredExpectedOutcomes($RuntimeControl, $MapControl = $null, 
 }
 
 # 정적 MAP과 설치 사전의 유한 선택지를 런타임 컨트롤 옵션에 중복 없이 병합한다.
-function Set-RuleMapControlOptions($RuntimeControl, $MapControl, $MapModel = $null) {
+function Set-RuleMapControlOptions($Context, $RuntimeControl, $MapControl, $MapModel = $null) {
     $kind = [string]$MapControl.ruleControlKind
     $staticOptions = @($MapControl.staticOptions)
     if ($staticOptions.Count -gt 0) {
@@ -505,10 +487,10 @@ function Set-RuleMapControlOptions($RuntimeControl, $MapControl, $MapModel = $nu
         }
         $RuntimeControl | Add-Member -NotePropertyName mapOptionSource -NotePropertyValue ([string]$MapControl.optionSource) -Force
     }
-    if ([string]$MapControl.kind -eq 'Instrument' -and $script:ruleMapCatalog -and $script:ruleMapCatalog.masterDataSources) {
+    if ([string]$MapControl.kind -eq 'Instrument' -and $Context.MapCatalog -and $Context.MapCatalog.masterDataSources) {
         $existingOptions=@($RuntimeControl.options)
-        $limit = [Math]::Max(1,[int]$script:ruleDataset.autoExploration.maxOptionsPerControl)
-        $instrumentOptions = @($script:ruleMapCatalog.masterDataSources | ForEach-Object {
+        $limit = [Math]::Max(1,[int]$Context.Dataset.autoExploration.maxOptionsPerControl)
+        $instrumentOptions = @($Context.MapCatalog.masterDataSources | ForEach-Object {
             $source=[string]$_.id
             @($_.samples) | ForEach-Object {
                 $outcome=if($_.expectedOutcome -and [string]$_.expectedOutcome.type -ne 'Unspecified'){$_.expectedOutcome}else{New-RuleExpectedOutcome 'Success' 'InstallationMaster' 'High' @("HTS 설치 종목 마스터: $source") @() @() $true}
@@ -540,7 +522,7 @@ function Set-RuleMapControlOptions($RuntimeControl, $MapControl, $MapModel = $nu
 }
 
 # MAP 정의를 물리 좌표·종류·의미 점수로 런타임 컨트롤에 일대일 결합한다.
-function Merge-RuleSingleMapBaseline($Screen, [string]$ScreenNumber, $RuntimeControls, $mapModel, [bool]$IncludeRuntimeOnly = $true) {
+function Merge-RuleSingleMapBaseline($Context, $Screen, [string]$ScreenNumber, $RuntimeControls, $mapModel, [bool]$IncludeRuntimeOnly = $true) {
     $runtimeRows = @($RuntimeControls)
     if (-not $mapModel) {
         foreach ($runtimeControl in $runtimeRows) {
@@ -551,12 +533,12 @@ function Merge-RuleSingleMapBaseline($Screen, [string]$ScreenNumber, $RuntimeCon
         return $runtimeRows
     }
 
-    $transform = Get-RuleMapTransform $Screen $mapModel $runtimeRows
+    $transform = Get-RuleMapTransform $Context $Screen $mapModel $runtimeRows
     $usedRuntime = @{}
     $merged = New-Object Collections.Generic.List[object]
     $actionableMapControls = @($mapModel.controls | Where-Object isActionable | Sort-Object definitionOrder)
-    $orderTabProfile = Get-RuleOrderTabProfile $ScreenNumber ([string]$mapModel.screenCode) 'TAB_Ord'
-    $activeOrderTabValue = Get-RuleOrderTabState $ScreenNumber ([string]$mapModel.screenCode)
+    $orderTabProfile = Get-RuleOrderTabProfile $Context $ScreenNumber ([string]$mapModel.screenCode) 'TAB_Ord'
+    $activeOrderTabValue = Get-RuleOrderTabState $Context $ScreenNumber ([string]$mapModel.screenCode)
     if ($orderTabProfile -and $activeOrderTabValue) {
         $activeOrderTabItem = @($orderTabProfile.items | Where-Object { [string]$_.value -eq $activeOrderTabValue } | Select-Object -First 1)[0]
         $allOrderCommands = @($orderTabProfile.items | ForEach-Object { @($_.verificationControls) } | Sort-Object -Unique)
@@ -642,7 +624,7 @@ function Merge-RuleSingleMapBaseline($Screen, [string]$ScreenNumber, $RuntimeCon
             $nearest | Add-Member -NotePropertyName mapOptionSource -NotePropertyValue ([string]$mapControl.optionSource) -Force
             $nearest | Add-Member -NotePropertyName mapRect -NotePropertyValue $mapControl.rect -Force
             if ([string]$mapControl.kind -in @("Account","Password")) { $nearest.claimedByDataset=$true; $nearest.options=@() }
-            else { Set-RuleMapControlOptions $nearest $mapControl $mapModel }
+            else { Set-RuleMapControlOptions $Context $nearest $mapControl $mapModel }
             $merged.Add($nearest)
         } else {
             $left=[int][Math]::Round(([double]$mapControl.rect.x*[double]$transform.scale)+[int]$transform.offsetX)
@@ -666,7 +648,7 @@ function Merge-RuleSingleMapBaseline($Screen, [string]$ScreenNumber, $RuntimeCon
                 mapAffectedControls=@($mapControl.affectedControls);mapResultControls=@($mapControl.resultControls);mapInvokedHandlers=@($mapControl.invokedHandlers)
                 mapNavigationTargets=@($mapControl.navigationTargets);mapOptionSource=[string]$mapControl.optionSource;mapRect=$mapControl.rect
             }
-            if ([string]$mapControl.kind -notin @('Account','Password')) { Set-RuleMapControlOptions $placeholder $mapControl $mapModel }
+            if ([string]$mapControl.kind -notin @('Account','Password')) { Set-RuleMapControlOptions $Context $placeholder $mapControl $mapModel }
             $merged.Add($placeholder)
         }
     }
@@ -683,9 +665,9 @@ function Merge-RuleSingleMapBaseline($Screen, [string]$ScreenNumber, $RuntimeCon
 }
 
 # 0101처럼 같은 화면번호를 공유하는 MAP family를 모두 보존하고 런타임 전용 컨트롤은 한 번만 추가한다.
-function Merge-RuleMapBaseline($Screen, [string]$ScreenNumber, $RuntimeControls) {
+function Merge-RuleMapBaseline($Context, $Screen, [string]$ScreenNumber, $RuntimeControls) {
     $runtimeRows = @($RuntimeControls)
-    $models = @(Get-RuleMapScreenModels $ScreenNumber)
+    $models = @(Get-RuleMapScreenModels $Context $ScreenNumber)
     if ($models.Count -eq 0) {
         foreach ($runtimeControl in $runtimeRows) {
             $runtimeControl | Add-Member -NotePropertyName definitionSource -NotePropertyValue 'RuntimeOnly' -Force
@@ -699,9 +681,9 @@ function Merge-RuleMapBaseline($Screen, [string]$ScreenNumber, $RuntimeControls)
     $merged = New-Object Collections.Generic.List[object]
     foreach ($model in $models) {
         $mapCode = ([string]$model.screenCode).Trim().ToUpperInvariant()
-        $isActive = $script:ruleActiveMapScreenCodes.Count -eq 0 -or $script:ruleActiveMapScreenCodes -contains $mapCode
+        $isActive = $Context.ActiveMapScreenCodes.Count -eq 0 -or $Context.ActiveMapScreenCodes -contains $mapCode
         $clonedRuntime = if ($isActive) { @($runtimeRows | ForEach-Object { $_ | Select-Object * }) } else { @() }
-        foreach ($control in @(Merge-RuleSingleMapBaseline $Screen $ScreenNumber $clonedRuntime $model $false)) {
+        foreach ($control in @(Merge-RuleSingleMapBaseline $Context $Screen $ScreenNumber $clonedRuntime $model $false)) {
             if (-not $isActive) {
                 $control.pendingReason = "MAP $mapCode 는 카탈로그에 포함되지만 현재 컨테이너/탭 상태에서는 활성화되지 않았습니다."
                 $control.mapMatched = $false
@@ -742,12 +724,12 @@ function Get-RulePolicyValue($Object, [string]$Name, $DefaultValue) {
 }
 
 # 콘텐츠 경계: 프레임/창 버튼을 제외하고 현재 화면 내부에서 조작 가능한 상대 영역을 계산한다.
-function Get-RuleContentPolicy([string]$ScreenNumber) {
-    $defaults = if ($script:ruleRegionConfig) { $script:ruleRegionConfig.defaults } else { $null }
+function Get-RuleContentPolicy($Context, [string]$ScreenNumber) {
+    $defaults = if ($Context.RegionConfig) { $Context.RegionConfig.defaults } else { $null }
     $screenPolicy = $null
-    if ($script:ruleRegionConfig -and $script:ruleRegionConfig.screens -and
-        $script:ruleRegionConfig.screens.PSObject.Properties.Name -contains $ScreenNumber) {
-        $screenPolicy = $script:ruleRegionConfig.screens.$ScreenNumber
+    if ($Context.RegionConfig -and $Context.RegionConfig.screens -and
+        $Context.RegionConfig.screens.PSObject.Properties.Name -contains $ScreenNumber) {
+        $screenPolicy = $Context.RegionConfig.screens.$ScreenNumber
     }
     [pscustomobject]@{
         contentRegion = Get-RulePolicyValue $screenPolicy "contentRegion" (Get-RulePolicyValue $defaults "contentRegion" $null)
@@ -801,7 +783,7 @@ function Get-RuleButtonKind($Window) {
 }
 
 # ComboBoxEx 같은 래퍼 안에서 실제 목록 동작을 수행할 네이티브 콤보 HWND를 찾는다.
-function Get-RuleNativeComboWindow($Window) {
+function Get-RuleNativeComboWindow($Context, $Window) {
     if ($Window.className -eq "ComboBox") { return $Window }
     if ($Window.className -eq "ComboBoxEx32") {
         $inner = @(Get-ChildWindows ([Int64]$Window.hwnd) | Where-Object { $_.visible -and $_.enabled -and $_.className -eq "ComboBox" } | Select-Object -First 1)
@@ -866,10 +848,10 @@ function Get-RuleTabOrderMap($Screen, $Children) {
 
 # 탭오더 수집: 첫 포커스로 돌아올 때까지 Tab을 보내 실제 활성 컨트롤 순서를 기록한다.
 # 실제 Tab 키 포커스 이동을 관찰해 owner-drawn 컨트롤까지 포함한 실행 순서를 만든다.
-function Get-RuleActualTabOrderMap($Screen, $Children, $Policy) {
+function Get-RuleActualTabOrderMap($Context, $Screen, $Children, $Policy) {
     $candidateIds = @($Children | Where-Object { Test-RuleContentControl $_ $Screen $Policy } | ForEach-Object { [string]$_.hwnd } | Sort-Object)
     $cacheKey = "$($Screen.hwnd)|$($candidateIds -join ',')"
-    if ($script:ruleActualTabOrderCache.ContainsKey($cacheKey)) { return $script:ruleActualTabOrderCache[$cacheKey] }
+    if ($Context.ActualTabOrderCache.ContainsKey($cacheKey)) { return $Context.ActualTabOrderCache[$cacheKey] }
 
     $known = @{}
     foreach ($child in $Children) { $known[[Int64]$child.hwnd] = $child }
@@ -878,7 +860,7 @@ function Get-RuleActualTabOrderMap($Screen, $Children, $Policy) {
         ($_.className -in @('Edit','ComboBox','ComboBoxEx32') -or ($_.rawTitle -match '^\d{8,14}(-\d{3})?$' -and $_.rect.width -ge 80))
     } | Sort-Object rect.top,rect.left)
     $nativeTabStarts = @($Children | Where-Object {
-        (Test-RuleContentControl $_ $Screen $Policy) -and (([Int64]$_.style -band $script:WS_TABSTOP) -ne 0)
+        (Test-RuleContentControl $_ $Screen $Policy) -and (([Int64]$_.style -band 0x00010000) -ne 0)
     } | Sort-Object rect.top,rect.left)
     $ownerDrawnStarts = @($Children | Where-Object {
         (Test-RuleContentControl $_ $Screen $Policy) -and $_.className -like 'AfxWnd*' -and
@@ -889,14 +871,14 @@ function Get-RuleActualTabOrderMap($Screen, $Children, $Policy) {
     $safeStarts = @($startPool | Group-Object hwnd | ForEach-Object { $_.Group[0] } | Select-Object -First 8)
     if ($safeStarts.Count -eq 0) {
         $result = [pscustomobject]@{ map=@{}; order=@() }
-        $script:ruleActualTabOrderCache[$cacheKey] = $result
+        $Context.ActualTabOrderCache[$cacheKey] = $result
         return $result
     }
 
     $ordered = New-Object Collections.Generic.List[Int64]
     $seen = @{}
     $currentThread=[TargetRuleNative]::GetCurrentThreadId()
-    $limit = [Math]::Min([Math]::Max(24,$Children.Count+12),[int]$script:ruleDataset.autoExploration.maxControlsPerScreen+12)
+    $limit = [Math]::Min([Math]::Max(24,$Children.Count+12),[int]$Context.Dataset.autoExploration.maxControlsPerScreen+12)
     foreach($safeStart in $safeStarts){
         $targetHwnd=[IntPtr][Int64]$safeStart.hwnd
         if(-not [TargetRuleNative]::IsWindow($targetHwnd)){continue}
@@ -959,7 +941,7 @@ function Get-RuleActualTabOrderMap($Screen, $Children, $Policy) {
     $map = @{}
     for ($index=0; $index -lt $ordered.Count; $index++) { $map[$ordered[$index]]=$index }
     $result = [pscustomobject]@{ map=$map; order=$ordered.ToArray() }
-    $script:ruleActualTabOrderCache[$cacheKey] = $result
+    $Context.ActualTabOrderCache[$cacheKey] = $result
     $result
 }
 
@@ -971,18 +953,18 @@ function Get-RuleAfxControlKind($Window) {
 }
 
 # 콤보 목록을 실제로 열어 위에서부터 표시문자와 인덱스를 수집한다.
-function Get-RuleComboOptions($Window, [int]$Limit) {
-    $Window = Get-RuleNativeComboWindow $Window
+function Get-RuleComboOptions($Context, $Window, [int]$Limit) {
+    $Window = Get-RuleNativeComboWindow $Context $Window
     $rows = New-Object Collections.Generic.List[object]
-    $count = [int][TargetRuleNative]::SendMessage([IntPtr][Int64]$Window.hwnd, $script:CB_GETCOUNT, [IntPtr]::Zero, [IntPtr]::Zero).ToInt64()
+    $count = [int][TargetRuleNative]::SendMessage([IntPtr][Int64]$Window.hwnd, 0x0146, [IntPtr]::Zero, [IntPtr]::Zero).ToInt64()
     if ($count -lt 0) { return @() }
     for ($index=0; $index -lt [Math]::Min($count,$Limit); $index++) {
-        $length = [int][TargetRuleNative]::SendMessage([IntPtr][Int64]$Window.hwnd, $script:CB_GETLBTEXTLEN, [IntPtr]$index, [IntPtr]::Zero).ToInt64()
+        $length = [int][TargetRuleNative]::SendMessage([IntPtr][Int64]$Window.hwnd, 0x0149, [IntPtr]$index, [IntPtr]::Zero).ToInt64()
         $label = "항목 $($index+1) (표시문자 수집 불가)"
         $labelSource = "ordinalFallback"
         if ($length -ge 0 -and $length -lt 4096) {
             $buffer = New-Object Text.StringBuilder ([Math]::Max(2,$length+1))
-            [void][TargetRuleNative]::SendMessageText([IntPtr][Int64]$Window.hwnd, $script:CB_GETLBTEXT, [IntPtr]$index, $buffer)
+            [void][TargetRuleNative]::SendMessageText([IntPtr][Int64]$Window.hwnd, 0x0148, [IntPtr]$index, $buffer)
             if ($buffer.Length -gt 0) { $label = $buffer.ToString(); $labelSource = "native" }
         }
         $rows.Add([pscustomobject]@{id="index-$index";value=[string]$index;displayValue=$label;labelSource=$labelSource;index=$index})
@@ -991,17 +973,17 @@ function Get-RuleComboOptions($Window, [int]$Limit) {
 }
 
 # ListBox·ListView의 접근 가능한 행을 제한 수까지 선택지로 읽는다.
-function Get-RuleListOptions($Window, [int]$Limit) {
+function Get-RuleListOptions($Context, $Window, [int]$Limit) {
     $rows = New-Object Collections.Generic.List[object]
-    $count = [int][TargetRuleNative]::SendMessage([IntPtr][Int64]$Window.hwnd,$script:LB_GETCOUNT,[IntPtr]::Zero,[IntPtr]::Zero).ToInt64()
+    $count = [int][TargetRuleNative]::SendMessage([IntPtr][Int64]$Window.hwnd,0x018B,[IntPtr]::Zero,[IntPtr]::Zero).ToInt64()
     if ($count -lt 0) { return @() }
     for ($index=0; $index -lt [Math]::Min($count,$Limit); $index++) {
-        $length = [int][TargetRuleNative]::SendMessage([IntPtr][Int64]$Window.hwnd,$script:LB_GETTEXTLEN,[IntPtr]$index,[IntPtr]::Zero).ToInt64()
+        $length = [int][TargetRuleNative]::SendMessage([IntPtr][Int64]$Window.hwnd,0x018A,[IntPtr]$index,[IntPtr]::Zero).ToInt64()
         $label = "목록 항목 $($index+1) (표시문자 수집 불가)"
         $labelSource = "ordinalFallback"
         if ($length -ge 0 -and $length -lt 4096) {
             $buffer = New-Object Text.StringBuilder ([Math]::Max(2,$length+1))
-            [void][TargetRuleNative]::SendMessageText([IntPtr][Int64]$Window.hwnd,$script:LB_GETTEXT,[IntPtr]$index,$buffer)
+            [void][TargetRuleNative]::SendMessageText([IntPtr][Int64]$Window.hwnd,0x0189,[IntPtr]$index,$buffer)
             if ($buffer.Length -gt 0) { $label=$buffer.ToString(); $labelSource="native" }
         }
         $rows.Add([pscustomobject]@{id="row-$index";value=[string]$index;displayValue=$label;labelSource=$labelSource;index=$index})
@@ -1025,28 +1007,28 @@ function New-RuleControlId([string]$ScreenNumber, $Window, [string]$Kind, $Relat
 }
 
 # 컨트롤 발견: HWND/UIA/탭오더/MAP 정보를 하나의 실행 컨트롤 모델로 병합하고 옵션을 수집한다.
-function Get-RuleDiscoveredControls($Screen, [string]$ScreenNumber, [hashtable]$ClaimedHwnds) {
+function Get-RuleDiscoveredControls($Context, $Screen, [string]$ScreenNumber, [hashtable]$ClaimedHwnds) {
     if($Screen -and [Int64]$Screen.hwnd -ne 0 -and [TargetRuleNative]::IsWindow([IntPtr][Int64]$Screen.hwnd)){
         $Screen=Get-WindowInfo ([IntPtr][Int64]$Screen.hwnd)
     }
-    $policy = Get-RuleContentPolicy $ScreenNumber
-    $maxControls = [int]$script:ruleDataset.autoExploration.maxControlsPerScreen
-    $maxOptions = [int]$script:ruleDataset.autoExploration.maxOptionsPerControl
-    $textValues = @($script:ruleDataset.autoExploration.defaultTextValues)
-    $dateValues = @($script:ruleDataset.autoExploration.defaultDateValues)
+    $policy = Get-RuleContentPolicy $Context $ScreenNumber
+    $maxControls = [int]$Context.Dataset.autoExploration.maxControlsPerScreen
+    $maxOptions = [int]$Context.Dataset.autoExploration.maxOptionsPerControl
+    $textValues = @($Context.Dataset.autoExploration.defaultTextValues)
+    $dateValues = @($Context.Dataset.autoExploration.defaultDateValues)
     $rows = New-Object Collections.Generic.List[object]
     $children = @(Get-ChildWindows ([Int64]$Screen.hwnd) | Where-Object {
         $_.visible -and $_.enabled -and $_.rect.width -ge 8 -and $_.rect.height -ge 8
     })
     $fallbackTabOrderMap = Get-RuleTabOrderMap $Screen $children
-    $passiveDiscovery = $script:ruleFastScenarioDiscovery -or [string]$script:ruleCurrentInteractionStrategy -eq 'CoordinateFocus'
+    $passiveDiscovery = $Context.FastScenarioDiscovery -or [string]$Context.CurrentInteractionStrategy -eq 'CoordinateFocus'
     $actualTabOrder = if ($passiveDiscovery) {
         [pscustomobject]@{
             map = $fallbackTabOrderMap
             order = @($children | Sort-Object @{Expression={ [int]$fallbackTabOrderMap[[Int64]$_.hwnd] }},enumerationIndex | ForEach-Object { [Int64]$_.hwnd })
         }
     } else {
-        Get-RuleActualTabOrderMap $Screen $children $policy
+        Get-RuleActualTabOrderMap $Context $Screen $children $policy
     }
     $tabOrderMap = @{}
     foreach ($entry in $actualTabOrder.map.GetEnumerator()) { $tabOrderMap[[Int64]$entry.Key]=[int]$entry.Value }
@@ -1056,7 +1038,7 @@ function Get-RuleDiscoveredControls($Screen, [string]$ScreenNumber, [hashtable]$
     }
     $tabState = @($children | Where-Object className -eq "SysTabControl32" | Sort-Object {$_.rect.top},{$_.rect.left} | ForEach-Object {
         $relativeTab=Get-RuleRelativeRect $_.rect $Screen.rect
-        $selected=[TargetRuleNative]::SendMessage([IntPtr][Int64]$_.hwnd,$script:TCM_GETCURSEL,[IntPtr]::Zero,[IntPtr]::Zero).ToInt64()
+        $selected=[TargetRuleNative]::SendMessage([IntPtr][Int64]$_.hwnd,0x130B,[IntPtr]::Zero,[IntPtr]::Zero).ToInt64()
         "$($relativeTab.centerX):$($relativeTab.centerY)=$selected"
     }) -join ";"
     $actualWindows = @($actualTabOrder.order | ForEach-Object { $id=[Int64]$_; $children | Where-Object { [Int64]$_.hwnd -eq $id } | Select-Object -First 1 })
@@ -1139,8 +1121,8 @@ function Get-RuleDiscoveredControls($Screen, [string]$ScreenNumber, [hashtable]$
         }
         if (-not $kind) { continue }
         if ($kind -eq "Text" -and (([int64]$window.style -band 0x20) -ne 0)) { continue }
-        if ($kind -eq "Button" -and -not [bool]$script:ruleDataset.autoExploration.includeButtons) { continue }
-        if ($kind -eq "Button" -and -not $window.rawTitle -and -not [bool]$script:ruleDataset.autoExploration.includeUnlabeledButtons) { continue }
+        if ($kind -eq "Button" -and -not [bool]$Context.Dataset.autoExploration.includeButtons) { continue }
+        if ($kind -eq "Button" -and -not $window.rawTitle -and -not [bool]$Context.Dataset.autoExploration.includeUnlabeledButtons) { continue }
         $relative = Get-RuleRelativeRect $window.rect $Screen.rect
         $isAccount = ([Int64]$window.hwnd -eq $accountHwnd)
         $isPassword = ([Int64]$window.hwnd -eq $passwordHwnd)
@@ -1155,9 +1137,9 @@ function Get-RuleDiscoveredControls($Screen, [string]$ScreenNumber, [hashtable]$
         $pendingReason = ""
         switch ($kind) {
             "ComboBox" {
-                $options = @(Get-RuleComboOptions $window $maxOptions)
-                $nativeCombo = Get-RuleNativeComboWindow $window
-                $initialValue = [string][TargetRuleNative]::SendMessage([IntPtr][Int64]$nativeCombo.hwnd,$script:CB_GETCURSEL,[IntPtr]::Zero,[IntPtr]::Zero).ToInt64()
+                $options = @(Get-RuleComboOptions $Context $window $maxOptions)
+                $nativeCombo = Get-RuleNativeComboWindow $Context $window
+                $initialValue = [string][TargetRuleNative]::SendMessage([IntPtr][Int64]$nativeCombo.hwnd,0x0147,[IntPtr]::Zero,[IntPtr]::Zero).ToInt64()
                 if ($options.Count -eq 0) { $pendingReason = "콤보 선택지를 Win32 메시지로 읽지 못했습니다." }
             }
             "CheckBox" {
@@ -1167,7 +1149,7 @@ function Get-RuleDiscoveredControls($Screen, [string]$ScreenNumber, [hashtable]$
                         [pscustomobject]@{id="toggled";value="toggle";displayValue="반대 상태";labelSource="tabOrder";index=1}
                     )
                 } else {
-                    $initialValue = [string][TargetRuleNative]::SendMessage([IntPtr][Int64]$window.hwnd,$script:BM_GETCHECK,[IntPtr]::Zero,[IntPtr]::Zero).ToInt64()
+                    $initialValue = [string][TargetRuleNative]::SendMessage([IntPtr][Int64]$window.hwnd,0x00F0,[IntPtr]::Zero,[IntPtr]::Zero).ToInt64()
                     $options = @(
                         [pscustomobject]@{id="unchecked";value="false";displayValue="해제";labelSource="generated";index=0},
                         [pscustomobject]@{id="checked";value="true";displayValue="선택";labelSource="generated";index=1}
@@ -1180,8 +1162,8 @@ function Get-RuleDiscoveredControls($Screen, [string]$ScreenNumber, [hashtable]$
                 $options=@(for($index=0;$index-lt$count;$index++){[pscustomobject]@{id="option-$index";value=[string]$index;displayValue="라디오 항목 $($index+1)";labelSource="tabOrderOrdinal";index=$index}})
             }
             "Tab" {
-                $initialValue = [string][TargetRuleNative]::SendMessage([IntPtr][Int64]$window.hwnd,$script:TCM_GETCURSEL,[IntPtr]::Zero,[IntPtr]::Zero).ToInt64()
-                $count = [int][TargetRuleNative]::SendMessage([IntPtr][Int64]$window.hwnd, $script:TCM_GETITEMCOUNT, [IntPtr]::Zero, [IntPtr]::Zero).ToInt64()
+                $initialValue = [string][TargetRuleNative]::SendMessage([IntPtr][Int64]$window.hwnd,0x130B,[IntPtr]::Zero,[IntPtr]::Zero).ToInt64()
+                $count = [int][TargetRuleNative]::SendMessage([IntPtr][Int64]$window.hwnd, 0x1304, [IntPtr]::Zero, [IntPtr]::Zero).ToInt64()
                 if ($count -le 0) { $count = [Math]::Max(1,[Math]::Min(20,[int][Math]::Ceiling($window.rect.width/90.0))) }
                 $options = @(for ($index=0; $index -lt [Math]::Min($count,$maxOptions); $index++) { [pscustomobject]@{id="tab-$index";value=[string]$index;displayValue="탭 $($index+1) (표시문자 수집 불가)";labelSource="ordinalFallback";index=$index} })
             }
@@ -1204,14 +1186,14 @@ function Get-RuleDiscoveredControls($Screen, [string]$ScreenNumber, [hashtable]$
                 if ($options.Count -eq 0) { $dataRequired=$true; $pendingReason="데이터셋 autoExploration.defaultDateValues에 yyyyMMdd 입력값이 필요합니다." }
             }
             "ListBox" {
-                $initialValue = [string][TargetRuleNative]::SendMessage([IntPtr][Int64]$window.hwnd,$script:LB_GETCURSEL,[IntPtr]::Zero,[IntPtr]::Zero).ToInt64()
-                $options = @(Get-RuleListOptions $window $maxOptions)
+                $initialValue = [string][TargetRuleNative]::SendMessage([IntPtr][Int64]$window.hwnd,0x0188,[IntPtr]::Zero,[IntPtr]::Zero).ToInt64()
+                $options = @(Get-RuleListOptions $Context $window $maxOptions)
                 if ($options.Count -eq 0) { $pendingReason="목록 선택지를 Win32 메시지로 읽지 못했습니다." }
             }
             "Slider" {
-                $minimum=[int][TargetRuleNative]::SendMessage([IntPtr][Int64]$window.hwnd,$script:TBM_GETRANGEMIN,[IntPtr]::Zero,[IntPtr]::Zero).ToInt64()
-                $maximum=[int][TargetRuleNative]::SendMessage([IntPtr][Int64]$window.hwnd,$script:TBM_GETRANGEMAX,[IntPtr]::Zero,[IntPtr]::Zero).ToInt64()
-                $initialValue=[string][TargetRuleNative]::SendMessage([IntPtr][Int64]$window.hwnd,$script:TBM_GETPOS,[IntPtr]::Zero,[IntPtr]::Zero).ToInt64()
+                $minimum=[int][TargetRuleNative]::SendMessage([IntPtr][Int64]$window.hwnd,0x0401,[IntPtr]::Zero,[IntPtr]::Zero).ToInt64()
+                $maximum=[int][TargetRuleNative]::SendMessage([IntPtr][Int64]$window.hwnd,0x0402,[IntPtr]::Zero,[IntPtr]::Zero).ToInt64()
+                $initialValue=[string][TargetRuleNative]::SendMessage([IntPtr][Int64]$window.hwnd,0x0400,[IntPtr]::Zero,[IntPtr]::Zero).ToInt64()
                 if ($maximum -gt $minimum) { $options=@($minimum,[int](($minimum+$maximum)/2),$maximum | Sort-Object -Unique | ForEach-Object {[pscustomobject]@{id="value-$_";value=[string]$_;displayValue=[string]$_;labelSource="nativeRange";index=[int]$_}}) } else { $pendingReason="슬라이더 범위를 읽지 못했습니다." }
             }
             "Spin" {
@@ -1224,13 +1206,13 @@ function Get-RuleDiscoveredControls($Screen, [string]$ScreenNumber, [hashtable]$
             controlId=$controlId; controlKind=$kind; name=$controlName; className=[string]$window.className
             automationEngine='Win32/MAP'; supportedActions=@()
             hwnd=[Int64]$window.hwnd; locatorSignature="$($window.className)|$(if($kind -in @('Text','Date')){''}else{$window.rawTitle})|$($relative.centerX)|$($relative.centerY)|$tabState"
-            initialValue=$initialValue; tabOrder=[int]$tabOrderMap[[Int64]$window.hwnd]; tabStop=($actualTabOrder.map.ContainsKey([Int64]$window.hwnd) -or (([int64]$window.style -band $script:WS_TABSTOP) -ne 0))
+            initialValue=$initialValue; tabOrder=[int]$tabOrderMap[[Int64]$window.hwnd]; tabStop=($actualTabOrder.map.ContainsKey([Int64]$window.hwnd) -or (([int64]$window.style -band 0x00010000) -ne 0))
             relativeRect=$relative; regionRole="content"; stateContext=$tabState; claimedByDataset=[bool]$claimed; dataRequired=$dataRequired
             pendingReason=$pendingReason; options=$options
         })
         if ($rows.Count -ge $maxControls) { break }
     }
-    $uiaActionableControls = if ($script:ruleFastScenarioDiscovery) { @() } else { @(Get-FlaUiActionableControls $Screen) }
+    $uiaActionableControls = if ($Context.FastScenarioDiscovery) { @() } else { @(Get-FlaUiActionableControls $Screen) }
     foreach ($window in $uiaActionableControls) {
         if ($rows.Count -ge $maxControls) { break }
         if (-not (Test-RuleContentControl $window $Screen $policy)) { continue }
@@ -1249,8 +1231,8 @@ function Get-RuleDiscoveredControls($Screen, [string]$ScreenNumber, [hashtable]$
             "ControlType.Spinner"{"Spin"}
             default{"Button"}
         }
-        if ($kind -eq "Button" -and -not [bool]$script:ruleDataset.autoExploration.includeButtons) { continue }
-        if ($kind -eq "Button" -and -not $window.rawTitle -and -not [bool]$script:ruleDataset.autoExploration.includeUnlabeledButtons) { continue }
+        if ($kind -eq "Button" -and -not [bool]$Context.Dataset.autoExploration.includeButtons) { continue }
+        if ($kind -eq "Button" -and -not $window.rawTitle -and -not [bool]$Context.Dataset.autoExploration.includeUnlabeledButtons) { continue }
         $relative=Get-RuleRelativeRect $window.rect $Screen.rect
         $duplicate=@($rows | Where-Object {
             $_.controlKind-eq$kind -and [Math]::Abs([int]$_.relativeRect.centerX-[int]$relative.centerX)-le4 -and
@@ -1311,5 +1293,5 @@ function Get-RuleDiscoveredControls($Screen, [string]$ScreenNumber, [hashtable]$
             dataRequired=$false;pendingReason=$pendingReason;options=$options
         })
     }
-    @(Merge-RuleMapBaseline $Screen $ScreenNumber @($rows.ToArray() | Sort-Object tabOrder,controlId))
+    @(Merge-RuleMapBaseline $Context $Screen $ScreenNumber @($rows.ToArray() | Sort-Object tabOrder,controlId))
 }

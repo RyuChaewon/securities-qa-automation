@@ -46,8 +46,8 @@ foreach ($path in $paths) {
     $functionsByFile[[IO.Path]::GetFileName($path)] = $names
     $allFunctionNames += $names
 }
-Assert-Equal 49 $allFunctionNames.Count 'split retains the characterized public function count'
-Assert-Equal 49 @($allFunctionNames | Sort-Object -Unique).Count 'each public function has one implementation'
+Assert-Equal 50 $allFunctionNames.Count 'split retains 49 characterized functions plus one explicit text-input adapter'
+Assert-Equal 50 @($allFunctionNames | Sort-Object -Unique).Count 'each function has one implementation'
 Assert-True ($functionsByFile['hts-target-rule-discovery.ps1'] -contains 'Get-RuleDiscoveredControls') 'discovery owns target control discovery'
 Assert-True ($functionsByFile['hts-target-rule-discovery.ps1'] -notcontains 'Invoke-RuleControlPlanItem') 'discovery does not own target actions'
 Assert-True ($functionsByFile['hts-target-rule-binding.ps1'] -contains 'Resolve-RuleLiveControl') 'binding owns live control resolution'

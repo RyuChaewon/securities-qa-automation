@@ -357,13 +357,20 @@ $sessionContext = New-HtsSessionContext `
     -GetTopWindows { Get-TopWindows }
 
 . (Join-Path $PSScriptRoot "rule-control-exploration.ps1")
-Initialize-RuleControlExploration $root $dataset $mapCatalog
-if ($OrderTabStateOverride) { Set-RuleOrderTabState '0101' 'HT010115' $OrderTabStateOverride }
-$script:ruleFastScenarioDiscovery = [bool]($scenarioMode -or $PlanOnly)
+$targetRuleDependencies = [pscustomobject]@{
+    SetAutomationText = {
+        param($Window, [string]$Value, [bool]$AlreadyFocused)
+        $success = Set-AutomationText $Window $Value -AlreadyFocused:$AlreadyFocused
+        [pscustomobject]@{ success=[bool]$success; engine=[string]$script:lastTextAutomationEngine }
+    }
+}
+$targetRuleContext = New-HtsTargetRuleContext -RootPath $root -Dataset $dataset -MapCatalog $mapCatalog -Dependencies $targetRuleDependencies
+$targetRuleContext.FastScenarioDiscovery = [bool]($scenarioMode -or $PlanOnly)
+if ($OrderTabStateOverride) { Set-RuleOrderTabState $targetRuleContext '0101' 'HT010115' $OrderTabStateOverride }
 $discoveryDependencies = [pscustomobject]@{
     InvokeBridgeRequest = { param($Context, $Request) Invoke-FlaUiBridgeRequest -Context $Context -Request $Request }
-    GetMapScreenModel = { param([string]$ScreenNumber, [string]$MapScreenCode) Get-RuleMapScreenModel $ScreenNumber $MapScreenCode }
-    GetRuleDiscoveredControls = { param($Screen, [string]$ScreenNumber, [hashtable]$ClaimedHwnds) @(Get-RuleDiscoveredControls $Screen $ScreenNumber $ClaimedHwnds) }
+    GetMapScreenModel = { param([string]$ScreenNumber, [string]$MapScreenCode) Get-RuleMapScreenModel $targetRuleContext $ScreenNumber $MapScreenCode }
+    GetRuleDiscoveredControls = { param($Screen, [string]$ScreenNumber, [hashtable]$ClaimedHwnds) @(Get-RuleDiscoveredControls $targetRuleContext $Screen $ScreenNumber $ClaimedHwnds) }
 }
 $discoveryContext = New-HtsDiscoveryContext -SessionContext $sessionContext -Dependencies $discoveryDependencies -Metrics $automationMetrics
 $bindingDependencies = [pscustomobject]@{
@@ -376,8 +383,8 @@ $actionDependencies = [pscustomobject]@{
     GetActiveInputSurface = { Get-HtsActiveInputSurface }
     InvokeBridgeRequest = { param($Context,$Request) Invoke-FlaUiBridgeRequest -Context $Context -Request $Request }
     WriteInputAudit = { param([string]$InputType,[string]$Status,[int]$X,[int]$Y,[string]$Detail) Write-HtsInputBoundaryAudit $InputType $Status $X $Y $Detail }
-    InvokeRuleControlPlanItem = { param($Navigation,$Screen,$PlanItem) Invoke-RuleControlPlanItem $Navigation $Screen $PlanItem }
-    InvokeRuleDatasetVariable = { param($Window,[string]$Kind,[string]$Value,[string]$ValueMatch,[int]$MaxOptions) Invoke-RuleDatasetVariable $Window $Kind $Value $ValueMatch $MaxOptions }
+    InvokeRuleControlPlanItem = { param($Navigation,$Screen,$PlanItem) Invoke-RuleControlPlanItem $targetRuleContext $Navigation $Screen $PlanItem }
+    InvokeRuleDatasetVariable = { param($Window,[string]$Kind,[string]$Value,[string]$ValueMatch,[int]$MaxOptions) Invoke-RuleDatasetVariable $targetRuleContext $Window $Kind $Value $ValueMatch $MaxOptions }
 }
 $actionContext = New-HtsActionContext -SessionContext $sessionContext -Metrics $automationMetrics -Dependencies $actionDependencies
 $observationDependencies = [pscustomobject]@{
@@ -411,7 +418,7 @@ $safetyDependencies = [pscustomobject]@{
     IsChild = { param([Int64]$Parent,[Int64]$Child) [TargetRuleNative]::IsChild([IntPtr]$Parent,[IntPtr]$Child) }
     GetWindowProcessId = { param([Int64]$Hwnd) [uint32]$windowProcessId=0;[void][TargetRuleNative]::GetWindowThreadProcessId([IntPtr]$Hwnd,[ref]$windowProcessId);[int]$windowProcessId }
     GetScreenNumber = { param($Window) Get-HtsScreenNumber $Window }
-    GetContentPolicy = { param([string]$ScreenNumber) Get-RuleContentPolicy $ScreenNumber }
+    GetContentPolicy = { param([string]$ScreenNumber) Get-RuleContentPolicy $targetRuleContext $ScreenNumber }
     TestContentControl = { param($Window,$Screen,$Policy) Test-RuleContentControl $Window $Screen $Policy }
     GetKeyboardFocusHwnd = { $info=New-Object TargetRuleNative+GUITHREADINFO;$info.cbSize=[Runtime.InteropServices.Marshal]::SizeOf([type][TargetRuleNative+GUITHREADINFO]);[void][TargetRuleNative]::GetGUIThreadInfo(0,[ref]$info);[Int64]$info.hwndFocus.ToInt64() }
     WindowFromPoint = { param([int]$X,[int]$Y) $point=New-Object TargetRuleNative+POINT;$point.X=$X;$point.Y=$Y;[Int64]([TargetRuleNative]::WindowFromPoint($point)).ToInt64() }
@@ -1567,7 +1574,7 @@ $results = New-Object Collections.Generic.List[object]
 for ($caseIndex = 0; $caseIndex -lt $cases.Count; $caseIndex++) {
     $case = $cases[$caseIndex]
     $datasetInteractionStrategy = [string]$dataset.autoExploration.interactionStrategy
-    $script:ruleCurrentInteractionStrategy = if ($scenarioMode -and [string]$case.scenarioCase.executionOrder) {
+    $targetRuleContext.CurrentInteractionStrategy = if ($scenarioMode -and [string]$case.scenarioCase.executionOrder) {
         [string]$case.scenarioCase.executionOrder
     } elseif ($datasetInteractionStrategy) {
         $datasetInteractionStrategy
@@ -1800,7 +1807,7 @@ for ($caseIndex = 0; $caseIndex -lt $cases.Count; $caseIndex++) {
                     $expectedAccount = ([string]$case.account.accountNumber -replace '\D','')
                     $allowObservedPrefilledAccount = [bool]$dataset.executionPolicy.allowObservedPrefilledTransactionalAccount -and $inputMode -eq 'Prefilled'
                     foreach ($accountCandidate in @($initialControls | Where-Object { [string]$_.mapKind -eq 'Account' -and [string]$_.definitionSource -eq 'MAP+Runtime' })) {
-                        $accountLive = Resolve-RuleLiveControl $navigationContext $screen $accountCandidate
+                        $accountLive = Resolve-RuleLiveControl $targetRuleContext $navigationContext $screen $accountCandidate
                         if (-not $accountLive) { continue }
                         $observedAccount = ([string]$accountLive.rawTitle -replace '\D','')
                         if (-not $observedAccount) { $observedAccount = ([string]$accountCandidate.initialValue -replace '\D','') }
@@ -1842,7 +1849,7 @@ for ($caseIndex = 0; $caseIndex -lt $cases.Count; $caseIndex++) {
                 foreach ($controlRow in $initialControls) { $controlById[[string]$controlRow.controlId] = $controlRow }
                 $scheduledPlanIds = @{}
                 if ($scenarioMode) {
-                    $initialPlans = @(Get-RuleScenarioPlanItems -Controls $initialControls -ScenarioCase $case.scenarioCase)
+                    $initialPlans = @(Get-RuleScenarioPlanItems -Context $targetRuleContext -Controls $initialControls -ScenarioCase $case.scenarioCase)
                     foreach ($planRow in $initialPlans) {
                         if ($physicalPlan) { $planRow = Set-HtsScenarioPhysicalBinding -Context $bindingContext -PlanItem $planRow -ScenarioCase $case.scenarioCase -PhysicalPlan $physicalPlan }
                         [void]$queue.Add($planRow)
@@ -1850,7 +1857,7 @@ for ($caseIndex = 0; $caseIndex -lt $cases.Count; $caseIndex++) {
                     }
                     Add-Action $actions "discoverControls" "PASS" ([string]$case.screen.screenNumber) "콘텐츠 영역 컨트롤 $($initialControls.Count)개를 발견하고 시나리오 '$([string]$case.scenarioCase.scenarioId)'의 조작 단계 $($queue.Count)개만 계획했습니다."
                 } else {
-                    $initialPlans = @(Get-RuleControlPlanItems $initialControls)
+                    $initialPlans = @(Get-RuleControlPlanItems $targetRuleContext $initialControls)
                     $currentTabPlans = @($initialPlans | Where-Object {
                         $_.control.controlKind -eq "Tab" -and $_.option -and [string]$_.option.value -eq [string]$_.control.initialValue
                     })
@@ -1879,7 +1886,7 @@ for ($caseIndex = 0; $caseIndex -lt $cases.Count; $caseIndex++) {
                                 $discoveredControls.Add($refreshedControl)
                             }
                         }
-                        $replacement = @(Get-RuleScenarioPlanItems -Controls $scenarioRefresh -ScenarioCase $case.scenarioCase | Where-Object scenarioStepId -eq ([string]$planItem.scenarioStepId) | Select-Object -First 1)
+                        $replacement = @(Get-RuleScenarioPlanItems -Context $targetRuleContext -Controls $scenarioRefresh -ScenarioCase $case.scenarioCase | Where-Object scenarioStepId -eq ([string]$planItem.scenarioStepId) | Select-Object -First 1)
                         if ($replacement.Count -gt 0) {
                             if ($physicalPlan) { $replacement[0] = Set-HtsScenarioPhysicalBinding -Context $bindingContext -PlanItem $replacement[0] -ScenarioCase $case.scenarioCase -PhysicalPlan $physicalPlan }
                             if ([string]$replacement[0].status -eq 'READY') { $mapReboundControls++ }
@@ -1924,7 +1931,7 @@ for ($caseIndex = 0; $caseIndex -lt $cases.Count; $caseIndex++) {
                             sourceTestCaseId=$(if($scenarioMode){[string]$case.scenarioCase.sourceTestCaseId}else{''});mapScreenCode=$(if($scenarioMode){[string]$planItem.mapScreenCode}else{''});stateContext=$(if($scenarioMode){[string]$planItem.stateContext}else{''});transactional=$(if($scenarioMode){[bool]$planItem.transactional}else{$false})
                             scenarioStepId=$(if($scenarioMode){[string]$planItem.scenarioStepId}else{''});scenarioSequence=$(if($scenarioMode){[int]$planItem.scenarioSequence}else{0});scenarioAction=$(if($scenarioMode){[string]$planItem.scenarioAction}else{''})
                             expectedObservation=$(if($scenarioMode){[string]$planItem.expectedObservation}else{''})
-                            interactionStrategy=[string]$script:ruleCurrentInteractionStrategy;coordinateFocusUsed=$false;coordinateFocusVerified=$false
+                            interactionStrategy=[string]$targetRuleContext.CurrentInteractionStrategy;coordinateFocusUsed=$false;coordinateFocusVerified=$false
                             planItemId=[string]$planItem.planItemId; controlId=[string]$planItem.control.controlId; controlKind=[string]$planItem.control.controlKind
                             controlName=[string]$planItem.control.name; optionId=$(if ($option) {[string]$option.id} else {""}); inputValue=$(if ($option) {[string]$option.value} else {""})
                             displayValue=$(if ($option) {[string]$option.displayValue} else {""}); status=[string]$controlTestResult.status; queryTriggered=$false; errorDetected=[bool]$controlTestResult.productDefectDetected
@@ -1971,7 +1978,7 @@ for ($caseIndex = 0; $caseIndex -lt $cases.Count; $caseIndex++) {
                             elseif ([string]::IsNullOrWhiteSpace([string]$case.account.accountNumber) -and -not [bool]$policy.allowObservedPrefilledTransactionalAccount) { $transactionBlockReason = '테스트 계좌번호가 데이터셋에 없고 사전입력 계좌 실행 정책도 허용되지 않았습니다.' }
                             elseif (-not $transactionAccountVerified) { $transactionBlockReason = '현재 화면 계좌가 데이터셋 테스트 계좌와 일치한다고 확인되지 않았습니다.' }
                             elseif ($transactionAccountCandidate) {
-                                $currentAccountLive = Resolve-RuleLiveControl $navigationContext $screen $transactionAccountCandidate
+                                $currentAccountLive = Resolve-RuleLiveControl $targetRuleContext $navigationContext $screen $transactionAccountCandidate
                                 $currentAccountDigits = if ($currentAccountLive) { ([string]$currentAccountLive.rawTitle -replace '\D','') } else { '' }
                                 if (-not $currentAccountDigits) { $currentAccountDigits = ([string]$transactionAccountCandidate.initialValue -replace '\D','') }
                                 if (-not $currentAccountDigits -or (Get-AccountFingerprint $currentAccountDigits) -ne $transactionAccountFingerprint) {
@@ -1991,7 +1998,7 @@ for ($caseIndex = 0; $caseIndex -lt $cases.Count; $caseIndex++) {
                         } elseif ($transactionBlockReason) {
                             $invoke=[pscustomobject]@{success=$false;queryEligible=$false;errorCode='TRANSACTION_GUARD_BLOCKED';automationEngine='Transaction guard';output=$transactionBlockReason}
                         } elseif ([string]$planItem.scenarioAction -in @('AssertVisible','AssertEnabled','AssertSelected','AssertGrid')) {
-                            $invoke = Invoke-RuleControlAssertion $navigationContext $screen $planItem
+                            $invoke = Invoke-RuleControlAssertion $targetRuleContext $navigationContext $screen $planItem
                         } elseif ([string]$planItem.scenarioAction -eq 'Restore') {
                             $restoreDialogs = @(Get-HtsDialogs $main $secret)
                             $restoreConnectionDialogs = @($restoreDialogs | Where-Object { Test-HtsConnectionDialog $_ })
@@ -2164,7 +2171,7 @@ for ($caseIndex = 0; $caseIndex -lt $cases.Count; $caseIndex++) {
                     $triggerQueryForPlanItem = if ($scenarioMode) { [bool]$planItem.triggerQueryAfterChange } else { [bool]$dataset.autoExploration.triggerQueryAfterStateChange }
                     if ($invoke.success -and $invoke.queryEligible -and -not $navigationHandled -and $screenAlive -and $triggerQueryForPlanItem) {
                         [void](Focus-HtsRequestedScreen $main $screen $requestedScreenNumber)
-                        $liveTabQuery=if($tabOrderQueryControl){Resolve-RuleLiveControl $navigationContext $screen $tabOrderQueryControl}else{$null}
+                        $liveTabQuery=if($tabOrderQueryControl){Resolve-RuleLiveControl $targetRuleContext $navigationContext $screen $tabOrderQueryControl}else{$null}
                         if($liveTabQuery){
                             $queryResult=Invoke-FlaUiControlAction $liveTabQuery 'invoke'
                             if(-not ([bool]$queryResult.success -and [bool]$queryResult.verified)){Click-Center $liveTabQuery}
@@ -2261,7 +2268,7 @@ for ($caseIndex = 0; $caseIndex -lt $cases.Count; $caseIndex++) {
                         sourceTestCaseId=$(if($scenarioMode){[string]$case.scenarioCase.sourceTestCaseId}else{''});mapScreenCode=$(if($scenarioMode){[string]$planItem.mapScreenCode}else{''});stateContext=$(if($scenarioMode){[string]$planItem.stateContext}else{''});transactional=$(if($scenarioMode){[bool]$planItem.transactional}else{$false})
                         scenarioStepId=$(if($scenarioMode){[string]$planItem.scenarioStepId}else{''});scenarioSequence=$(if($scenarioMode){[int]$planItem.scenarioSequence}else{0});scenarioAction=$(if($scenarioMode){[string]$planItem.scenarioAction}else{''})
                         expectedObservation=$(if($scenarioMode){[string]$planItem.expectedObservation}else{''})
-                        interactionStrategy=$(if($invoke.PSObject.Properties.Name -contains 'interactionStrategy'){[string]$invoke.interactionStrategy}else{[string]$script:ruleCurrentInteractionStrategy})
+                        interactionStrategy=$(if($invoke.PSObject.Properties.Name -contains 'interactionStrategy'){[string]$invoke.interactionStrategy}else{[string]$targetRuleContext.CurrentInteractionStrategy})
                         coordinateFocusUsed=$(if($invoke.PSObject.Properties.Name -contains 'coordinateFocusUsed'){[bool]$invoke.coordinateFocusUsed}else{$false})
                         coordinateFocusVerified=$(if($invoke.PSObject.Properties.Name -contains 'coordinateFocusVerified'){[bool]$invoke.coordinateFocusVerified}else{$false})
                         planItemId=[string]$planItem.planItemId; controlId=[string]$planItem.control.controlId; controlKind=[string]$planItem.control.controlKind
@@ -2303,7 +2310,7 @@ for ($caseIndex = 0; $caseIndex -lt $cases.Count; $caseIndex++) {
                             }
                             if (-not $isRuntimeUpgrade) { continue }
                             if($controlForPlan.controlKind -eq 'Button' -and ([string]$controlForPlan.mapSemanticRole -eq 'Query' -or [string]$controlForPlan.name -eq '조회(탭오더)' -or [string]$controlForPlan.name -match '^BTN_(Comm|Search|Query)')){$tabOrderQueryControl=$controlForPlan}
-                            foreach ($newPlan in @(Get-RuleControlPlanItems @($controlForPlan))) {
+                            foreach ($newPlan in @(Get-RuleControlPlanItems $targetRuleContext @($controlForPlan))) {
                                 if (-not $scheduledPlanIds.ContainsKey([string]$newPlan.planItemId)) {
                                     $scheduledPlanIds[[string]$newPlan.planItemId] = $true
                                     $newPlans.Add($newPlan)
@@ -2333,7 +2340,7 @@ for ($caseIndex = 0; $caseIndex -lt $cases.Count; $caseIndex++) {
                 $queryStrategies = if ($case.screen.locators -and $case.screen.locators.query) { $case.screen.locators.query } else { $dataset.defaultLocators.query }
                 $queryControls = if(Test-HtsRequestedScreen $screen $requestedScreenNumber){@(Get-HtsRequiredQueryControls -Context $bindingContext -Screen $screen -Strategies $queryStrategies)}else{@()}
                 if($tabOrderQueryControl -and (Test-HtsRequestedScreen $screen $requestedScreenNumber)){
-                    $liveTabQuery=Resolve-RuleLiveControl $navigationContext $screen $tabOrderQueryControl
+                    $liveTabQuery=Resolve-RuleLiveControl $targetRuleContext $navigationContext $screen $tabOrderQueryControl
                     if($liveTabQuery){$queryControls=@($liveTabQuery)+@($queryControls)}
                 }
                 $queryControls=@($queryControls | Group-Object { "{0}:{1}" -f [int](($_.rect.left+$_.rect.right)/2),[int](($_.rect.top+$_.rect.bottom)/2) } | ForEach-Object {$_.Group[0]})
@@ -2646,7 +2653,7 @@ for ($caseIndex = 0; $caseIndex -lt $cases.Count; $caseIndex++) {
         automationEngine='FlaUI.UIA3';automationEngineVersion='5.0.0'
         scenarioMode=[bool]$scenarioMode;scenarioId=$(if($scenarioMode){[string]$case.scenarioCase.scenarioId}else{''});scenarioTitle=$(if($scenarioMode){[string]$case.scenarioCase.scenarioTitle}else{''})
         sourceTestCaseId=$(if($scenarioMode){[string]$case.scenarioCase.sourceTestCaseId}else{''});mapScreenCode=$(if($scenarioMode){[string]$case.scenarioCase.mapScreenCode}else{''});transactional=$(if($scenarioMode){[bool]$case.scenarioCase.transactional}else{$false})
-        interactionStrategy=[string]$script:ruleCurrentInteractionStrategy
+        interactionStrategy=[string]$targetRuleContext.CurrentInteractionStrategy
         expectedResult=$(if($scenarioMode){[string]$case.scenarioCase.expectedResult}else{''})
         scenarioPriority=$(if($scenarioMode){[string]$case.scenarioCase.priority}else{''});scenarioCategory=$(if($scenarioMode){[string]$case.scenarioCase.category}else{''})
         logicalPlanId=$(if($scenarioMode){[string]$scenarioPlan.planId}else{''});physicalPlanId=$(if($physicalPlan){[string]$physicalPlan.physicalPlanId}else{''})

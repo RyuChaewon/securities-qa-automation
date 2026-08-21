@@ -295,3 +295,11 @@ target rule adapter
 | 평가/리포트 | `Invoke-HtsRawObservationEvaluation`, `Export-RuleResultWorkbooks`, `Add-Action` |
 
 이번 후속 단계도 실제 HTS를 실행하지 않으며 Approved TestPack dry-run은 계속 `PENDING`, FlaUI action 0이어야 한다.
+
+### TargetRule context 전환 결과
+
+- `New-HtsTargetRuleContext`가 Dataset, MAP catalog/cache, content region, order-tab state, interaction strategy와 마지막 binding/text-input 증거를 실행별 객체로 소유한다.
+- target-specific Discovery/Binding/Action의 상태 의존 함수는 `Context`를 명시적으로 받으며 세 파일의 `$script:` 참조는 0개다.
+- Win32 메시지 번호는 mutable script 변수 대신 호출 지점의 고정 상수로 유지해 로드 시 초기화 순서를 제거했다.
+- 두 context를 동시에 만든 characterization에서 order-tab state가 서로 오염되지 않았고 기존 MAP 정렬, maxActions, 날짜/종류 호환 동작을 보존했다.
+- 검증: 전체 PowerShell parser 51파일 오류 0, 14개 회귀 스위트 PASS, Approved TestPack dry-run `PENDING`, FlaUI action 0.
