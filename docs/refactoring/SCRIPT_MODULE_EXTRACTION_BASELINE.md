@@ -257,3 +257,41 @@ AST 기준 공유 상태 접근 함수 수:
 - Target-specific characterization: 기존 49개 함수가 세 책임 파일에 중복 없이 유지되고 대표 순수 함수 동작이 동일함
 
 `scripts/dev/verify-source-layout.ps1`은 기존 범위 밖인 `scripts/import-0101-testcases.ps1:7`의 target-specific production 기본값을 계속 지적한다. 이번 단계에서는 해당 파일을 수정하지 않았다.
+
+## 8. 2026-08-21 잔여 요구사항 기준선
+
+직전 모듈 물리 분리 후에도 다음 결합이 남아 있어 이번 후속 작업의 대상이다.
+
+| 위치 | 현재 상태 | 후속 처리 |
+|---|---|---|
+| `hts-rule-suite-orchestration.ps1` | 2,800줄, AST 함수 69개, `$script:` 상태 12개. 창·입력·관찰·리포트 helper가 실행 순서와 함께 존재 | helper를 책임 모듈로 이동하고 orchestration에는 context 조립과 단계 순서만 유지 |
+| target-specific Discovery/Binding/Action | 기존 함수 49개는 단일 소유지만 dataset, MAP cache, order-tab state, 실행 전략, 마지막 resolution과 native 상수를 `$script:`로 공유 | 실행별 `TargetRuleContext`를 만들고 상태를 명시적 파라미터/결과 객체로 전달 |
+| `rule-control-exploration.ps1` | 세 파일을 순서대로 dot-source하는 호환 진입점 | 하위 파일의 로드 시 mutable 초기화를 제거해 순서와 무관한 선언 전용 진입점으로 제한 |
+
+### 잔여 호출 흐름
+
+```text
+run-target-rule-suite.ps1
+  -> hts-rule-suite-orchestration.ps1
+       -> TestPack validation
+       -> Session -> Navigation
+       -> Discovery -> Binding -> Action
+       -> Observation -> ResultEvaluator -> Reporting
+       -> Safety (Navigation/Action의 모든 입력 경계)
+
+target rule adapter
+  -> Discovery: MAP/Runtime snapshot과 control identity
+  -> Binding: plan item과 live UIA/physical binding
+  -> Action: binding 결과에 승인된 입력 적용
+```
+
+### 순수/UI 의존 잔여 분류
+
+| 구분 | 대표 함수 |
+|---|---|
+| 순수 | `Get-RuleMapCompatibility`, `Test-RuleRuntimeKindCompatible`, `Test-RuleStateContextMatch`, `ConvertTo-RuleDateValue`, `Protect-Text`, `Get-AccountFingerprint`, `Get-RelativeFilePath` |
+| 읽기/관찰 | `Get-WindowInfo`, `Get-TopWindows`, `Get-ChildWindows`, `Get-HtsDialogs`, `Get-LogState`, `Capture-HtsScreenshot` |
+| UI 변경 | `Set-HtsScreenNumber`, `Send-Key`, `Click-Center`, `Set-AutomationText`, `Invoke-RuleControlPlanItem`, `Submit-HtsTransactionalDialog` |
+| 평가/리포트 | `Invoke-HtsRawObservationEvaluation`, `Export-RuleResultWorkbooks`, `Add-Action` |
+
+이번 후속 단계도 실제 HTS를 실행하지 않으며 Approved TestPack dry-run은 계속 `PENDING`, FlaUI action 0이어야 한다.
