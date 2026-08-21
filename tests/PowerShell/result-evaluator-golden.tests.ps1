@@ -15,6 +15,12 @@ try {
 
     $testPackPath = Join-Path $tempRoot 'approved-test-pack.json'
     '{"testPackId":"GOLDEN-PACK","approvalStatus":"Approved"}' | Set-Content -LiteralPath $testPackPath -Encoding UTF8
+    $evaluationContext = New-HtsEvaluationAdapterContext -CliProject $cliProject -TestPackPath $testPackPath -WorkingDirectory (Join-Path $tempRoot 'raw-adapter') -ObservationContext ([pscustomobject]@{name='fake-observation'})
+    if ([string]$evaluationContext.TestPackPath -ne $testPackPath -or [string]$evaluationContext.ObservationContext.name -ne 'fake-observation') {
+        throw 'Raw observation evaluator context did not retain its explicit contracts.'
+    }
+    $orchestrationText = Get-Content -LiteralPath (Join-Path $root 'scripts\modules\hts-rule-suite-orchestration.ps1') -Raw
+    if ($orchestrationText -match 'function Invoke-HtsRawObservationEvaluation') { throw 'Orchestration still owns raw observation evaluation.' }
     $observationsPath = Join-Path $tempRoot 'observations.json'
     $directOutputPath = Join-Path $tempRoot 'direct-test-results.json'
     $document = [pscustomobject]@{

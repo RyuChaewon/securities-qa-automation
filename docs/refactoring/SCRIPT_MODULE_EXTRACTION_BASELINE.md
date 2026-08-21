@@ -371,3 +371,9 @@ target rule adapter
 - 취소·아니오·닫기 버튼 또는 `WM_CLOSE`로 비거래 팝업을 복구하는 `Dismiss-HtsDialogs`를 `hts-action.ps1`로 이동했다.
 - 연결 끊김·재접속·프로그램 종료 팝업은 기존처럼 닫기 대상에서 제외한다.
 - Action은 대화상자 관찰과 Session helper를 직접 탐색하지 않고 명시적 dependency와 `ActionContext`/`ObservationContext`를 사용한다.
+
+### ResultEvaluator adapter 이동
+
+- 원시 Observation 한 건을 C# CLI 평가 입력으로 전달하던 helper를 `result-evaluator.ps1`로 이동했다.
+- CLI 프로젝트, Approved TestPack, 임시 결과 경로와 case-local Observation 상태는 `HtsEvaluationAdapterContext`로 명시적으로 전달한다.
+- Observation 모듈은 평가 호출을 포함하지 않으며, 기존 golden 8케이스에서 C# CLI와 PowerShell adapter 결과가 동일했다.

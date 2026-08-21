@@ -6,6 +6,53 @@
 .NOTES Only HtsQa.Core ResultEvaluator defines PASS, FAIL, ERROR, PENDING, and matcher semantics.
 #>
 
+function New-HtsEvaluationAdapterContext {
+    param(
+        [Parameter(Mandatory = $true)][string]$CliProject,
+        [Parameter(Mandatory = $true)][string]$TestPackPath,
+        [Parameter(Mandatory = $true)][string]$WorkingDirectory,
+        [Parameter(Mandatory = $true)]$ObservationContext
+    )
+
+    [pscustomobject]@{
+        CliProject = $CliProject
+        TestPackPath = $TestPackPath
+        WorkingDirectory = $WorkingDirectory
+        ObservationContext = $ObservationContext
+    }
+}
+
+function Invoke-HtsRawObservationEvaluation {
+    param(
+        [Parameter(Mandatory = $true)]$Context,
+        [string]$ObservationKind,
+        [string]$Text,
+        [string]$SourceCode,
+        $ExpectedOutcome,
+        [bool]$Executed = $true,
+        [bool]$EvidencePresent = $true,
+        [string]$Prefix = 'control'
+    )
+
+    $evaluationSequence = Get-HtsNextObservationSequence -Context $Context.ObservationContext
+    $evaluation = Invoke-RuleSignalEvaluation `
+        -CliProject $Context.CliProject `
+        -TestPackPath $Context.TestPackPath `
+        -WorkingDirectory $Context.WorkingDirectory `
+        -CaseId ("{0}-{1:D6}" -f $Prefix, $evaluationSequence) `
+        -EventType $ObservationKind `
+        -Text $Text `
+        -SourceCode $SourceCode `
+        -Source 'PowerShell raw observation' `
+        -Executed $Executed `
+        -EvidencePresent $EvidencePresent `
+        -ExpectedOutcome $ExpectedOutcome
+    if ($Context.ObservationContext.CurrentResultEvaluationCases) {
+        $Context.ObservationContext.CurrentResultEvaluationCases.Add($evaluation.evaluationCase)
+    }
+    $evaluation
+}
+
 function Invoke-RuleResultEvaluation {
     [CmdletBinding()]
     param(

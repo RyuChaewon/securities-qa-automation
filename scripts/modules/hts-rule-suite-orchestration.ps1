@@ -401,6 +401,11 @@ $observationDependencies = [pscustomobject]@{
     GetRelativeFilePath = { param([string]$BasePath,[string]$Path) Get-RelativeFilePath $BasePath $Path }
 }
 $observationContext = New-HtsObservationContext -MapCatalog $mapCatalog -InstallationRoot ([string]$targetContext.InstallationRoot) -Dependencies $observationDependencies
+$evaluationAdapterContext = New-HtsEvaluationAdapterContext `
+    -CliProject $cliProject `
+    -TestPackPath $resultEvaluationTestPackPath `
+    -WorkingDirectory $resultEvaluationWorkingDirectory `
+    -ObservationContext $observationContext
 
 $safetyDependencies = [pscustomobject]@{
     IsWindow = { param([Int64]$Hwnd) [TargetRuleNative]::IsWindow([IntPtr]$Hwnd) }
@@ -483,30 +488,6 @@ $actionContext.SafetyContext = $safetyContext
 # 팝업 관찰: 현재 HTS 프로세스의 새 대화상자를 읽고 민감 문구를 제거한 관찰 객체를 만든다.
 
 # 컨트롤 실행 사실을 원시 Observation으로 넘기고 현재 케이스의 Core 평가 입력에 함께 보존한다.
-function Invoke-HtsRawObservationEvaluation(
-    [string]$ObservationKind,
-    [string]$Text,
-    [string]$SourceCode,
-    $ExpectedOutcome,
-    [bool]$Executed = $true,
-    [bool]$EvidencePresent = $true,
-    [string]$Prefix = 'control') {
-    $evaluationSequence = Get-HtsNextObservationSequence -Context $observationContext
-    $evaluation = Invoke-RuleSignalEvaluation `
-        -CliProject $cliProject `
-        -TestPackPath $resultEvaluationTestPackPath `
-        -WorkingDirectory $resultEvaluationWorkingDirectory `
-        -CaseId ("{0}-{1:D6}" -f $Prefix, $evaluationSequence) `
-        -EventType $ObservationKind `
-        -Text $Text `
-        -SourceCode $SourceCode `
-        -Source 'PowerShell raw observation' `
-        -Executed $Executed `
-        -EvidencePresent $EvidencePresent `
-        -ExpectedOutcome $ExpectedOutcome
-    if ($observationContext.CurrentResultEvaluationCases) { $observationContext.CurrentResultEvaluationCases.Add($evaluation.evaluationCase) }
-    $evaluation
-}
 
 # 승인된 거래 실행에서만 주문 확인창을 식별한다. 입력 검증·시스템 오류와
 # 의미가 모호한 '취소' 단독 버튼은 제출 대상으로 인정하지 않는다.
@@ -1070,7 +1051,7 @@ for ($caseIndex = 0; $caseIndex -lt $cases.Count; $caseIndex++) {
                         }
                         $pendingCode = if ($PlanOnly) { "PLAN_ONLY" } else { [string]$planItem.errorCode }
                         $pendingOutput = if ($PlanOnly) { "계획 전용 실행이므로 조작하지 않았습니다." } else { [string]$planItem.control.pendingReason }
-                        $controlEvaluation = Invoke-HtsRawObservationEvaluation `
+                        $controlEvaluation = Invoke-HtsRawObservationEvaluation -Context $evaluationAdapterContext `
                             $(if ($PlanOnly) { 'EvidenceMissing' } else { 'InfrastructureError' }) `
                             $pendingOutput `
                             $pendingCode `
@@ -1403,7 +1384,7 @@ for ($caseIndex = 0; $caseIndex -lt $cases.Count; $caseIndex++) {
                     $controlObservationKind = if ($unexpectedScreenClose -or $newErrors -or ($isAssertionStep -and -not $invoke.success)) { 'ProductFailure' } elseif (-not $invoke.success -or $restorationFailed -or $queryExpectationIncomplete) { 'EvidenceMissing' } else { 'Success' }
                     $controlObservationCode = if (-not $invoke.success) {[string]$invoke.errorCode} elseif ($restorationFailed) {'TARGET_RESTORE_FAILED'} elseif ($queryExpectationIncomplete) {'QUERY_EXPECTATION_NOT_EXECUTED'} elseif ($unexpectedScreenClose) {'SCREEN_CLOSED_UNEXPECTEDLY'} elseif ($newErrors) {'PRODUCT_DEFECT_DETECTED'} else {''}
                     $controlCompletionExpectation = [pscustomobject]@{ type='Success';expectationId=[string]$expectedOutcome.expectationId;messagePatterns=@();errorCodes=@();evidence=@('컨트롤 실행 완료 계약') }
-                    $controlEvaluation = Invoke-HtsRawObservationEvaluation `
+                    $controlEvaluation = Invoke-HtsRawObservationEvaluation -Context $evaluationAdapterContext `
                         $controlObservationKind `
                         ([string]$invoke.output) `
                         $controlObservationCode `
@@ -1513,7 +1494,7 @@ for ($caseIndex = 0; $caseIndex -lt $cases.Count; $caseIndex++) {
                         } catch {
                             $guardMessage=Protect-Text $_.Exception.Message $secret
                             $queryExpectation = [pscustomobject]@{type='Success';expectationId="required-query-$queryIndex";messagePatterns=@();errorCodes=@();evidence=@('필수 조회 실행 계약')}
-                            $guardEvaluation = Invoke-HtsRawObservationEvaluation 'EvidenceMissing' $guardMessage 'INPUT_GUARD_BLOCKED' $queryExpectation $false $false 'required-query-guard'
+                            $guardEvaluation = Invoke-HtsRawObservationEvaluation -Context $evaluationAdapterContext 'EvidenceMissing' $guardMessage 'INPUT_GUARD_BLOCKED' $queryExpectation $false $false 'required-query-guard'
                             $guardTestResult = $guardEvaluation.testResult
                             $controlTests.Add([pscustomobject]@{
                                 planItemId="REQUIRED-QUERY-$queryIndex";controlId="REQUIRED-QUERY-$queryIndex";controlKind="Button";controlName='조회'
@@ -1570,7 +1551,7 @@ for ($caseIndex = 0; $caseIndex -lt $cases.Count; $caseIndex++) {
                         $queryObservationCode=if($queryAlive){''}elseif($queryNavigationHandled){'TARGET_RESTORE_FAILED'}else{'SCREEN_CLOSED_UNEXPECTEDLY'}
                         $queryName=if($queryControl.rawTitle){[string]$queryControl.rawTitle}elseif($tabOrderQueryControl){[string]$tabOrderQueryControl.name}else{"조회"}
                         $queryExpectation = [pscustomobject]@{type='Success';expectationId="required-query-$queryIndex";messagePatterns=@();errorCodes=@();evidence=@('필수 조회 실행 계약')}
-                        $queryEvaluation = Invoke-HtsRawObservationEvaluation $queryObservationKind '활성화된 조회 버튼을 필수 단계에서 실제 클릭했습니다.' $queryObservationCode $queryExpectation $true ($queryObservationKind -ne 'EvidenceMissing') 'required-query'
+                        $queryEvaluation = Invoke-HtsRawObservationEvaluation -Context $evaluationAdapterContext $queryObservationKind '활성화된 조회 버튼을 필수 단계에서 실제 클릭했습니다.' $queryObservationCode $queryExpectation $true ($queryObservationKind -ne 'EvidenceMissing') 'required-query'
                         $queryTestResult = $queryEvaluation.testResult
                         $queryStatus = [string]$queryTestResult.status
                         $controlTests.Add([pscustomobject]@{
@@ -1585,7 +1566,7 @@ for ($caseIndex = 0; $caseIndex -lt $cases.Count; $caseIndex++) {
                 } elseif (@($controlTests | Where-Object { $_.controlKind -eq 'Button' -and $_.controlName -eq '조회(탭오더)' -and $_.queryTriggered -and -not $_.errorDetected }).Count -gt 0) {
                     $completedTabQueries=@($controlTests | Where-Object { $_.controlKind -eq 'Button' -and $_.controlName -eq '조회(탭오더)' -and $_.queryTriggered -and -not $_.errorDetected }).Count
                     $queryHistoryExpectation = [pscustomobject]@{type='Success';expectationId='required-query-history';messagePatterns=@();errorCodes=@();evidence=@('탭오더 조회 실행 이력')}
-                    $queryHistoryEvaluation = Invoke-HtsRawObservationEvaluation 'Success' "탭오더 조회 버튼 $completedTabQueries개 실행 이력" '' $queryHistoryExpectation $true $true 'required-query-history'
+                    $queryHistoryEvaluation = Invoke-HtsRawObservationEvaluation -Context $evaluationAdapterContext 'Success' "탭오더 조회 버튼 $completedTabQueries개 실행 이력" '' $queryHistoryExpectation $true $true 'required-query-history'
                     $queryHistoryTestResult = $queryHistoryEvaluation.testResult
                     $controlTests.Add([pscustomobject]@{
                         planItemId='REQUIRED-QUERY-HISTORY';controlId='REQUIRED-QUERY-HISTORY';controlKind='Button';controlName='조회(탭오더)'
@@ -1781,7 +1762,7 @@ for ($caseIndex = 0; $caseIndex -lt $cases.Count; $caseIndex++) {
         type='Success';expectationId="case-completion:$($case.caseId)";messagePatterns=@();errorCodes=@()
         evidence=@($(if($scenarioMode){[string]$case.scenarioCase.expectedResult}else{'케이스 실행 완료 계약'}))
     }
-    $completionEvaluation = Invoke-HtsRawObservationEvaluation `
+    $completionEvaluation = Invoke-HtsRawObservationEvaluation -Context $evaluationAdapterContext `
         $completionObservationKind `
         $completionMessage `
         $completionObservationCode `
