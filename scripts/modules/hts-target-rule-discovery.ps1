@@ -42,6 +42,7 @@ function Test-RuleRuntimeKindCompatible([string]$PlannedKind, [string]$RuntimeKi
     $PlannedKind -eq $RuntimeKind
 }
 
+# 발견된 control이 실행 계획에 포함될 최소 조건을 만족하는지 확인한다.
 function Test-RuleControlExecutionEligible($Control) {
     if (-not $Control) { return $false }
     $rect = $Control.relativeRect
@@ -151,6 +152,7 @@ function Get-RuleConfiguredMapHostTransform($Context, $Screen, $MapModel, $Runti
     }
 }
 
+# MAP 좌표를 runtime 화면 좌표로 변환한 geometry를 반환한다.
 function Get-RuleMapGeometry($MapControl, $RuntimeControl, $Transform) {
     $scale = [double]$Transform.scale
     $left = ([double]$MapControl.rect.x*$scale)+[int]$Transform.offsetX

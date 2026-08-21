@@ -14,6 +14,7 @@ function New-HtsDiscoveryMetrics {
     }
 }
 
+# UI 탐색 의존성과 메트릭을 담은 Discovery 컨텍스트를 생성한다.
 function New-HtsDiscoveryContext {
     param(
         [Parameter(Mandatory = $true)]$SessionContext,
@@ -29,6 +30,7 @@ function New-HtsDiscoveryContext {
     }
 }
 
+# 이름으로 등록된 Discovery 의존성을 명시적 인수로 호출한다.
 function Invoke-HtsDiscoveryDependency {
     param(
         [Parameter(Mandatory = $true)]$Context,
@@ -44,6 +46,7 @@ function Invoke-HtsDiscoveryDependency {
     & $dependency @Arguments
 }
 
+# Discovery가 대체 경로를 선택한 이유를 메트릭에 기록한다.
 function Add-HtsDiscoveryFallbackReason {
     param(
         [Parameter(Mandatory = $true)]$Context,
@@ -56,6 +59,7 @@ function Add-HtsDiscoveryFallbackReason {
     }
 }
 
+# FlaUI를 통해 현재 화면에서 조작 가능한 원시 control 목록을 수집한다.
 function Get-HtsFlaUiActionableControls {
     param(
         [Parameter(Mandatory = $true)]$Context,
@@ -121,6 +125,7 @@ function Get-HtsFlaUiActionableControls {
     $rows.ToArray()
 }
 
+# 대상 adapter에서 현재 화면의 MAP 모델을 조회한다.
 function Get-HtsDiscoveryMapScreenModel {
     param(
         [Parameter(Mandatory = $true)]$Context,
@@ -131,6 +136,7 @@ function Get-HtsDiscoveryMapScreenModel {
     Invoke-HtsDiscoveryDependency -Context $Context -Name 'GetMapScreenModel' -Arguments @($ScreenNumber, $MapScreenCode)
 }
 
+# FlaUI와 MAP 탐색 결과를 조정해 원시 control 집합으로 반환한다.
 function Get-HtsDiscoveredControls {
     param(
         [Parameter(Mandatory = $true)]$Context,

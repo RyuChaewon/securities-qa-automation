@@ -61,6 +61,7 @@ function ConvertTo-FlaUiAsciiJson($Request) {
     $builder.ToString()
 }
 
+# 실행 중인 FlaUI bridge에 JSON 요청을 보내고 원시 응답을 반환한다.
 function Invoke-FlaUiBridgeRequest {
     param(
         [Parameter(Mandatory = $true)]$Context,
@@ -86,6 +87,7 @@ function Invoke-FlaUiBridgeRequest {
     $response
 }
 
+# bridge 프로세스와 표준 입출력 자원을 정상적으로 종료한다.
 function Stop-FlaUiBridge {
     param([Parameter(Mandatory = $true)]$Context)
 
@@ -99,6 +101,7 @@ function Stop-FlaUiBridge {
     try { $process.Dispose() } catch { }
 }
 
+# 오프라인 FlaUI bridge 프로세스를 시작하고 session에 연결한다.
 function Start-FlaUiBridge {
     param([Parameter(Mandatory = $true)]$Context)
 
@@ -124,6 +127,7 @@ function Start-FlaUiBridge {
     $process
 }
 
+# 프로세스 창 중 HTS 메인 창 후보를 찾아 반환한다.
 function Find-HtsMainWindow {
     param([Parameter(Mandatory = $true)]$Context)
 
@@ -139,6 +143,7 @@ function Find-HtsMainWindow {
     $main
 }
 
+# 제한 시간 동안 HTS 메인 창이 준비될 때까지 대기한다.
 function Wait-HtsMainWindow {
     param(
         [Parameter(Mandatory = $true)]$Context,
@@ -187,12 +192,14 @@ function Get-WindowInfo([IntPtr]$Hwnd) {
     }
 }
 
+# session의 FlaUI bridge를 통해 최상위 창 목록을 조회한다.
 function Get-TopWindows {
     $rows = New-Object Collections.Generic.List[object]
     [void][TargetRuleNative]::EnumWindows({ param($h, $l) $rows.Add((Get-WindowInfo $h)); return $true }, [IntPtr]::Zero)
     $rows
 }
 
+# session의 FlaUI bridge를 통해 지정 창의 자식 목록을 조회한다.
 function Get-ChildWindows([Int64]$ParentHwnd) {
     $rows = New-Object Collections.Generic.List[object]
     [void][TargetRuleNative]::EnumChildWindows([IntPtr]$ParentHwnd, { param($h, $l) $rows.Add((Get-WindowInfo $h)); return $true }, [IntPtr]::Zero)

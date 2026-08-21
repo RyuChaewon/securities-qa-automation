@@ -35,6 +35,7 @@ function New-HtsTargetRuleContext([string]$RootPath, $Dataset, $MapCatalog = $nu
     }
 }
 
+# 이름으로 등록된 target rule 의존성을 명시적 인수로 호출한다.
 function Invoke-HtsTargetRuleDependency($Context, [string]$Name, [object[]]$Arguments = @()) {
     if (-not $Context -or -not $Context.Dependencies -or -not ($Context.Dependencies.PSObject.Properties.Name -contains $Name)) {
         throw "TargetRule dependency가 없습니다: $Name"

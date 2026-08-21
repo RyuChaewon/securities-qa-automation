@@ -23,6 +23,7 @@ function New-HtsActionContext {
     }
 }
 
+# 이름으로 등록된 Action 의존성을 명시적 인수로 호출한다.
 function Invoke-HtsActionDependency {
     param(
         [Parameter(Mandatory = $true)]$Context,
@@ -38,6 +39,7 @@ function Invoke-HtsActionDependency {
     & $dependency @Arguments
 }
 
+# 실행 계획에서 FlaUI가 사용할 선택자 객체를 생성한다.
 function New-HtsFlaUiSelector {
     param([Parameter(Mandatory = $true)]$Window)
 
@@ -56,6 +58,7 @@ function New-HtsFlaUiSelector {
     }
 }
 
+# Action 경로가 대체 구현을 사용한 이유를 실행 메트릭에 기록한다.
 function Add-HtsActionFallbackReason {
     param(
         [Parameter(Mandatory = $true)]$Context,
@@ -68,6 +71,7 @@ function Add-HtsActionFallbackReason {
     }
 }
 
+# FlaUI 선택자와 동작을 bridge에 전달하고 원시 실행 결과를 반환한다.
 function Invoke-HtsFlaUiControlAction {
     param(
         [Parameter(Mandatory = $true)]$Context,
@@ -113,6 +117,7 @@ function Invoke-HtsFlaUiControlAction {
     }
 }
 
+# Rule control plan 항목을 주입된 target action 구현으로 전달한다.
 function Invoke-HtsRuleControlPlanAction {
     param(
         [Parameter(Mandatory = $true)]$Context,
@@ -124,6 +129,7 @@ function Invoke-HtsRuleControlPlanAction {
     Invoke-HtsActionDependency -Context $Context -Name 'InvokeRuleControlPlanItem' -Arguments @($NavigationContext,$Screen,$PlanItem)
 }
 
+# Dataset 변수 입력을 주입된 target action 구현으로 전달한다.
 function Invoke-HtsDatasetVariableAction {
     param(
         [Parameter(Mandatory = $true)]$Context,
@@ -149,6 +155,7 @@ function Invoke-FlaUiControlAction(
     Invoke-HtsFlaUiControlAction -Context $ActionContext -Window $Window -Action $Action -Value $Value -Index $Index -Checked $Checked -Key $Key
 }
 
+# 키보드나 마우스 입력 전에 허용된 HTS 프로세스가 전경인지 검증한다.
 function Assert-HtsForeground($ActionContext) {
     if($ActionContext.SafetyContext.MainHwnd -eq 0 -or $ActionContext.SafetyContext.MainPid -eq 0){return}
     $mainHwnd=[IntPtr][Int64]$ActionContext.SafetyContext.MainHwnd
@@ -213,6 +220,7 @@ function Assert-HtsForeground($ActionContext) {
     if([int]$foregroundPid -ne [int]$ActionContext.SafetyContext.MainPid){throw 'HTS_FOREGROUND_GUARD: HTS를 전경으로 확정하지 못해 입력을 차단했습니다.'}
 }
 
+# 안전 경계를 확인한 뒤 단일 가상 키 입력을 보낸다.
 function Send-Key($ActionContext, [byte]$Key) {
     $foregroundReady=$false
     $foregroundError=''
@@ -228,6 +236,7 @@ function Send-Key($ActionContext, [byte]$Key) {
     Start-Sleep -Milliseconds 30
 }
 
+# 지정한 입력 창에 포커스를 주고 실제 포커스 소유권을 확인한다.
 function Focus-HtsInputWindow($ActionContext, $Window) {
     if (-not $Window -or -not ($Window.PSObject.Properties.Name -contains 'hwnd') -or [Int64]$Window.hwnd -eq 0) {
         throw 'INPUT_SCOPE_BLOCKED: 포커스 대상 HWND가 없습니다.'
@@ -260,6 +269,7 @@ function Focus-HtsInputWindow($ActionContext, $Window) {
     Write-HtsSafetyInputBoundaryAudit -Context $ActionContext.SafetyContext -InputType 'KeyboardFocus' -Status 'ALLOWED' -X -1 -Y -1 -Detail "targetHwnd=$([Int64]$targetHwnd)"
 }
 
+# 허용된 UI 요소 중심 좌표에서 단일 또는 이중 클릭을 수행한다.
 function Click-Center($ActionContext, $Window, [switch]$DoubleClick) {
     $foregroundReady=$false
     $foregroundError=''
@@ -363,6 +373,7 @@ function Click-Center($ActionContext, $Window, [switch]$DoubleClick) {
     Start-Sleep -Milliseconds 120
 }
 
+# UI 요소에 텍스트를 입력하고 민감 값은 로그에서 보호한다.
 function Set-AutomationText($ActionContext, $Window, [string]$Value, [switch]$Sensitive, [switch]$AlreadyFocused) {
     $ActionContext.RuntimeContext.LastTextAutomationEngine = 'Win32 fallback'
     $scopeWindow=$Window
@@ -438,6 +449,7 @@ function Set-AutomationText($ActionContext, $Window, [string]$Value, [switch]$Se
     return $(if ($Sensitive) { $length -gt 0 -or $sentByVirtualKeys } elseif ([string]$current.rawTitle -eq $Value) { $true } else { $sentByVirtualKeys })
 }
 
+# 대화상자가 승인된 상태 변경 확인 창인지 보수적으로 식별한다.
 function Test-HtsTransactionalConfirmationDialog($ActionContext, $Dialog, $PlanItem) {
     if (-not $ActionContext -or -not $Dialog -or -not $PlanItem) { return $false }
     $policy = Get-HtsTargetTransactionalDialogPolicy $ActionContext.TargetAdapter
@@ -456,6 +468,7 @@ function Test-HtsTransactionalConfirmationDialog($ActionContext, $Dialog, $PlanI
     @($Dialog.buttons | Where-Object { [string]$_ -match $positiveButtonPattern }).Count -gt 0
 }
 
+# 명시적 거래 승인 조건을 만족할 때만 확인 대화상자를 제출한다.
 function Submit-HtsTransactionalDialog($ActionContext, $Dialog, $PlanItem) {
     $policy = Get-HtsTargetTransactionalDialogPolicy $ActionContext.TargetAdapter
     if (-not $policy) {
@@ -500,6 +513,7 @@ function Submit-HtsTransactionalDialog($ActionContext, $Dialog, $PlanItem) {
     }
 }
 
+# 관찰된 대화상자를 안전 정책에 따라 닫고 수행 기록을 반환한다.
 function Dismiss-HtsDialogs($ActionContext, $ObservationContext, $RuntimeContext, $Main, [string]$Secret = "") {
     $dismissed = 0
     foreach ($dialog in @(Invoke-HtsActionDependency -Context $ActionContext -Name 'GetDialogs' -Arguments @($ObservationContext,$RuntimeContext,$Main,$Secret))) {

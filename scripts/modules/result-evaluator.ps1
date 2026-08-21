@@ -22,6 +22,7 @@ function New-HtsEvaluationAdapterContext {
     }
 }
 
+# 원시 Observation을 C# ResultEvaluator 입력으로 전달하고 TestResult를 반환한다.
 function Invoke-HtsRawObservationEvaluation {
     param(
         [Parameter(Mandatory = $true)]$Context,
@@ -53,6 +54,7 @@ function Invoke-HtsRawObservationEvaluation {
     $evaluation
 }
 
+# rule 실행 결과 파일을 단일 C# 평가 명령으로 처리한다.
 function Invoke-RuleResultEvaluation {
     [CmdletBinding()]
     param(
@@ -87,6 +89,7 @@ function Invoke-RuleResultEvaluation {
     Get-Content -LiteralPath $outputPath -Raw -Encoding UTF8 | ConvertFrom-Json
 }
 
+# legacy rule 신호를 ResultEvaluator가 소비할 평가 케이스로 변환한다.
 function New-RuleSignalEvaluationCase {
     [CmdletBinding()]
     param(
@@ -124,6 +127,7 @@ function New-RuleSignalEvaluationCase {
     }
 }
 
+# rule 신호 평가 케이스를 단일 C# 평가 경로로 전달한다.
 function Invoke-RuleSignalEvaluation {
     [CmdletBinding()]
     param(

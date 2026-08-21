@@ -15,6 +15,7 @@ function New-HtsBindingContext {
     }
 }
 
+# 승인 계획에서 실행할 단일 케이스의 불변 컨텍스트를 생성한다.
 function New-HtsExecutionCaseContext {
     param(
         [string]$ScreensCsv = '',
@@ -39,6 +40,7 @@ function New-HtsExecutionCaseContext {
     }
 }
 
+# 승인된 계획만 필터링해 Runner가 소비할 실행 케이스로 변환한다.
 function Get-ExecutionCasesFromApprovedPlans {
     param([Parameter(Mandatory = $true)]$Context)
 
@@ -97,6 +99,7 @@ function Get-ExecutionCasesFromApprovedPlans {
     }
 }
 
+# 이름으로 등록된 Binding 의존성을 명시적 인수로 호출한다.
 function Invoke-HtsBindingDependency {
     param(
         [Parameter(Mandatory = $true)]$Context,
@@ -112,6 +115,7 @@ function Invoke-HtsBindingDependency {
     & $dependency @Arguments
 }
 
+# UI 요소가 허용된 바인딩 영역 안에 있는지 확인한다.
 function Test-HtsBindingRegion {
     param($Candidate, $Screen, [string]$Region)
 
@@ -127,6 +131,7 @@ function Test-HtsBindingRegion {
     }
 }
 
+# 논리 역할과 일치하는 실제 UI control을 후보 집합에서 해결한다.
 function Resolve-HtsRoleControl {
     param(
         [Parameter(Mandatory = $true)]$Context,
@@ -171,6 +176,7 @@ function Resolve-HtsRoleControl {
     $null
 }
 
+# 이미 논리 역할에 할당된 HWND 집합을 중복 방지 맵으로 반환한다.
 function Get-HtsClaimedControlHwndMap {
     param(
         [Parameter(Mandatory = $true)]$Context,
@@ -196,6 +202,7 @@ function Get-HtsClaimedControlHwndMap {
     $claimedHwnds
 }
 
+# 시나리오의 논리 control을 발견된 실제 UI 요소와 연결한다.
 function Set-HtsScenarioPhysicalBinding {
     param(
         [Parameter(Mandatory = $true)]$Context,
@@ -233,6 +240,7 @@ function Set-HtsScenarioPhysicalBinding {
     $PlanItem
 }
 
+# 조회 실행에 필요한 필수 control 바인딩만 검증해 반환한다.
 function Get-HtsRequiredQueryControls {
     param(
         [Parameter(Mandatory = $true)]$Context,

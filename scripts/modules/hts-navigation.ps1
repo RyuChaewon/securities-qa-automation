@@ -31,6 +31,7 @@ function New-HtsNavigationContext {
     }
 }
 
+# 이름으로 등록된 Navigation 의존성을 명시적 인수로 호출한다.
 function Invoke-HtsNavigationDependency {
     param(
         [Parameter(Mandatory = $true)]$Context,
@@ -41,6 +42,7 @@ function Invoke-HtsNavigationDependency {
     & $adapter @ArgumentList
 }
 
+# 현재 탐색 세션에서 닫지 않을 화면 식별자 집합을 설정한다.
 function Set-HtsNavigationPreservedScreens {
     param(
         [Parameter(Mandatory = $true)]$Context,
@@ -50,6 +52,7 @@ function Set-HtsNavigationPreservedScreens {
     $Context.PreservedTargetScreenHwnds
 }
 
+# 요청한 화면 번호와 일치하는 최상위 창을 찾는다.
 function Find-HtsNavigationScreenWindow {
     param(
         [Parameter(Mandatory = $true)]$Context,
@@ -61,6 +64,7 @@ function Find-HtsNavigationScreenWindow {
     } | Sort-Object @{ Expression = { [int]$_.rect.width * [int]$_.rect.height }; Descending = $true } | Select-Object -First 1
 }
 
+# 창 메타데이터에서 화면 번호를 추출한다.
 function Get-HtsNavigationScreenNumber {
     param(
         [Parameter(Mandatory = $true)]$Context,
@@ -73,6 +77,7 @@ function Get-HtsNavigationScreenNumber {
     ''
 }
 
+# HTS 메인 창에 연결된 번호 화면 창 목록을 반환한다.
 function Get-HtsNavigationScreenWindows {
     param(
         [Parameter(Mandatory = $true)]$Context,
@@ -84,6 +89,7 @@ function Get-HtsNavigationScreenWindows {
     } | Sort-Object @{Expression={ [Int64]$_.rect.width * [Int64]$_.rect.height };Descending=$true})
 }
 
+# 발견한 창이 요청 화면과 일치하는지 확인한다.
 function Test-HtsNavigationRequestedScreen {
     param(
         [Parameter(Mandatory = $true)]$Context,
@@ -95,6 +101,7 @@ function Test-HtsNavigationRequestedScreen {
     [bool]$current.visible -and (Get-HtsNavigationScreenNumber -Context $Context -Window $current) -eq $ScreenNumber
 }
 
+# 요청 화면 창을 전경으로 전환하고 접근 가능 여부를 반환한다.
 function Focus-HtsNavigationRequestedScreen {
     param(
         [Parameter(Mandatory = $true)]$Context,
@@ -112,6 +119,7 @@ function Focus-HtsNavigationRequestedScreen {
     $true
 }
 
+# 화면 번호 입력 경로를 통해 요청 화면을 열고 결과 창을 반환한다.
 function Open-HtsNavigationScreen {
     param(
         [Parameter(Mandatory = $true)]$Context,
@@ -140,6 +148,7 @@ function Open-HtsNavigationScreen {
     }
 }
 
+# 요청 화면과 연결된 보조 화면 창을 조회한다.
 function Get-HtsNavigationLinkedScreens {
     param(
         [Parameter(Mandatory = $true)]$Context,
@@ -152,6 +161,7 @@ function Get-HtsNavigationLinkedScreens {
     })
 }
 
+# 보존 대상이 아닌 요청 화면의 연결 창만 닫는다.
 function Close-HtsNavigationLinkedScreens {
     param(
         [Parameter(Mandatory = $true)]$Context,
@@ -169,6 +179,7 @@ function Close-HtsNavigationLinkedScreens {
     $closed
 }
 
+# 창의 입력 가능 영역 특성으로 콘텐츠 표면 후보 점수를 계산한다.
 function Get-HtsNavigationInputSurfaceScore {
     param(
         [Parameter(Mandatory = $true)]$Context,
@@ -187,6 +198,7 @@ function Get-HtsNavigationInputSurfaceScore {
     }).Count
 }
 
+# 요청 화면과 새로 열린 창 중 가장 적합한 입력 표면을 선택한다.
 function Find-HtsNavigationBestContentSurface {
     param(
         [Parameter(Mandatory = $true)]$Context,
@@ -229,6 +241,7 @@ function Find-HtsNavigationBestContentSurface {
     $RequestedWindow
 }
 
+# 허용된 화면 창에 닫기 요청을 보내고 종료 여부를 확인한다.
 function Close-HtsNavigationScreen {
     param(
         [Parameter(Mandatory = $true)]$Context,
@@ -250,6 +263,7 @@ function Close-HtsNavigationScreen {
     -not [bool](Invoke-HtsNavigationDependency -Context $Context -Name 'IsWindow' -ArgumentList @([Int64]$Screen.hwnd))
 }
 
+# 보존 정책을 지키며 기존 대상 화면 창을 정리한다.
 function Close-HtsNavigationExistingTargetScreens {
     param(
         [Parameter(Mandatory = $true)]$Context,
@@ -266,6 +280,7 @@ function Close-HtsNavigationExistingTargetScreens {
     $closed
 }
 
+# 창이 현재 탐색 세션의 보존 화면인지 확인한다.
 function Test-HtsNavigationPreservedTargetScreen {
     param(
         [Parameter(Mandatory = $true)]$Context,
@@ -274,6 +289,7 @@ function Test-HtsNavigationPreservedTargetScreen {
     $Window -and $Context.PreservedTargetScreenHwnds -contains [Int64]$Window.hwnd
 }
 
+# 화면 검색 과정에서 열린 임시 overlay만 닫는다.
 function Close-HtsNavigationSearchOverlays {
     param(
         [Parameter(Mandatory = $true)]$Context,
@@ -304,6 +320,7 @@ function Find-ScreenNumberEdit($RuntimeContext, $Main) {
     $edit
 }
 
+# 화면 번호 입력 control이 실제로 입력 가능한 상태인지 확인한다.
 function Test-HtsScreenNavigationInputAccess($ScreenEdit) {
     $targetHwnd = [IntPtr][Int64]$ScreenEdit.hwnd
     [IntPtr]$messageResult = [IntPtr]::Zero
@@ -318,6 +335,7 @@ function Test-HtsScreenNavigationInputAccess($ScreenEdit) {
     [int]$messageResult.ToInt64()
 }
 
+# 화면 번호 입력 control에 요청 값을 설정한다.
 function Set-HtsScreenNumber($ScreenEdit, [string]$ScreenNumber) {
     [void](Test-HtsScreenNavigationInputAccess $ScreenEdit)
     $uiaResult = Invoke-FlaUiControlAction $ScreenEdit 'setText' -Value $ScreenNumber
@@ -353,58 +371,72 @@ function Set-HtsScreenNumber($ScreenEdit, [string]$ScreenNumber) {
     throw "SCREEN_NAVIGATION_TEXT_UNVERIFIED: 화면번호 '$ScreenNumber' 입력을 확인하지 못했습니다. $uiaDetail; nativeText='$([string]$current.rawTitle)'; win32Error=$nativeError"
 }
 
+# 기존 호출 계약을 유지하며 화면 열기를 Navigation 구현에 위임한다.
 function Open-HtsScreen($NavigationContext, $Main, $ScreenEdit, [string]$ScreenNumber) {
     Open-HtsNavigationScreen -Context $navigationContext -Main $Main -ScreenEdit $ScreenEdit -ScreenNumber $ScreenNumber
 }
 
+# 기존 호출 계약을 유지하며 화면 창 찾기를 Navigation 구현에 위임한다.
 function Find-ScreenWindow($NavigationContext, $Main, [string]$ScreenNumber) {
     Find-HtsNavigationScreenWindow -Context $navigationContext -Main $Main -ScreenNumber $ScreenNumber
 }
 
+# 기존 호출 계약을 유지하며 화면 번호 추출을 Navigation 구현에 위임한다.
 function Get-HtsScreenNumber($NavigationContext, $Window) {
     Get-HtsNavigationScreenNumber -Context $navigationContext -Window $Window
 }
 
+# 기존 호출 계약을 유지하며 화면 창 조회를 Navigation 구현에 위임한다.
 function Get-HtsScreenWindows($NavigationContext, $Main) {
     @(Get-HtsNavigationScreenWindows -Context $navigationContext -Main $Main)
 }
 
+# 기존 호출 계약을 유지하며 요청 화면 검증을 Navigation 구현에 위임한다.
 function Test-HtsRequestedScreen($NavigationContext, $Screen, [string]$ScreenNumber) {
     Test-HtsNavigationRequestedScreen -Context $navigationContext -Screen $Screen -ScreenNumber $ScreenNumber
 }
 
+# 기존 호출 계약을 유지하며 요청 화면 포커스를 Navigation 구현에 위임한다.
 function Focus-HtsRequestedScreen($NavigationContext, $Main, $Screen, [string]$ScreenNumber) {
     Focus-HtsNavigationRequestedScreen -Context $navigationContext -Main $Main -Screen $Screen -ScreenNumber $ScreenNumber
 }
 
+# 기존 호출 계약을 유지하며 연결 화면 조회를 Navigation 구현에 위임한다.
 function Get-HtsLinkedScreens($NavigationContext, $Main, [string]$RequestedScreenNumber) {
     @(Get-HtsNavigationLinkedScreens -Context $navigationContext -Main $Main -RequestedScreenNumber $RequestedScreenNumber)
 }
 
+# 기존 호출 계약을 유지하며 연결 화면 닫기를 Navigation 구현에 위임한다.
 function Close-HtsLinkedScreens($NavigationContext, $Main, [string]$RequestedScreenNumber) {
     Close-HtsNavigationLinkedScreens -Context $navigationContext -Main $Main -RequestedScreenNumber $RequestedScreenNumber
 }
 
+# 기존 호출 계약을 유지하며 입력 표면 점수 계산을 Navigation 구현에 위임한다.
 function Get-HtsInputSurfaceScore($NavigationContext, $Window) {
     Get-HtsNavigationInputSurfaceScore -Context $navigationContext -Window $Window
 }
 
+# 기존 호출 계약을 유지하며 최적 콘텐츠 표면 선택을 Navigation 구현에 위임한다.
 function Find-BestHtsContentSurface($NavigationContext, $Main, $RequestedWindow, [string]$RequestedScreenNumber, [Int64[]]$BaselineScreenHwnds = @()) {
     Find-HtsNavigationBestContentSurface -Context $navigationContext -Main $Main -RequestedWindow $RequestedWindow -RequestedScreenNumber $RequestedScreenNumber -BaselineScreenHwnds $BaselineScreenHwnds
 }
 
+# 기존 호출 계약을 유지하며 화면 닫기를 Navigation 구현에 위임한다.
 function Close-HtsScreen($NavigationContext, $Screen) {
     Close-HtsNavigationScreen -Context $navigationContext -Screen $Screen
 }
 
+# 기존 호출 계약을 유지하며 기존 대상 화면 정리를 Navigation 구현에 위임한다.
 function Close-ExistingTargetScreens($NavigationContext, $Main) {
     Close-HtsNavigationExistingTargetScreens -Context $navigationContext -Main $Main
 }
 
+# 기존 호출 계약을 유지하며 보존 화면 여부 확인을 Navigation 구현에 위임한다.
 function Test-PreservedTargetScreen($NavigationContext, $Window) {
     Test-HtsNavigationPreservedTargetScreen -Context $navigationContext -Window $Window
 }
 
+# 기존 호출 계약을 유지하며 검색 overlay 정리를 Navigation 구현에 위임한다.
 function Close-ScreenSearchOverlays($NavigationContext, $Main) {
     Close-HtsNavigationSearchOverlays -Context $navigationContext -Main $Main
 }

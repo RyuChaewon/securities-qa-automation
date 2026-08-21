@@ -21,41 +21,49 @@ function New-HtsObservationContext {
     }
 }
 
+# 관찰 대상 프로세스의 최상위 창 목록을 의존성에서 조회한다.
 function Get-HtsObservationTopWindows {
     param([Parameter(Mandatory = $true)]$Context)
     @(Invoke-HtsObservationDependency -Context $Context -Name 'GetTopWindows')
 }
 
+# 지정한 부모 창의 자식 창 목록을 의존성에서 조회한다.
 function Get-HtsObservationChildWindows {
     param([Parameter(Mandatory = $true)]$Context, [Int64]$Hwnd)
     @(Invoke-HtsObservationDependency -Context $Context -Name 'GetChildWindows' -Arguments @($Hwnd))
 }
 
+# HWND에 대한 원시 창 메타데이터를 의존성에서 조회한다.
 function Get-HtsObservationWindowInfo {
     param([Parameter(Mandatory = $true)]$Context, [Int64]$Hwnd)
     Invoke-HtsObservationDependency -Context $Context -Name 'GetWindowInfo' -Arguments @($Hwnd)
 }
 
+# 창에서 화면 번호를 추출하는 의존성을 호출한다.
 function Get-HtsObservationScreenNumber {
     param([Parameter(Mandatory = $true)]$Context, $Window)
     Invoke-HtsObservationDependency -Context $Context -Name 'GetScreenNumber' -Arguments @($Window)
 }
 
+# 관찰 텍스트에서 비밀 값을 제거한 안전한 문자열을 반환한다.
 function Protect-HtsObservationText {
     param([Parameter(Mandatory = $true)]$Context, $Text, [string]$Secret = '')
     Invoke-HtsObservationDependency -Context $Context -Name 'ProtectText' -Arguments @($Text,$Secret)
 }
 
+# 증거 파일 경로를 보고서 기준 상대 경로로 변환한다.
 function Get-HtsObservationRelativePath {
     param([Parameter(Mandatory = $true)]$Context, [string]$BasePath, [string]$Path)
     Invoke-HtsObservationDependency -Context $Context -Name 'GetRelativeFilePath' -Arguments @($BasePath,$Path)
 }
 
+# 테스트에서 교체 가능한 시각 공급자로 현재 시각을 반환한다.
 function Get-HtsObservationNow {
     param([Parameter(Mandatory = $true)]$Context)
     Invoke-HtsObservationDependency -Context $Context -Name 'GetNow'
 }
 
+# 새 케이스 관찰 전에 순번과 대상별 임시 상태를 초기화한다.
 function Reset-HtsObservationCaseContext {
     param(
         [Parameter(Mandatory = $true)]$Context,
@@ -73,6 +81,7 @@ function Reset-HtsObservationCaseContext {
     $Context
 }
 
+# 이름으로 등록된 Observation 의존성을 명시적 인수로 호출한다.
 function Invoke-HtsObservationDependency {
     param(
         [Parameter(Mandatory = $true)]$Context,
@@ -88,12 +97,14 @@ function Invoke-HtsObservationDependency {
     & $dependency @Arguments
 }
 
+# 현재 케이스의 다음 관찰 순번을 원자적으로 증가시켜 반환한다.
 function Get-HtsNextObservationSequence {
     param([Parameter(Mandatory = $true)]$Context)
     $Context.ResultEvaluationSequence++
     [int]$Context.ResultEvaluationSequence
 }
 
+# 관찰 메시지와 일치하는 MAP oracle 기대 항목을 찾는다.
 function Get-HtsMapOracleMessageMatch {
     param([string]$Text, $MapOracle)
 
@@ -108,6 +119,7 @@ function Get-HtsMapOracleMessageMatch {
     $null
 }
 
+# 관찰 텍스트에서 설치별 오류 코드 정의와 일치하는 항목을 찾는다.
 function Get-HtsInstallationErrorCodeMatch {
     param([Parameter(Mandatory = $true)]$Context, [string]$Text)
 
@@ -121,6 +133,7 @@ function Get-HtsInstallationErrorCodeMatch {
     $null
 }
 
+# MAP oracle 근거로 관찰에 대응하는 기대 결과 메타데이터를 구성한다.
 function Get-HtsExpectedOutcome {
     param($Option, $FallbackPatterns = @())
 
@@ -144,16 +157,19 @@ function Get-HtsExpectedOutcome {
     }
 }
 
+# 원시 신호가 시스템 실패를 나타내는지 보수적으로 확인한다.
 function Test-HtsSystemFailureSignal {
     param([string]$Text)
     $Text -match '시스템\s*오류|처리\s*오류가?\s*발생|서버\s*(오류|장애|접속)|통신\s*(오류|장애|실패)|소켓|Socket|Exception|예외|프로그램\s*(오류|종료)|강제\s*종료|응답\s*(없음|하지)|세션\s*만료|자동\s*로그아웃'
 }
 
+# 원시 신호가 입력 검증 메시지를 나타내는지 확인한다.
 function Test-HtsInputValidationSignal {
     param([string]$Text)
     $Text -match '종목\s*코드\s*오류|계좌번호를?\s*확인|비밀번호를?\s*확인|하나를\s*선택해\s*주세요|입력해\s*주세요|선택해\s*주세요|조회가\s*불가|시작일자가\s*종료일자보다'
 }
 
+# 메시지와 근거를 판정 전 원시 Observation 객체로 생성한다.
 function New-HtsSignalObservation {
     param(
         [Parameter(Mandatory = $true)]$Context,
@@ -197,11 +213,13 @@ function New-HtsSignalObservation {
     }
 }
 
+# 대화상자 메타데이터를 판정 전 원시 Observation 객체로 생성한다.
 function New-HtsDialogObservation {
     param([Parameter(Mandatory = $true)]$Context,$Dialog,$MapOracle,$ExpectedOutcome,[regex]$ErrorRegex)
     New-HtsSignalObservation -Context $Context -Text ([string]$Dialog.text) -MapOracle $MapOracle -ExpectedOutcome $ExpectedOutcome -ErrorRegex $ErrorRegex -FallbackClassification ([string]$Dialog.classification)
 }
 
+# MAP oracle와 일치한 원시 관찰을 케이스 증거 목록에 추가한다.
 function Add-HtsOracleObservation {
     param(
         [Parameter(Mandatory = $true)]$Context,
@@ -239,6 +257,7 @@ function Add-HtsOracleObservation {
     }
 }
 
+# 설치 설정과 기본값에서 오류 신호 탐지 정규식을 구성한다.
 function Get-HtsObservationErrorRegex {
     param([Parameter(Mandatory = $true)]$Context,[regex]$BaseRegex,$MapOracle)
 
@@ -249,6 +268,7 @@ function Get-HtsObservationErrorRegex {
     [regex]::new(($patterns -join '|'),[Text.RegularExpressions.RegexOptions]::IgnoreCase)
 }
 
+# 메인 창에 연결된 대화상자를 수집하고 민감 텍스트를 보호한다.
 function Get-HtsDialogs($Context, $RuntimeContext, $Main, [string]$Secret = "") {
     foreach ($window in @(Get-HtsObservationTopWindows $Context | Where-Object {
         $_.visible -and $_.pid -eq $Main.pid -and $_.hwnd -ne $Main.hwnd -and
@@ -282,6 +302,7 @@ function Get-HtsDialogs($Context, $RuntimeContext, $Main, [string]$Secret = "") 
     }
 }
 
+# 연결 화면의 상태와 스크린샷 경로를 원시 관찰 목록에 추가한다.
 function Add-LinkedScreenObservations($Context, $RuntimeContext, $List, $LinkedScreens, $Main, [string]$CaseId, [string]$RequestedScreenNumber, [string]$ReportBase, [string]$Secret = "", $ExpectedTargets = @()) {
     $index=$List.Count
     $expectedNumbers=@($ExpectedTargets | Where-Object targetScreenCode | ForEach-Object {
@@ -308,6 +329,7 @@ function Add-LinkedScreenObservations($Context, $RuntimeContext, $List, $LinkedS
     }
 }
 
+# 번호가 없는 화면 전환 창을 원시 관찰 목록에 추가한다.
 function Add-UnnumberedTransitionObservation($Context, $RuntimeContext, $List, $Main, [string]$CaseId, [string]$RequestedScreenNumber, [string]$ReportBase, [string]$Secret = "") {
     $index=$List.Count+1
     $visibleTitles=@(Get-HtsObservationTopWindows $Context | Where-Object {
@@ -323,6 +345,7 @@ function Add-UnnumberedTransitionObservation($Context, $RuntimeContext, $List, $
     })
 }
 
+# 대화상자가 연결 상태 알림인지 텍스트와 class 정보로 확인한다.
 function Test-HtsConnectionDialog($Dialog) {
     $buttonText = @($Dialog.buttons | ForEach-Object {
         if ($_ -is [string]) { [string]$_ }
@@ -334,11 +357,13 @@ function Test-HtsConnectionDialog($Dialog) {
     $dialogText -match '접속\s*해제|연결이\s*끊어|재접속|프로그램\s*종료|connection\s*(lost|disconnected)|reconnect'
 }
 
+# 현재 연결 상태 대화상자만 필터링해 반환한다.
 function Get-HtsConnectionDialogs($Context, $RuntimeContext, $Main, [string]$Secret = '') {
     if (-not $Main) { return @() }
     @(Get-HtsDialogs $Context $RuntimeContext $Main $Secret | Where-Object { Test-HtsConnectionDialog $_ })
 }
 
+# 팝업 메시지와 증거를 판정하지 않은 Observation으로 목록에 추가한다.
 function Add-PopupObservations($Context, $List, $Dialogs, $Main, [string]$CaseId, [string]$ScreenNumber, [string]$ReportBase, $ExpectedPatterns, $MapOracle = $null) {
     $index = $List.Count
     foreach ($dialog in @($Dialogs)) {
@@ -383,6 +408,7 @@ function Add-PopupObservations($Context, $List, $Dialogs, $Main, [string]$CaseId
     }
 }
 
+# 지정한 HTS 창 범위의 스크린샷을 증거 경로에 저장한다.
 function Capture-HtsScreenshot($Context, $Main, [string]$Path, [bool]$IncludeVisibleOwnedWindows = $false) {
     $mainHwnd=[IntPtr][Int64]$Main.hwnd
     if(-not [TargetRuleNative]::IsWindow($mainHwnd)){return $false}
@@ -414,6 +440,7 @@ function Capture-HtsScreenshot($Context, $Main, [string]$Path, [bool]$IncludeVis
     }
 }
 
+# 관찰 시작 시점의 로그 파일 길이와 타임스탬프를 스냅샷으로 반환한다.
 function Get-LogState($Context) {
     $state = @{}
     $sources = if ($Context.MapCatalog -and $Context.MapCatalog.logSources) { @($Context.MapCatalog.logSources) } else {
@@ -439,6 +466,7 @@ function Get-LogState($Context) {
     $state
 }
 
+# 기준 스냅샷 이후 증가한 전송 로그 구간만 반환한다.
 function Get-TransmissionDelta($Context, $Before) {
     $after = Get-LogState $Context
     $changes = New-Object Collections.Generic.List[string]
@@ -457,6 +485,7 @@ function Get-TransmissionDelta($Context, $Before) {
     [pscustomobject]@{hasTransmission=($changes.Count-gt0);sources=@($changes.ToArray() | Select-Object -Unique)}
 }
 
+# 기준 이후 로그에서 오류 패턴과 oracle 신호를 원시 증거로 수집한다.
 function Get-LogErrors($Context, $Before, [regex]$ErrorRegex, [string]$Secret, $MapOracle = $null) {
     $errors = New-Object Collections.Generic.List[string]
     foreach ($path in $Before.Keys) {
@@ -496,6 +525,7 @@ function Get-LogErrors($Context, $Before, [regex]$ErrorRegex, [string]$Secret, $
     @($errors | Select-Object -Last 20)
 }
 
+# 현재 창 트리에서 오류 패턴과 일치하는 보호된 텍스트를 수집한다.
 function Get-ErrorWindowTexts($Context, $Main, [regex]$ErrorRegex, [string]$Secret) {
     $rows = New-Object Collections.Generic.List[string]
     foreach ($window in @(Get-HtsObservationTopWindows $Context | Where-Object { $_.visible -and $_.pid -eq $Main.pid })) {
@@ -505,6 +535,7 @@ function Get-ErrorWindowTexts($Context, $Main, [regex]$ErrorRegex, [string]$Secr
     @($rows | Sort-Object -Unique)
 }
 
+# 기준 이후 새로 나타난 명시적 창 오류만 원시 증거로 반환한다.
 function Get-ExplicitWindowErrors($Context, $Main, $BeforeErrorTexts, [regex]$ErrorRegex, [string]$Secret, $MapOracle = $null) {
     $rows = New-Object Collections.Generic.List[string]
     $top = @(Get-HtsObservationTopWindows $Context | Where-Object { $_.visible -and $_.pid -eq $Main.pid })

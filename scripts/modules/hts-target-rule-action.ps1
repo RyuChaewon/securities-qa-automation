@@ -14,14 +14,17 @@ function Invoke-HtsTargetTextInput($Context, $Window, [string]$Value, [bool]$Alr
     [bool]$result.success
 }
 
+# target rule action 컨텍스트의 검증된 클릭 구현을 호출한다.
 function Invoke-HtsTargetClick($Context, $Window, [switch]$DoubleClick) {
     [void](Invoke-HtsTargetRuleDependency $Context 'ClickCenter' @($Window,[bool]$DoubleClick))
 }
 
+# target rule action에서 주입된 대기 구현을 호출한다.
 function Invoke-HtsTargetSleep($Context, [int]$Milliseconds) {
     [void](Invoke-HtsTargetRuleDependency $Context 'Sleep' @($Milliseconds))
 }
 
+# target rule action을 FlaUI control 동작 계약으로 전달한다.
 function Invoke-HtsTargetFlaUiControlAction(
     $Context,
     $Window,

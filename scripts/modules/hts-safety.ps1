@@ -14,6 +14,7 @@ function New-HtsSafetyContext {
     }
 }
 
+# 이름으로 등록된 Safety 의존성을 명시적 인수로 호출한다.
 function Invoke-HtsSafetyDependency {
     param([Parameter(Mandatory = $true)]$Context,[Parameter(Mandatory = $true)][string]$Name,[object[]]$Arguments=@())
     if(-not $Context.Dependencies -or -not ($Context.Dependencies.PSObject.Properties.Name -contains $Name)){throw "HTS safety dependency가 없습니다: $Name"}
@@ -22,21 +23,25 @@ function Invoke-HtsSafetyDependency {
     & $dependency @Arguments
 }
 
+# 안전 검증에 사용할 HTS 프로세스와 메인 창 식별자를 설정한다.
 function Set-HtsSafetySession {
     param([Parameter(Mandatory = $true)]$Context,[Parameter(Mandatory = $true)]$Main)
     $Context.MainHwnd=[Int64]$Main.hwnd;$Context.MainPid=[int]$Main.pid
 }
 
+# 입력 좌표가 허용 사각형 내부인지 확인한다.
 function Test-HtsSafetyPointInRect {
     param([int]$X,[int]$Y,$Rect)
     $Rect -and $X -ge [int]$Rect.left -and $X -lt [int]$Rect.right -and $Y -ge [int]$Rect.top -and $Y -lt [int]$Rect.bottom
 }
 
+# 현재 허용된 입력 표면 정보를 제거해 후속 입력을 차단한다.
 function Clear-HtsSafetyInputSurface {
     param([Parameter(Mandatory = $true)]$Context)
     $Context.ActiveInputSurfaceHwnd=[Int64]0;$Context.ActiveInputSurfaceKind='None';$Context.ActiveInputSurfaceLabel=''
 }
 
+# 검증된 HWND와 경계를 현재 허용 입력 표면으로 설정한다.
 function Set-HtsSafetyInputSurface {
     param([Parameter(Mandatory = $true)]$Context,$Window,[string]$Kind,[string]$Label='')
     if(-not $Window -or [Int64]$Window.hwnd -eq 0 -or -not [bool](Invoke-HtsSafetyDependency $Context 'IsWindow' @([Int64]$Window.hwnd))){
@@ -56,6 +61,7 @@ function Set-HtsSafetyInputSurface {
     $Context.ActiveInputSurfaceHwnd=[Int64]$current.hwnd;$Context.ActiveInputSurfaceKind=$Kind;$Context.ActiveInputSurfaceLabel=$Label
 }
 
+# 현재 활성화된 입력 표면의 불변 스냅샷을 반환한다.
 function Get-HtsSafetyActiveInputSurface {
     param([Parameter(Mandatory = $true)]$Context)
     if($Context.ActiveInputSurfaceHwnd -eq 0 -or -not [bool](Invoke-HtsSafetyDependency $Context 'IsWindow' @([Int64]$Context.ActiveInputSurfaceHwnd))){
@@ -64,6 +70,7 @@ function Get-HtsSafetyActiveInputSurface {
     Invoke-HtsSafetyDependency $Context 'GetWindowInfo' @([Int64]$Context.ActiveInputSurfaceHwnd)
 }
 
+# 클릭 좌표와 소유 창이 허용 입력 표면에 속하는지 검증한다.
 function Assert-HtsSafetyClickScope {
     param([Parameter(Mandatory = $true)]$Context,$Window,[int]$X,[int]$Y)
     $main=Invoke-HtsSafetyDependency $Context 'GetWindowInfo' @([Int64]$Context.MainHwnd)
@@ -85,6 +92,7 @@ function Assert-HtsSafetyClickScope {
     }
 }
 
+# 키보드 대상 HWND가 허용 입력 표면과 HTS 프로세스에 속하는지 검증한다.
 function Assert-HtsSafetyKeyboardScope {
     param([Parameter(Mandatory = $true)]$Context)
     $surface=Get-HtsSafetyActiveInputSurface $Context
@@ -101,6 +109,7 @@ function Assert-HtsSafetyKeyboardScope {
     }
 }
 
+# 입력 허용 또는 차단 결정을 감사 추적에 기록한다.
 function Write-HtsSafetyInputBoundaryAudit {
     param([Parameter(Mandatory = $true)]$Context,[string]$InputType,[string]$Status,[int]$X=-1,[int]$Y=-1,[string]$Detail='')
     $mainRect=$null;$surfaceRect=$null
@@ -115,6 +124,7 @@ function Write-HtsSafetyInputBoundaryAudit {
     Invoke-HtsSafetyDependency $Context 'AppendAuditRecord' @($Context.AuditPath,$record)
 }
 
+# 좌표의 실제 소유 창이 승인된 HTS 창 계층에 속하는지 검증한다.
 function Assert-HtsSafetyPointOwner {
     param([Parameter(Mandatory = $true)]$Context,[int]$LogicalX,[int]$LogicalY,[int]$PhysicalX,[int]$PhysicalY)
     $hitHwnd=[Int64](Invoke-HtsSafetyDependency $Context 'WindowFromPoint' @($LogicalX,$LogicalY))
@@ -122,6 +132,7 @@ function Assert-HtsSafetyPointOwner {
     if($hitPid -ne [int]$Context.MainPid){throw "HTS_POINT_OWNER_GUARD: 논리 좌표 ($LogicalX,$LogicalY), 물리 좌표 ($PhysicalX,$PhysicalY)의 최상단 창이 HTS 프로세스가 아닙니다. ownerPid=$hitPid"}
 }
 
+# 현재 커서 대상이 승인된 HTS 입력 범위인지 검증한다.
 function Assert-HtsSafetyCursorTarget {
     param([Parameter(Mandatory = $true)]$Context,$ClickWindow,$PhysicalPoint)
     $hitHwnd=[Int64](Invoke-HtsSafetyDependency $Context 'WindowFromPoint' @([int]$PhysicalPoint.X,[int]$PhysicalPoint.Y))
