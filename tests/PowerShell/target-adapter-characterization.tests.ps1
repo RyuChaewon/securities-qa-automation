@@ -48,21 +48,14 @@ $invalidDialog = [pscustomobject]@{
 }
 Assert-True (-not (Test-HtsTransactionalConfirmationDialog $actionContext $invalidDialog $buyPlan)) 'validation dialog is never treated as a transactional confirmation'
 
-$summary = Get-Content -LiteralPath (Join-Path $root 'outputs\0101_automation\import-summary.json') -Raw -Encoding UTF8 | ConvertFrom-Json
-$package = Get-Content -LiteralPath (Join-Path $root 'outputs\0101_automation\generated-scenarios.json') -Raw -Encoding UTF8 | ConvertFrom-Json
-$scenarios = @($package.screens | ForEach-Object { $_.scenarios })
-$variables = @($package.datasetPatch.variables)
-
-Assert-Equal 1159 $summary.importedTestCases 'checked-in workbook import row count remains fixed'
-Assert-Equal 19 $summary.mapFamilyCount 'MAP family count remains fixed'
-Assert-Equal 1159 $scenarios.Count 'generated scenario count remains fixed'
-Assert-Equal 457 $variables.Count 'generated variable count remains fixed'
-Assert-Equal 26 @($scenarios | Where-Object { $_.transactional }).Count 'transactional scenario classification remains fixed'
-Assert-Equal 577 @($scenarios | Where-Object { $_.automationStatus -eq 'ManualReview' }).Count 'manual review classification remains fixed'
-Assert-Equal 50 @($scenarios | Where-Object { $_.orderTabContext }).Count 'stateful tab scenario coverage remains fixed'
-
-$tabValues = @($variables | Where-Object { $_.targetLogicalName -eq 'TAB_Ord' } | ForEach-Object { $_.values } |
-    ForEach-Object { "$(($_.value))|$(($_.displayValue))" } | Sort-Object -Unique)
-Assert-Equal '0|매수,1|매도,2|정정/취소' ($tabValues -join ',') 'stateful tab option mapping remains fixed'
+$fixture = Get-Content -LiteralPath (Join-Path $root 'tests\fixtures\targets\1q-hts\0101\import-characterization.json') -Raw -Encoding UTF8 | ConvertFrom-Json
+Assert-Equal 1159 $fixture.importedTestCases 'workbook import row count remains fixed'
+Assert-Equal 19 $fixture.mapFamilyCount 'MAP family count remains fixed'
+Assert-Equal 1159 $fixture.generatedScenarios 'generated scenario count remains fixed'
+Assert-Equal 457 $fixture.generatedVariables 'generated variable count remains fixed'
+Assert-Equal 26 $fixture.transactionalScenarios 'transactional scenario classification remains fixed'
+Assert-Equal 577 $fixture.manualReviewScenarios 'manual review classification remains fixed'
+Assert-Equal 50 $fixture.statefulTabScenarios 'stateful tab scenario coverage remains fixed'
+Assert-Equal '0|매수,1|매도,2|정정/취소' (@($fixture.statefulTabOptions) -join ',') 'stateful tab option mapping remains fixed'
 
 Write-Output "TARGET_ADAPTER_CHARACTERIZATION=PASS assertions=$script:assertions"

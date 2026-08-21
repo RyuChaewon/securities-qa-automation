@@ -35,6 +35,13 @@ try {
   check(Object.isFrozen(loaded.canonicalDocument), true, "canonical document is immutable");
   check(createRuleResultsWorkbookViewModel(loaded).resultRows.map((row) => row[10]), ["통과", "실패", "오류", "대기"], "view labels");
 
+  const legacyDir = await createReportDir();
+  tempDirs.push(legacyDir);
+  await fs.rm(path.join(legacyDir, "test-results.json"));
+  const legacy = await loadRuleResults(legacyDir);
+  check(legacy.canonicalSource, "case-results.json#testResult", "legacy JSON fallback source");
+  check(legacy.results.map((item) => item.status), ["PASS", "FAIL", "ERROR", "PENDING"], "legacy statuses are preserved");
+
   const mismatchDir = await createReportDir();
   tempDirs.push(mismatchDir);
   const mismatchCases = JSON.parse(await fs.readFile(path.join(mismatchDir, "case-results.json"), "utf8"));

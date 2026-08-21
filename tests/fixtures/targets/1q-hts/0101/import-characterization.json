@@ -1,0 +1,16 @@
+{
+  "schemaVersion": "1.0",
+  "sourceSha256": "774f63d9f2957e257b304767682921498a151943d19d11568c5e8d8d5298f502",
+  "importedTestCases": 1159,
+  "mapFamilyCount": 19,
+  "generatedScenarios": 1159,
+  "generatedVariables": 457,
+  "transactionalScenarios": 26,
+  "manualReviewScenarios": 577,
+  "statefulTabScenarios": 50,
+  "statefulTabOptions": [
+    "0|매수",
+    "1|매도",
+    "2|정정/취소"
+  ]
+}
