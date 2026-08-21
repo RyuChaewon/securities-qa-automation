@@ -482,7 +482,7 @@ const dataset = {
 };
 
 const summary = {
-  sourceWorkbook: workbookPath,
+  sourceWorkbook: path.basename(workbookPath),
   sourceSha256: sha256(sourceBytes),
   sourceSheet: sourceSheetName,
   importedTestCases: rows.length,

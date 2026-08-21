@@ -50,3 +50,9 @@ ResultEvaluator
 - 기존 `summary.json`과 `case-results.json`은 표시 컨텍스트로 계속 읽는다.
 - 새 canonical 입력은 같은 report directory의 `test-results.json`이다. legacy report에 이 파일이 없으면 기존 `case-results[].testResult`를 검증 가능한 범위에서 사용하되 새 실행 경로는 `test-results.json`을 필수로 생성한다.
 - `OrderTabStateOverride` 등 실행 계약과 TestPack 승인 계약은 변경하지 않는다.
+
+## 적용 결과
+
+- golden fixture는 `tests/fixtures/reporting/rule-results/`에 두고 대용량 실행 산출물을 회귀 입력으로 사용하지 않는다.
+- `outputs/0101_automation/`에서 Dataset과 수동 승인 증거만 추적하며 나머지 생성 JSON은 로컬에 보존한 채 Git 추적에서 제외한다.
+- `import-summary.json.sourceWorkbook`은 필드명을 유지하고 파일명만 기록한다. 전체 로컬 경로가 필요한 내부 작업은 importer 호출 인자를 별도로 보존한다.

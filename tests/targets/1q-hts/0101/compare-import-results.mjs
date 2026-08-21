@@ -10,7 +10,7 @@ const afterDir = path.resolve(afterArg);
 const read = async (directory, name) => JSON.parse(await fs.readFile(path.join(directory, name), "utf8"));
 
 function scenarioMeaning(document) {
-  const { generator: _generator, generatorVersion: _generatorVersion, ...generationMeaning } = document.generationSummary ?? {};
+  const { generator: _generator, generatorVersion: _generatorVersion, referenceDate: _referenceDate, ...generationMeaning } = document.generationSummary ?? {};
   return {
     packageVersion: document.packageVersion,
     sourceInstallationFingerprint: document.sourceInstallationFingerprint,
@@ -27,6 +27,11 @@ function datasetMeaning(dataset) {
   return { ...dataset, targetProfile: profileMeaning };
 }
 
+function summaryMeaning(summary) {
+  const { sourceWorkbook: _sourceWorkbook, ...meaning } = summary;
+  return meaning;
+}
+
 const [beforeSummary, afterSummary, beforeScenarios, afterScenarios, beforeDataset, afterDataset] = await Promise.all([
   read(beforeDir, "import-summary.json"),
   read(afterDir, "import-summary.json"),
@@ -36,7 +41,9 @@ const [beforeSummary, afterSummary, beforeScenarios, afterScenarios, beforeDatas
   read(afterDir, "0101.dataset.json"),
 ]);
 
-assert.deepStrictEqual(afterSummary, beforeSummary, "import summary changed");
+assert.deepStrictEqual(summaryMeaning(afterSummary), summaryMeaning(beforeSummary), "import summary meaning changed");
+assert.equal(afterSummary.sourceWorkbook, path.basename(afterSummary.sourceWorkbook), "import summary exposes a local workbook path");
+assert.match(afterScenarios.generationSummary?.referenceDate ?? "", /^\d{8}$/, "referenceDate must remain yyyyMMdd metadata");
 assert.deepStrictEqual(scenarioMeaning(afterScenarios), scenarioMeaning(beforeScenarios), "scenario meaning changed");
 assert.deepStrictEqual(datasetMeaning(afterDataset), datasetMeaning(beforeDataset), "dataset meaning outside adapter changed");
 assert.equal(afterDataset.targetProfile.adapter?.schemaVersion, "1.0", "new dataset does not embed a versioned adapter");

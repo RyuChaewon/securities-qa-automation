@@ -340,7 +340,7 @@ $files=@(Get-ChildItem -LiteralPath '.\scripts' -Recurse -File -Filter '*.ps1');
 #### 기존 dry-run
 
 ```powershell
-powershell.exe -NoProfile -ExecutionPolicy Bypass -File C:\Users\ch1\Desktop\1QHTS_TEST\scripts\run-target-rule-suite.ps1 -DatasetPath C:\Users\ch1\Desktop\1QHTS_TEST\data\rule-tests\1q-hts-non07-static-smoke.dataset.json -ReportDir C:\Users\ch1\AppData\Local\Temp\hts-refactoring-baseline-dryrun-20260819-210041 -DryRun -SkipExcel
+powershell.exe -NoProfile -ExecutionPolicy Bypass -File <repo>\scripts\run-target-rule-suite.ps1 -DatasetPath <repo>\data\rule-tests\1q-hts-non07-static-smoke.dataset.json -ReportDir <temp>\hts-refactoring-baseline-dryrun -DryRun -SkipExcel
 ```
 
 결과: 종료 코드 0. `summary.json`은 `status=PENDING`, `total=1`, `pass=0`, `fail=0`, `error=0`, `pending=1`, `dryRun=true`다. `flaUiActionAttempts=0`, `flaUiDiscoveryCalls=0`, `discoveredControls=0`, `popupObservations=0`이며, 실행 모드는 `드라이런 - 실제 HTS 조작 없음`이다.

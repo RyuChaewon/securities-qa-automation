@@ -19,15 +19,7 @@ outputs/*
 !outputs/0101_automation/
 outputs/0101_automation/*
 !outputs/0101_automation/0101.dataset.json
-!outputs/0101_automation/compiled-plan.json
-!outputs/0101_automation/generated-scenarios.json
-!outputs/0101_automation/import-summary.json
-!outputs/0101_automation/map-screen-models.json
 !outputs/0101_automation/scenario-approval.json
-!outputs/0101_automation/scenario-validation.json
-!outputs/0101_automation/representative-plan/
-outputs/0101_automation/representative-plan/*
-!outputs/0101_automation/representative-plan/*.json
 *.log
 *.pid
 *.mp4
