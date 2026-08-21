@@ -5,47 +5,6 @@
 .OUTPUTS 발견 컨트롤, 탭 순서와 MAP 결합 결과 객체.
 .NOTES UI 동작, 결과 판정과 리포트 생성은 수행하지 않는다.
 #>
-# 실행별 TargetRule 상태를 한 객체에 격리한다. 모듈 로드 시 mutable 상태를 만들지 않는다.
-function New-HtsTargetRuleContext([string]$RootPath, $Dataset, $MapCatalog = $null, $Dependencies = $null) {
-    $regionConfig = $null
-    $orderTabStateByScreenMap = @{}
-    $activeMapScreenCodes = @($Dataset.targetProfile.map.initiallyActiveMapScreenCodes | ForEach-Object {
-        ([string]$_).Trim().ToUpperInvariant()
-    } | Where-Object { $_ } | Select-Object -Unique)
-    $configuredStrategy = [string]$Dataset.autoExploration.interactionStrategy
-    $interactionStrategy = if ($configuredStrategy) { $configuredStrategy } else { 'RuntimeTabOrder' }
-    $regionFile = [string]$Dataset.autoExploration.contentRegionFile
-    if ($regionFile) {
-        $regionPath = if ([IO.Path]::IsPathRooted($regionFile)) { $regionFile } else { Join-Path $RootPath $regionFile }
-        if (Test-Path -LiteralPath $regionPath) {
-            $regionConfig = Get-Content -LiteralPath $regionPath -Raw -Encoding UTF8 | ConvertFrom-Json
-            foreach ($screenProperty in @($regionConfig.screens.PSObject.Properties)) {
-                foreach ($orderTab in @($screenProperty.Value.orderTabs)) {
-                    if (-not [string]::IsNullOrWhiteSpace([string]$orderTab.defaultValue)) {
-                        $orderTabStateByScreenMap["$([string]$screenProperty.Name)|$(([string]$orderTab.mapScreenCode).ToUpperInvariant())"] = [string]$orderTab.defaultValue
-                    }
-                }
-            }
-        }
-    }
-
-    [pscustomobject]@{
-        RootPath = $RootPath
-        Dataset = $Dataset
-        RegionConfig = $regionConfig
-        MapCatalog = $MapCatalog
-        MapTransformCache = @{}
-        ActualTabOrderCache = @{}
-        OrderTabStateByScreenMap = $orderTabStateByScreenMap
-        ActiveMapScreenCodes = $activeMapScreenCodes
-        CurrentInteractionStrategy = $interactionStrategy
-        FastScenarioDiscovery = $false
-        LastLiveControlResolution = [pscustomobject]@{success=$false;errorCode='CONTROL_STALE';mode='Unresolved';candidateCount=0;evidence=@()}
-        LastTextAutomationEngine = '미실행'
-        Dependencies = $Dependencies
-    }
-}
-
 # 현재 화면 ID에 속한 컨테이너/탭 MAP 전체를 반환한다.
 function Get-RuleMapScreenModels($Context, [string]$ScreenNumber) {
     if (-not $Context.MapCatalog -or -not $Context.MapCatalog.screens) { return $null }
@@ -786,7 +745,7 @@ function Get-RuleButtonKind($Window) {
 function Get-RuleNativeComboWindow($Context, $Window) {
     if ($Window.className -eq "ComboBox") { return $Window }
     if ($Window.className -eq "ComboBoxEx32") {
-        $inner = @(Get-ChildWindows ([Int64]$Window.hwnd) | Where-Object { $_.visible -and $_.enabled -and $_.className -eq "ComboBox" } | Select-Object -First 1)
+        $inner = @(Invoke-HtsTargetRuleDependency $Context 'GetChildWindows' @([Int64]$Window.hwnd) | Where-Object { $_.visible -and $_.enabled -and $_.className -eq "ComboBox" } | Select-Object -First 1)
         if ($inner.Count -gt 0) { return $inner[0] }
     }
     $Window
@@ -892,13 +851,13 @@ function Get-RuleActualTabOrderMap($Context, $Screen, $Children, $Policy) {
         } finally {
             if($attached){[void][TargetRuleNative]::AttachThreadInput($currentThread,$targetThread,$false)}
         }
-        Start-Sleep -Milliseconds 80
+        [void](Invoke-HtsTargetRuleDependency $Context 'Sleep' @(80))
         $focusCheck=New-Object TargetRuleNative+GUITHREADINFO
         $focusCheck.cbSize=[Runtime.InteropServices.Marshal]::SizeOf([type][TargetRuleNative+GUITHREADINFO])
         [void][TargetRuleNative]::GetGUIThreadInfo(0,[ref]$focusCheck)
         if($focusCheck.hwndFocus -ne $targetHwnd){
-            Click-Center $safeStart
-            Start-Sleep -Milliseconds 120
+            [void](Invoke-HtsTargetRuleDependency $Context 'ClickCenter' @($safeStart,$false))
+            [void](Invoke-HtsTargetRuleDependency $Context 'Sleep' @(120))
         }
         $scanSeen=@{}
         $repeatedFocusCount=0
@@ -922,8 +881,8 @@ function Get-RuleActualTabOrderMap($Context, $Screen, $Children, $Policy) {
                     }
                 }
             }
-            Send-Key ([byte]$VK_TAB)
-            Start-Sleep -Milliseconds 90
+            [void](Invoke-HtsTargetRuleDependency $Context 'SendKey' @([byte]0x09))
+            [void](Invoke-HtsTargetRuleDependency $Context 'Sleep' @(90))
         }
         if($scanSeen.Count -ge 3){break}
     }
@@ -1009,7 +968,7 @@ function New-RuleControlId([string]$ScreenNumber, $Window, [string]$Kind, $Relat
 # 컨트롤 발견: HWND/UIA/탭오더/MAP 정보를 하나의 실행 컨트롤 모델로 병합하고 옵션을 수집한다.
 function Get-RuleDiscoveredControls($Context, $Screen, [string]$ScreenNumber, [hashtable]$ClaimedHwnds) {
     if($Screen -and [Int64]$Screen.hwnd -ne 0 -and [TargetRuleNative]::IsWindow([IntPtr][Int64]$Screen.hwnd)){
-        $Screen=Get-WindowInfo ([IntPtr][Int64]$Screen.hwnd)
+        $Screen=Invoke-HtsTargetRuleDependency $Context 'GetWindowInfo' @([Int64]$Screen.hwnd)
     }
     $policy = Get-RuleContentPolicy $Context $ScreenNumber
     $maxControls = [int]$Context.Dataset.autoExploration.maxControlsPerScreen
@@ -1017,7 +976,7 @@ function Get-RuleDiscoveredControls($Context, $Screen, [string]$ScreenNumber, [h
     $textValues = @($Context.Dataset.autoExploration.defaultTextValues)
     $dateValues = @($Context.Dataset.autoExploration.defaultDateValues)
     $rows = New-Object Collections.Generic.List[object]
-    $children = @(Get-ChildWindows ([Int64]$Screen.hwnd) | Where-Object {
+    $children = @(Invoke-HtsTargetRuleDependency $Context 'GetChildWindows' @([Int64]$Screen.hwnd) | Where-Object {
         $_.visible -and $_.enabled -and $_.rect.width -ge 8 -and $_.rect.height -ge 8
     })
     $fallbackTabOrderMap = Get-RuleTabOrderMap $Screen $children
@@ -1212,7 +1171,7 @@ function Get-RuleDiscoveredControls($Context, $Screen, [string]$ScreenNumber, [h
         })
         if ($rows.Count -ge $maxControls) { break }
     }
-    $uiaActionableControls = if ($Context.FastScenarioDiscovery) { @() } else { @(Get-FlaUiActionableControls $Screen) }
+    $uiaActionableControls = if ($Context.FastScenarioDiscovery) { @() } else { @(Invoke-HtsTargetRuleDependency $Context 'GetFlaUiActionableControls' @($Screen)) }
     foreach ($window in $uiaActionableControls) {
         if ($rows.Count -ge $maxControls) { break }
         if (-not (Test-RuleContentControl $window $Screen $policy)) { continue }

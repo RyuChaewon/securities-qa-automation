@@ -25,16 +25,17 @@ function Get-ScriptAst([string]$Path) {
 $script:assertions = 0
 $moduleRoot = Join-Path $root 'scripts\modules'
 $aggregatorPath = Join-Path $moduleRoot 'rule-control-exploration.ps1'
+$contextPath = Join-Path $moduleRoot 'hts-target-rule-context.ps1'
 $discoveryPath = Join-Path $moduleRoot 'hts-target-rule-discovery.ps1'
 $bindingPath = Join-Path $moduleRoot 'hts-target-rule-binding.ps1'
 $actionPath = Join-Path $moduleRoot 'hts-target-rule-action.ps1'
-$paths = @($discoveryPath, $bindingPath, $actionPath)
+$paths = @($contextPath, $discoveryPath, $bindingPath, $actionPath)
 
 $aggregatorAst = Get-ScriptAst $aggregatorPath
 $aggregatorFunctions = @($aggregatorAst.FindAll({ param($node) $node -is [Management.Automation.Language.FunctionDefinitionAst] }, $true))
 Assert-Equal 0 $aggregatorFunctions.Count 'compatibility entrypoint defines no operational functions'
 $aggregatorText = Get-Content -LiteralPath $aggregatorPath -Raw
-foreach ($name in @('hts-target-rule-discovery.ps1', 'hts-target-rule-binding.ps1', 'hts-target-rule-action.ps1')) {
+foreach ($name in @('hts-target-rule-context.ps1', 'hts-target-rule-discovery.ps1', 'hts-target-rule-binding.ps1', 'hts-target-rule-action.ps1')) {
     Assert-True ($aggregatorText.Contains($name)) "compatibility entrypoint loads $name"
 }
 
@@ -46,8 +47,9 @@ foreach ($path in $paths) {
     $functionsByFile[[IO.Path]::GetFileName($path)] = $names
     $allFunctionNames += $names
 }
-Assert-Equal 50 $allFunctionNames.Count 'split retains 49 characterized functions plus one explicit text-input adapter'
-Assert-Equal 50 @($allFunctionNames | Sort-Object -Unique).Count 'each function has one implementation'
+Assert-Equal 54 $allFunctionNames.Count 'split retains 49 characterized functions plus explicit context/dependency adapters'
+Assert-Equal 54 @($allFunctionNames | Sort-Object -Unique).Count 'each function has one implementation'
+Assert-True ($functionsByFile['hts-target-rule-context.ps1'] -contains 'New-HtsTargetRuleContext') 'context module owns per-run state construction'
 Assert-True ($functionsByFile['hts-target-rule-discovery.ps1'] -contains 'Get-RuleDiscoveredControls') 'discovery owns target control discovery'
 Assert-True ($functionsByFile['hts-target-rule-discovery.ps1'] -notcontains 'Invoke-RuleControlPlanItem') 'discovery does not own target actions'
 Assert-True ($functionsByFile['hts-target-rule-binding.ps1'] -contains 'Resolve-RuleLiveControl') 'binding owns live control resolution'
@@ -66,6 +68,16 @@ Assert-True (-not (Test-RuleControlExecutionEligible $null)) 'missing controls r
 foreach ($path in $paths) {
     $text = Get-Content -LiteralPath $path -Raw
     Assert-True ($text -notmatch 'ResultEvaluator|Invoke-HtsRawObservationEvaluation|Set-Content|Add-Content') "$([IO.Path]::GetFileName($path)) cannot evaluate or report results"
+}
+
+& {
+    foreach ($path in @($contextPath, $actionPath, $bindingPath, $discoveryPath)) { . $path }
+    $fakeDataset = [pscustomobject]@{
+        targetProfile=[pscustomobject]@{map=[pscustomobject]@{initiallyActiveMapScreenCodes=@()}}
+        autoExploration=[pscustomobject]@{interactionStrategy='RuntimeTabOrder';contentRegionFile='';maxActionsPerScreen=1}
+    }
+    $reverseContext = New-HtsTargetRuleContext -RootPath $root -Dataset $fakeDataset -MapCatalog ([pscustomobject]@{screens=@()})
+    Assert-Equal 'RuntimeTabOrder' ([string]$reverseContext.CurrentInteractionStrategy) 'target modules load without Discovery/Binding/Action order dependence'
 }
 
 Write-Output "HTS_TARGET_RULE_SPLIT_TESTS=PASS assertions=$script:assertions"

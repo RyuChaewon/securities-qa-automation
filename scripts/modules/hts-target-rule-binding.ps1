@@ -167,7 +167,7 @@ function Resolve-RuleLiveControl($Context, $NavigationContext, $Screen, $Planned
             return $null
         }
         $candidate = $candidates[0]
-        $current = Get-WindowInfo ([IntPtr][Int64]$candidate.hwnd)
+        $current = Invoke-HtsTargetRuleDependency $Context 'GetWindowInfo' @([Int64]$candidate.hwnd)
         if (-not $current.visible -or -not $current.enabled -or -not [TargetRuleNative]::IsChild([IntPtr][Int64]$Screen.hwnd,[IntPtr][Int64]$current.hwnd)) {
             $Context.LastLiveControlResolution = [pscustomobject]@{success=$false;errorCode='CONTROL_OUTSIDE_TARGET_SURFACE';mode='StrictPhysical';candidateCount=1;evidence=@("hwnd=$([Int64]$candidate.hwnd)")}
             return $null
@@ -187,7 +187,7 @@ function Resolve-RuleLiveControl($Context, $NavigationContext, $Screen, $Planned
     }
     if ($PlannedControl.className -like "UIA:*") {
         $plannedRect=$PlannedControl.relativeRect
-        $matches=@(Get-FlaUiActionableControls $Screen | Where-Object {
+        $matches=@(Invoke-HtsTargetRuleDependency $Context 'GetFlaUiActionableControls' @($Screen) | Where-Object {
             $_.className-eq$PlannedControl.className -and
             [Math]::Abs([int](($_.rect.left+$_.rect.right)/2-$Screen.rect.left)-[int]$plannedRect.centerX)-le12 -and
             [Math]::Abs([int](($_.rect.top+$_.rect.bottom)/2-$Screen.rect.top)-[int]$plannedRect.centerY)-le12
@@ -199,7 +199,7 @@ function Resolve-RuleLiveControl($Context, $NavigationContext, $Screen, $Planned
         return $null
     }
     if ($PlannedControl.hwnd -and [TargetRuleNative]::IsWindow([IntPtr][Int64]$PlannedControl.hwnd)) {
-        $current = Get-WindowInfo ([IntPtr][Int64]$PlannedControl.hwnd)
+        $current = Invoke-HtsTargetRuleDependency $Context 'GetWindowInfo' @([Int64]$PlannedControl.hwnd)
         if ($current.visible -and $current.enabled -and [TargetRuleNative]::IsChild([IntPtr][Int64]$Screen.hwnd,[IntPtr][Int64]$current.hwnd)) {
             $Context.LastLiveControlResolution = [pscustomobject]@{success=$true;errorCode='';mode='ExistingHwnd';candidateCount=1;evidence=@("hwnd=$([Int64]$current.hwnd)")}
             return $current
@@ -213,12 +213,12 @@ function Resolve-RuleLiveControl($Context, $NavigationContext, $Screen, $Planned
     $sameMapControl = @($candidates | Where-Object { [string]$_.controlId -eq [string]$PlannedControl.controlId -and [Int64]$_.hwnd -ne 0 } | Select-Object -First 1)
     if ($sameMapControl.Count -gt 0) {
         $Context.LastLiveControlResolution = [pscustomobject]@{success=$true;errorCode='';mode='ControlIdFallback';candidateCount=$sameMapControl.Count;evidence=@([string]$PlannedControl.controlId)}
-        return Get-WindowInfo ([IntPtr][Int64]$sameMapControl[0].hwnd)
+        return Invoke-HtsTargetRuleDependency $Context 'GetWindowInfo' @([Int64]$sameMapControl[0].hwnd)
     }
     foreach ($candidate in $candidates) {
         if ([string]$candidate.locatorSignature -eq $signature) {
             $Context.LastLiveControlResolution = [pscustomobject]@{success=$true;errorCode='';mode='LocatorFallback';candidateCount=1;evidence=@($signature)}
-            return Get-WindowInfo ([IntPtr][Int64]$candidate.hwnd)
+            return Invoke-HtsTargetRuleDependency $Context 'GetWindowInfo' @([Int64]$candidate.hwnd)
         }
     }
     $plannedRect = $PlannedControl.relativeRect
@@ -229,7 +229,7 @@ function Resolve-RuleLiveControl($Context, $NavigationContext, $Screen, $Planned
     } | Sort-Object { [Math]::Abs([int]$_.relativeRect.centerX - [int]$plannedRect.centerX) + [Math]::Abs([int]$_.relativeRect.centerY - [int]$plannedRect.centerY) })
     if ($nearby.Count -gt 0) {
         $Context.LastLiveControlResolution = [pscustomobject]@{success=$true;errorCode='';mode='NearbyFallback';candidateCount=$nearby.Count;evidence=@('kind, class and center within 12px')}
-        return Get-WindowInfo ([IntPtr][Int64]$nearby[0].hwnd)
+        return Invoke-HtsTargetRuleDependency $Context 'GetWindowInfo' @([Int64]$nearby[0].hwnd)
     }
     $sameTabOrder = if ($ExecutionOrder -eq 'CoordinateFocus') { @() } else { @($candidates | Where-Object {
         $_.controlKind -eq $PlannedControl.controlKind -and
@@ -243,9 +243,9 @@ function Resolve-RuleLiveControl($Context, $NavigationContext, $Screen, $Planned
     if ($sameTabOrder.Count -gt 0) {
         if ([Int64]$sameTabOrder[0].hwnd -eq 0) { return $sameTabOrder[0] }
         $Context.LastLiveControlResolution = [pscustomobject]@{success=$true;errorCode='';mode='TabOrderFallback';candidateCount=$sameTabOrder.Count;evidence=@("tabOrder=$([int]$PlannedControl.tabOrder)")}
-        return Get-WindowInfo ([IntPtr][Int64]$sameTabOrder[0].hwnd)
+        return Invoke-HtsTargetRuleDependency $Context 'GetWindowInfo' @([Int64]$sameTabOrder[0].hwnd)
     }
-    $rawNearby=@(Get-ChildWindows ([Int64]$Screen.hwnd) | Where-Object {
+    $rawNearby=@(Invoke-HtsTargetRuleDependency $Context 'GetChildWindows' @([Int64]$Screen.hwnd) | Where-Object {
         $_.visible-and$_.enabled-and$_.className-eq$PlannedControl.className -and
         [Math]::Abs([int](($_.rect.left+$_.rect.right)/2-$Screen.rect.left)-[int]$plannedRect.centerX)-le12 -and
         [Math]::Abs([int](($_.rect.top+$_.rect.bottom)/2-$Screen.rect.top)-[int]$plannedRect.centerY)-le12

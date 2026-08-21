@@ -358,6 +358,16 @@ $sessionContext = New-HtsSessionContext `
 
 . (Join-Path $PSScriptRoot "rule-control-exploration.ps1")
 $targetRuleDependencies = [pscustomobject]@{
+    GetChildWindows = { param([Int64]$Hwnd) @(Get-ChildWindows $Hwnd) }
+    GetFlaUiActionableControls = { param($Screen) @(Get-FlaUiActionableControls $Screen) }
+    GetWindowInfo = { param([Int64]$Hwnd) Get-WindowInfo ([IntPtr]$Hwnd) }
+    ClickCenter = { param($Window, [bool]$DoubleClick) Click-Center $Window -DoubleClick:$DoubleClick }
+    SendKey = { param([byte]$Key) Send-Key $Key }
+    Sleep = { param([int]$Milliseconds) Start-Sleep -Milliseconds $Milliseconds }
+    InvokeFlaUiControlAction = {
+        param($Window, [string]$Action, [string]$Value, $Index, $Checked, [string]$Key)
+        Invoke-FlaUiControlAction $Window $Action -Value $Value -Index $Index -Checked $Checked -Key $Key
+    }
     SetAutomationText = {
         param($Window, [string]$Value, [bool]$AlreadyFocused)
         $success = Set-AutomationText $Window $Value -AlreadyFocused:$AlreadyFocused

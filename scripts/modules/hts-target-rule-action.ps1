@@ -14,37 +14,56 @@ function Invoke-HtsTargetTextInput($Context, $Window, [string]$Value, [bool]$Alr
     [bool]$result.success
 }
 
+function Invoke-HtsTargetClick($Context, $Window, [switch]$DoubleClick) {
+    [void](Invoke-HtsTargetRuleDependency $Context 'ClickCenter' @($Window,[bool]$DoubleClick))
+}
+
+function Invoke-HtsTargetSleep($Context, [int]$Milliseconds) {
+    [void](Invoke-HtsTargetRuleDependency $Context 'Sleep' @($Milliseconds))
+}
+
+function Invoke-HtsTargetFlaUiControlAction(
+    $Context,
+    $Window,
+    [string]$Action,
+    [string]$Value = '',
+    [Nullable[int]]$Index = $null,
+    [Nullable[bool]]$Checked = $null,
+    [string]$Key = '') {
+    Invoke-HtsTargetRuleDependency $Context 'InvokeFlaUiControlAction' @($Window,$Action,$Value,$Index,$Checked,$Key)
+}
+
 # 콤보를 펼친 뒤 계획된 행 위치를 클릭하고 선택 상태를 확인한다.
 function Invoke-RuleComboOptionClick($Context, $Window, $Option) {
     if ([Int64]$Window.hwnd -eq 0) { return [pscustomobject]@{success=$false;errorCode="COMBO_NATIVE_LIST_REQUIRED";output="좌표 핫스팟은 콤보 목록 행의 위치를 검증할 수 없습니다."} }
     $combo = Get-RuleNativeComboWindow $Context $Window
     $comboHwnd = [IntPtr][Int64]$combo.hwnd
     $clickPoint = [pscustomobject]@{rect=[pscustomobject]@{left=[Math]::Max($combo.rect.left,$combo.rect.right-24);right=$combo.rect.right;top=$combo.rect.top;bottom=$combo.rect.bottom}}
-    Click-Center $clickPoint
-    Start-Sleep -Milliseconds 150
+    Invoke-HtsTargetClick $Context $clickPoint
+    Invoke-HtsTargetSleep $Context 150
     $info = New-Object TargetRuleNative+COMBOBOXINFO
     $info.cbSize = [Runtime.InteropServices.Marshal]::SizeOf([type][TargetRuleNative+COMBOBOXINFO])
     if (-not [TargetRuleNative]::GetComboBoxInfo($comboHwnd,[ref]$info) -or $info.hwndList -eq [IntPtr]::Zero) {
         [void][TargetRuleNative]::SendMessage($comboHwnd,0x014F,[IntPtr]1,[IntPtr]::Zero)
-        Start-Sleep -Milliseconds 120
+        Invoke-HtsTargetSleep $Context 120
         $info = New-Object TargetRuleNative+COMBOBOXINFO
         $info.cbSize = [Runtime.InteropServices.Marshal]::SizeOf([type][TargetRuleNative+COMBOBOXINFO])
         if (-not [TargetRuleNative]::GetComboBoxInfo($comboHwnd,[ref]$info) -or $info.hwndList -eq [IntPtr]::Zero) {
             return [pscustomobject]@{success=$false;errorCode="COMBO_LIST_NOT_VISIBLE";output="콤보를 펼쳤지만 목록 창을 찾지 못했습니다."}
         }
     }
-    $list = Get-WindowInfo $info.hwndList
+    $list = Invoke-HtsTargetRuleDependency $Context 'GetWindowInfo' @([Int64]$info.hwndList)
     $itemHeight = [int][TargetRuleNative]::SendMessage($comboHwnd,0x0154,[IntPtr]0,[IntPtr]::Zero).ToInt64()
     if ($itemHeight -le 0 -or $itemHeight -gt 200) { $itemHeight=18 }
     $visibleRows = [Math]::Max(1,[int][Math]::Floor($list.rect.height/$itemHeight))
     $topIndex = [Math]::Max(0,[int]$Option.index-[int][Math]::Floor($visibleRows/2))
     [void][TargetRuleNative]::SendMessage($info.hwndList,0x0197,[IntPtr]$topIndex,[IntPtr]::Zero)
-    Start-Sleep -Milliseconds 80
+    Invoke-HtsTargetSleep $Context 80
     $topIndex = [int][TargetRuleNative]::SendMessage($info.hwndList,0x018E,[IntPtr]::Zero,[IntPtr]::Zero).ToInt64()
     $row = [int]$Option.index-$topIndex
     $target = [pscustomobject]@{rect=[pscustomobject]@{left=$list.rect.left+3;right=$list.rect.right-3;top=$list.rect.top+($row*$itemHeight);bottom=[Math]::Min($list.rect.bottom,$list.rect.top+(($row+1)*$itemHeight))}}
-    Click-Center $target
-    Start-Sleep -Milliseconds 180
+    Invoke-HtsTargetClick $Context $target
+    Invoke-HtsTargetSleep $Context 180
     $selected = [TargetRuleNative]::SendMessage($comboHwnd,0x0147,[IntPtr]::Zero,[IntPtr]::Zero).ToInt64()
     [pscustomobject]@{success=($selected -eq [int]$Option.index);errorCode=$(if ($selected -eq [int]$Option.index) {""} else {"COMBO_SELECTION_NOT_APPLIED"});output="드롭다운의 $([int]$Option.index+1)번째 항목을 실제 클릭했습니다."}
 }
@@ -59,7 +78,7 @@ function Invoke-RuleListOptionClick($Context, $Window, $Option) {
     $topIndex = [int][TargetRuleNative]::SendMessage([IntPtr][Int64]$Window.hwnd,0x018E,[IntPtr]::Zero,[IntPtr]::Zero).ToInt64()
     $row = [int]$Option.index-$topIndex
     $target = [pscustomobject]@{rect=[pscustomobject]@{left=$Window.rect.left+3;right=$Window.rect.right-3;top=$Window.rect.top+($row*$itemHeight);bottom=[Math]::Min($Window.rect.bottom,$Window.rect.top+(($row+1)*$itemHeight))}}
-    Click-Center $target
+    Invoke-HtsTargetClick $Context $target
     $selected = [TargetRuleNative]::SendMessage([IntPtr][Int64]$Window.hwnd,0x0188,[IntPtr]::Zero,[IntPtr]::Zero).ToInt64()
     $selected -eq [int]$Option.index
 }
@@ -68,8 +87,8 @@ function Invoke-RuleListOptionClick($Context, $Window, $Option) {
 # 좌표 우선 입력은 클릭 지점의 HTS 소유권 검증 뒤 포커스가 요청 화면 안에 남았는지 다시 확인한다.
 function Set-RuleCoordinateFocus($Context, $NavigationContext, $Screen, $Live) {
     $screenNumber = Get-HtsNavigationScreenNumber -Context $NavigationContext -Window $Screen
-    Click-Center $Live
-    Start-Sleep -Milliseconds 100
+    Invoke-HtsTargetClick $Context $Live
+    Invoke-HtsTargetSleep $Context 100
     if (-not $screenNumber -or (Get-HtsNavigationScreenNumber -Context $NavigationContext -Window $Screen) -ne $screenNumber) {
         return [pscustomobject]@{success=$false;errorCode='COORDINATE_FOCUS_SCREEN_CHANGED';output='좌표 클릭 직후 요청 화면이 바뀌어 후속 키 입력을 차단했습니다.'}
     }
@@ -164,7 +183,7 @@ function Invoke-RuleControlPlanItem($Context, $NavigationContext, $Screen, $Plan
                 $actionEngine='CoordinateFocus + Win32 combo'
                 break
             }
-            $flaUiResult = Invoke-FlaUiControlAction $live 'selectIndex' -Index ([int]$option.index)
+            $flaUiResult = Invoke-HtsTargetFlaUiControlAction $Context $live 'selectIndex' -Index ([int]$option.index)
             if ([bool]$flaUiResult.success -and [bool]$flaUiResult.verified) {
                 $success=$true;$queryEligible=$true;$actionEngine='FlaUI.UIA3';$verificationNote=" $($flaUiResult.pattern)으로 선택 결과를 확인했습니다."
                 break
@@ -177,7 +196,7 @@ function Invoke-RuleControlPlanItem($Context, $NavigationContext, $Screen, $Plan
         "CheckBox" {
             if (-not $coordinateFocus -and [string]$option.value -in @('true','false')) {
                 $wantedChecked = [string]$option.value -eq 'true'
-                $flaUiResult = Invoke-FlaUiControlAction $live 'setChecked' -Checked $wantedChecked
+                $flaUiResult = Invoke-HtsTargetFlaUiControlAction $Context $live 'setChecked' -Checked $wantedChecked
                 if ([bool]$flaUiResult.success -and [bool]$flaUiResult.verified) {
                     $success=$true;$queryEligible=$true;$actionEngine='FlaUI.UIA3';$verificationNote=" $($flaUiResult.pattern)으로 체크 상태를 확인했습니다."
                     break
@@ -191,16 +210,16 @@ function Invoke-RuleControlPlanItem($Context, $NavigationContext, $Screen, $Plan
                 }
             } elseif ([string]$option.value -eq 'toggle') {
                 $before = [int][TargetRuleNative]::SendMessage($hwnd,0x00F0,[IntPtr]::Zero,[IntPtr]::Zero).ToInt64()
-                Click-Center $live
+                Invoke-HtsTargetClick $Context $live
                 if ($coordinateFocus) { $coordinateFocusUsed=$true; $coordinateFocusVerified=$true; $actionEngine='CoordinateFocus' }
-                Start-Sleep -Milliseconds 180
+                Invoke-HtsTargetSleep $Context 180
                 $after = [int][TargetRuleNative]::SendMessage($hwnd,0x00F0,[IntPtr]::Zero,[IntPtr]::Zero).ToInt64()
                 $success = ($after -ne $before)
             } else {
                 $wanted = if ([string]$option.value -eq "true") {1} else {0}
                 $current = [int][TargetRuleNative]::SendMessage($hwnd,0x00F0,[IntPtr]::Zero,[IntPtr]::Zero).ToInt64()
                 if ($current -ne $wanted) {
-                    Click-Center $live
+                    Invoke-HtsTargetClick $Context $live
                     if ($coordinateFocus) { $coordinateFocusUsed=$true; $coordinateFocusVerified=$true; $actionEngine='CoordinateFocus' }
                 }
                 $after = [int][TargetRuleNative]::SendMessage($hwnd,0x00F0,[IntPtr]::Zero,[IntPtr]::Zero).ToInt64()
@@ -210,13 +229,13 @@ function Invoke-RuleControlPlanItem($Context, $NavigationContext, $Screen, $Plan
         }
         "RadioButton" {
             if (-not $coordinateFocus) {
-                $flaUiResult = Invoke-FlaUiControlAction $live 'select'
+                $flaUiResult = Invoke-HtsTargetFlaUiControlAction $Context $live 'select'
                 if ([bool]$flaUiResult.success -and [bool]$flaUiResult.verified) {
                     $success=$true;$queryEligible=$true;$actionEngine='FlaUI.UIA3';$verificationNote=" $($flaUiResult.pattern)으로 선택 상태를 확인했습니다."
                     break
                 }
             }
-            Click-Center $live
+            Invoke-HtsTargetClick $Context $live
             if ($coordinateFocus) { $coordinateFocusUsed=$true; $coordinateFocusVerified=$true; $actionEngine='CoordinateFocus' }
             $success=$(if([Int64]$live.hwnd-eq0){$true}else{[int][TargetRuleNative]::SendMessage($hwnd,0x00F0,[IntPtr]::Zero,[IntPtr]::Zero).ToInt64() -ne 0})
             $queryEligible=$true
@@ -226,9 +245,9 @@ function Invoke-RuleControlPlanItem($Context, $NavigationContext, $Screen, $Plan
             $segmentWidth=[double]$live.rect.width/$count
             $x=[int]($live.rect.left+($segmentWidth*([int]$option.index+0.5)))
             $y=[int](($live.rect.top+$live.rect.bottom)/2)
-            Click-Center ([pscustomobject]@{rect=[pscustomobject]@{left=$x-2;right=$x+2;top=$y-2;bottom=$y+2}})
+            Invoke-HtsTargetClick $Context ([pscustomobject]@{rect=[pscustomobject]@{left=$x-2;right=$x+2;top=$y-2;bottom=$y+2}})
             if ($coordinateFocus) { $coordinateFocusUsed=$true; $coordinateFocusVerified=$true; $actionEngine='CoordinateFocus' }
-            Start-Sleep -Milliseconds 180
+            Invoke-HtsTargetSleep $Context 180
             $success=$true
             $queryEligible=$true
         }
@@ -244,18 +263,18 @@ function Invoke-RuleControlPlanItem($Context, $NavigationContext, $Screen, $Plan
             if ($orderTabItem -and ([string]$live.className).StartsWith('AfxWnd',[StringComparison]::OrdinalIgnoreCase)) {
                 $x = [int]$live.rect.left + [int]$orderTabItem.x
                 $y = [int]$live.rect.top + [int]$orderTabProfile.y
-                Click-Center ([pscustomobject]@{rect=[pscustomobject]@{left=$x-2;right=$x+2;top=$y-2;bottom=$y+2}})
+                Invoke-HtsTargetClick $Context ([pscustomobject]@{rect=[pscustomobject]@{left=$x-2;right=$x+2;top=$y-2;bottom=$y+2}})
                 Set-RuleOrderTabState $Context $screenNumber ([string]$PlanItem.mapScreenCode) ([string]$option.value)
                 $coordinateFocusUsed=$true
                 $coordinateFocusVerified=$true
                 $actionEngine='CoordinateFocus + profiled owner-drawn tab'
-                Start-Sleep -Milliseconds 500
+                Invoke-HtsTargetSleep $Context 500
                 $success=$true
                 $verificationNote=" 0101 주문 탭 프로필 좌표 ($([int]$orderTabItem.x),$([int]$orderTabProfile.y))를 사용했습니다."
                 break
             }
             if (-not $coordinateFocus) {
-                $flaUiResult = Invoke-FlaUiControlAction $live 'selectTabIndex' -Index ([int]$option.index)
+                $flaUiResult = Invoke-HtsTargetFlaUiControlAction $Context $live 'selectTabIndex' -Index ([int]$option.index)
                 if ([bool]$flaUiResult.success -and [bool]$flaUiResult.verified) {
                     $success=$true;$actionEngine='FlaUI.UIA3';$verificationNote=" $($flaUiResult.pattern)으로 탭 인덱스를 확인했습니다."
                     break
@@ -264,9 +283,9 @@ function Invoke-RuleControlPlanItem($Context, $NavigationContext, $Screen, $Plan
             $count = if ([Int64]$live.hwnd -eq 0) { [Math]::Max(1,@($control.options).Count) } else { [Math]::Max(1,[int][TargetRuleNative]::SendMessage($hwnd,0x1304,[IntPtr]::Zero,[IntPtr]::Zero).ToInt64()) }
             $x = [int]($live.rect.left + ($live.rect.width * ([int]$option.index + 0.5) / $count))
             $y = [int](($live.rect.top + $live.rect.bottom) / 2)
-            Click-Center ([pscustomobject]@{rect=[pscustomobject]@{left=$x-2;right=$x+2;top=$y-2;bottom=$y+2}})
+            Invoke-HtsTargetClick $Context ([pscustomobject]@{rect=[pscustomobject]@{left=$x-2;right=$x+2;top=$y-2;bottom=$y+2}})
             if ($coordinateFocus) { $coordinateFocusUsed=$true; $coordinateFocusVerified=$true; $actionEngine='CoordinateFocus' }
-            Start-Sleep -Milliseconds 250
+            Invoke-HtsTargetSleep $Context 250
             if ([Int64]$live.hwnd -eq 0) { $success=$true } else {
                 $selected = [TargetRuleNative]::SendMessage($hwnd,0x130B,[IntPtr]::Zero,[IntPtr]::Zero).ToInt64()
                 if ($selected -ne [int]$option.index) { $verificationNote = " HTS owner-drawn 탭이 선택 인덱스 API를 갱신하지 않아 클릭 전송만 확인했습니다." }
@@ -275,22 +294,22 @@ function Invoke-RuleControlPlanItem($Context, $NavigationContext, $Screen, $Plan
         }
         "Button" {
             if (-not $coordinateFocus) {
-                $flaUiResult = Invoke-FlaUiControlAction $live 'invoke'
+                $flaUiResult = Invoke-HtsTargetFlaUiControlAction $Context $live 'invoke'
                 if ([bool]$flaUiResult.success -and [bool]$flaUiResult.verified) {
                     $success=$true;$actionEngine='FlaUI.UIA3';$verificationNote=" $($flaUiResult.pattern)으로 실행했습니다."
-                    Start-Sleep -Milliseconds 600
+                    Invoke-HtsTargetSleep $Context 600
                     break
                 }
             }
             $isDoubleClick = [string]$PlanItem.scenarioAction -eq 'DoubleClick'
-            Click-Center $live -DoubleClick:$isDoubleClick
+            Invoke-HtsTargetClick $Context $live -DoubleClick:$isDoubleClick
             if ($coordinateFocus) { $coordinateFocusUsed=$true; $coordinateFocusVerified=$true; $actionEngine='CoordinateFocus' }
-            Start-Sleep -Milliseconds 600
+            Invoke-HtsTargetSleep $Context 600
             $success=$true
         }
         "ListBox" {
             if (-not $coordinateFocus) {
-                $flaUiResult = Invoke-FlaUiControlAction $live 'selectIndex' -Index ([int]$option.index)
+                $flaUiResult = Invoke-HtsTargetFlaUiControlAction $Context $live 'selectIndex' -Index ([int]$option.index)
                 if ([bool]$flaUiResult.success -and [bool]$flaUiResult.verified) {
                     $success=$true;$queryEligible=$true;$actionEngine='FlaUI.UIA3';$verificationNote=" $($flaUiResult.pattern)으로 목록 선택을 확인했습니다."
                     break
@@ -302,7 +321,7 @@ function Invoke-RuleControlPlanItem($Context, $NavigationContext, $Screen, $Plan
         "Slider" {
             $flaUiAction = if ([string]$option.value -in @('increment','decrement')) { [string]$option.value } else { 'setRangeValue' }
             if (-not $coordinateFocus) {
-                $flaUiResult = Invoke-FlaUiControlAction $live $flaUiAction -Value ([string]$option.value)
+                $flaUiResult = Invoke-HtsTargetFlaUiControlAction $Context $live $flaUiAction -Value ([string]$option.value)
                 if ([bool]$flaUiResult.success -and [bool]$flaUiResult.verified) {
                     $success=$true;$queryEligible=$true;$actionEngine='FlaUI.UIA3';$verificationNote=" $($flaUiResult.pattern)으로 범위값을 확인했습니다."
                     break
@@ -314,7 +333,7 @@ function Invoke-RuleControlPlanItem($Context, $NavigationContext, $Screen, $Plan
             if ($maximum -gt $minimum) {
                 $ratio=($wanted-$minimum)/[double]($maximum-$minimum)
                 $target=[pscustomobject]@{rect=[pscustomobject]@{left=[int]($live.rect.left+6+(($live.rect.width-12)*$ratio))-2;right=[int]($live.rect.left+6+(($live.rect.width-12)*$ratio))+2;top=$live.rect.top;bottom=$live.rect.bottom}}
-                Click-Center $target
+                Invoke-HtsTargetClick $Context $target
                 if ($coordinateFocus) { $coordinateFocusUsed=$true; $coordinateFocusVerified=$true; $actionEngine='CoordinateFocus' }
                 $actual=[int][TargetRuleNative]::SendMessage($hwnd,0x0400,[IntPtr]::Zero,[IntPtr]::Zero).ToInt64()
                 $success=[Math]::Abs($actual-$wanted) -le [Math]::Max(1,[int](($maximum-$minimum)/50))
@@ -324,7 +343,7 @@ function Invoke-RuleControlPlanItem($Context, $NavigationContext, $Screen, $Plan
         "Spin" {
             $flaUiAction = if ([string]$option.value -eq 'decrement') { 'decrement' } else { 'increment' }
             if (-not $coordinateFocus) {
-                $flaUiResult = Invoke-FlaUiControlAction $live $flaUiAction
+                $flaUiResult = Invoke-HtsTargetFlaUiControlAction $Context $live $flaUiAction
                 if ([bool]$flaUiResult.success -and [bool]$flaUiResult.verified) {
                     $success=$true;$queryEligible=$true;$actionEngine='FlaUI.UIA3';$verificationNote=" $($flaUiResult.pattern)으로 증감 동작을 확인했습니다."
                     break
@@ -332,7 +351,7 @@ function Invoke-RuleControlPlanItem($Context, $NavigationContext, $Screen, $Plan
             }
             $mid=[int](($live.rect.top+$live.rect.bottom)/2)
             $target=[pscustomobject]@{rect=[pscustomobject]@{left=$live.rect.left;right=$live.rect.right;top=$(if($option.value -eq "increment"){$live.rect.top}else{$mid});bottom=$(if($option.value -eq "increment"){$mid}else{$live.rect.bottom})}}
-            Click-Center $target; $success=$true; $queryEligible=$true
+            Invoke-HtsTargetClick $Context $target; $success=$true; $queryEligible=$true
             if ($coordinateFocus) { $coordinateFocusUsed=$true; $coordinateFocusVerified=$true; $actionEngine='CoordinateFocus' }
         }
         default { $success=$false }
@@ -345,7 +364,7 @@ function Invoke-RuleControlPlanItem($Context, $NavigationContext, $Screen, $Plan
             output="전경 또는 대상 표면 안전 검증을 통과하지 못해 이 조작만 차단했습니다: $($_.Exception.Message)"
         }
     }
-    Start-Sleep -Milliseconds 450
+    Invoke-HtsTargetSleep $Context 450
     [pscustomobject]@{
         success=$success; queryEligible=$queryEligible
         errorCode=$(if ($success) {""} elseif ($control.controlKind -eq "ComboBox" -and $comboResult) {[string]$comboResult.errorCode} else {"CONTROL_ACTION_FAILED"})
@@ -393,60 +412,60 @@ function Invoke-RuleDatasetVariable($Context, $Window, [string]$ControlKind, [st
             }
             if ($selected.Count -eq 0) { return $false }
             $flaUiResult = if ($ValueMatch -eq 'Index') {
-                Invoke-FlaUiControlAction $Window 'selectIndex' -Index ([int]$selected[0].index)
+                Invoke-HtsTargetFlaUiControlAction $Context $Window 'selectIndex' -Index ([int]$selected[0].index)
             } else {
-                Invoke-FlaUiControlAction $Window 'selectText' -Value ([string]$selected[0].displayValue)
+                Invoke-HtsTargetFlaUiControlAction $Context $Window 'selectText' -Value ([string]$selected[0].displayValue)
             }
             if ([bool]$flaUiResult.success -and [bool]$flaUiResult.verified) { return $true }
             $comboResult=Invoke-RuleComboOptionClick $Context $Window $selected[0]
             return [bool]$comboResult.success
         }
         "CheckBox" {
-            if ($isHotspot) { Click-Center $Window; return $true }
+            if ($isHotspot) { Invoke-HtsTargetClick $Context $Window; return $true }
             $wantedChecked = $Value.Trim().ToLowerInvariant() -in @("true","1","y","yes","checked")
-            $flaUiResult = Invoke-FlaUiControlAction $Window 'setChecked' -Checked $wantedChecked
+            $flaUiResult = Invoke-HtsTargetFlaUiControlAction $Context $Window 'setChecked' -Checked $wantedChecked
             if ([bool]$flaUiResult.success -and [bool]$flaUiResult.verified) { return $true }
             $wanted = if ($Value.Trim().ToLowerInvariant() -in @("true","1","y","yes","checked")) {1} else {0}
             $current = [int][TargetRuleNative]::SendMessage($hwnd,0x00F0,[IntPtr]::Zero,[IntPtr]::Zero).ToInt64()
-            if ($current -ne $wanted) { Click-Center $Window }
+            if ($current -ne $wanted) { Invoke-HtsTargetClick $Context $Window }
             return ([int][TargetRuleNative]::SendMessage($hwnd,0x00F0,[IntPtr]::Zero,[IntPtr]::Zero).ToInt64() -eq $wanted)
         }
         "RadioButton" {
             if (-not $isHotspot) {
-                $flaUiResult = Invoke-FlaUiControlAction $Window 'select'
+                $flaUiResult = Invoke-HtsTargetFlaUiControlAction $Context $Window 'select'
                 if ([bool]$flaUiResult.success -and [bool]$flaUiResult.verified) { return $true }
             }
-            Click-Center $Window
+            Invoke-HtsTargetClick $Context $Window
             return $isHotspot -or ([int][TargetRuleNative]::SendMessage($hwnd,0x00F0,[IntPtr]::Zero,[IntPtr]::Zero).ToInt64() -ne 0)
         }
         "Tab" {
             $index = 0
             if (-not [int]::TryParse($Value,[ref]$index)) { return $false }
             if (-not $isHotspot) {
-                $flaUiResult = Invoke-FlaUiControlAction $Window 'selectTabIndex' -Index $index
+                $flaUiResult = Invoke-HtsTargetFlaUiControlAction $Context $Window 'selectTabIndex' -Index $index
                 if ([bool]$flaUiResult.success -and [bool]$flaUiResult.verified) { return $true }
             }
             $count = if ($isHotspot) { [Math]::Max(1,$index+1) } else { [Math]::Max(1,[int][TargetRuleNative]::SendMessage($hwnd,0x1304,[IntPtr]::Zero,[IntPtr]::Zero).ToInt64()) }
             if ($index -ge $count) { return $false }
             $x = [int]($Window.rect.left + ($Window.rect.width * ($index + 0.5) / $count))
             $y = [int](($Window.rect.top + $Window.rect.bottom) / 2)
-            Click-Center ([pscustomobject]@{rect=[pscustomobject]@{left=$x-2;right=$x+2;top=$y-2;bottom=$y+2}})
-            Start-Sleep -Milliseconds 250
+            Invoke-HtsTargetClick $Context ([pscustomobject]@{rect=[pscustomobject]@{left=$x-2;right=$x+2;top=$y-2;bottom=$y+2}})
+            Invoke-HtsTargetSleep $Context 250
             if ($isHotspot) { return $true }
             return ([TargetRuleNative]::SendMessage($hwnd,0x130B,[IntPtr]::Zero,[IntPtr]::Zero).ToInt64() -eq $index)
         }
         "Button" {
             if (-not $isHotspot) {
-                $flaUiResult = Invoke-FlaUiControlAction $Window 'invoke'
+                $flaUiResult = Invoke-HtsTargetFlaUiControlAction $Context $Window 'invoke'
                 if ([bool]$flaUiResult.success -and [bool]$flaUiResult.verified) { return $true }
             }
-            Click-Center $Window; return $true
+            Invoke-HtsTargetClick $Context $Window; return $true
         }
         "ListBox" {
             $options=@(Get-RuleListOptions $Context $Window $MaxOptions)
             $selected=@($options | Where-Object { $_.value -eq $Value -or $_.displayValue -eq $Value } | Select-Object -First 1)
             if ($selected.Count -eq 0) { return $false }
-            $flaUiResult = Invoke-FlaUiControlAction $Window 'selectIndex' -Index ([int]$selected[0].index)
+            $flaUiResult = Invoke-HtsTargetFlaUiControlAction $Context $Window 'selectIndex' -Index ([int]$selected[0].index)
             if ([bool]$flaUiResult.success -and [bool]$flaUiResult.verified) { return $true }
             return [bool](Invoke-RuleListOptionClick $Context $Window $selected[0])
         }

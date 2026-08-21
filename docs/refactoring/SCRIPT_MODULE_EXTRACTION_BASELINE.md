@@ -303,3 +303,11 @@ target rule adapter
 - Win32 메시지 번호는 mutable script 변수 대신 호출 지점의 고정 상수로 유지해 로드 시 초기화 순서를 제거했다.
 - 두 context를 동시에 만든 characterization에서 order-tab state가 서로 오염되지 않았고 기존 MAP 정렬, maxActions, 날짜/종류 호환 동작을 보존했다.
 - 검증: 전체 PowerShell parser 51파일 오류 0, 14개 회귀 스위트 PASS, Approved TestPack dry-run `PENDING`, FlaUI action 0.
+
+### TargetRule 로드 순서/의존성 전환 결과
+
+- `hts-target-rule-context.ps1`이 context 생성과 dependency 호출 계약을 전담한다.
+- Discovery/Binding/Action의 창 열거, UIA snapshot, HWND 조회, 클릭, 키 입력, 대기, 텍스트 입력은 모두 `Context.Dependencies`를 통해 호출한다.
+- 세 책임 파일에는 orchestration의 `Get-WindowInfo`, `Click-Center`, `Get-FlaUiActionableControls` 같은 함수에 대한 직접 호출이 남아 있지 않다.
+- context를 먼저 로드한 뒤 Action → Binding → Discovery 역순으로 선언해도 기존 MAP/상태 동작이 같은 characterization을 추가했다.
+- UI 동작 모듈은 여전히 원시 성공·검증·오류만 반환하며 ResultEvaluator 또는 리포트 생성을 포함하지 않는다.

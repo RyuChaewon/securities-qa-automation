@@ -58,7 +58,7 @@ Assert-Equal '' (Get-RuleOrderTabState -Context $secondContext -ScreenNumber '01
 Assert-Equal '2' (Get-RuleOrderTabState -Context $context -ScreenNumber '0101' -MapScreenCode 'HT010115') 'creating another context does not mutate the first run'
 Assert-True (Test-RuleRuntimeKindCompatible -PlannedKind 'Date' -RuntimeKind 'Text') 'representative pure compatibility behavior remains fixed'
 
-foreach ($path in @('hts-target-rule-discovery.ps1', 'hts-target-rule-binding.ps1', 'hts-target-rule-action.ps1')) {
+foreach ($path in @('hts-target-rule-context.ps1', 'hts-target-rule-discovery.ps1', 'hts-target-rule-binding.ps1', 'hts-target-rule-action.ps1')) {
     $text = Get-Content -LiteralPath (Join-Path $root "scripts\modules\$path") -Raw
     Assert-True ($text -notmatch '\$script:') "$path has no script-scoped shared state"
 }
