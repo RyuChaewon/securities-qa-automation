@@ -334,3 +334,9 @@ target rule adapter
 - 화면번호 입력칸 탐색·검증, 화면 열기/식별/포커스, 연계 화면 계산과 화면 종료 호환 함수를 `hts-navigation.ps1`로 이동했다.
 - 기존 암묵적 `$navigationContext` 참조는 각 함수의 `NavigationContext` 파라미터로 바꿨다.
 - orchestration은 Navigation 함수의 호출 순서만 선택하고 화면 탐색·종료 구현을 정의하지 않는다.
+
+### Action 잔여 helper 이동
+
+- FlaUI 호환 호출, 전경 검증, 키 입력, 입력창 포커스, 물리 클릭, 텍스트 입력과 승인된 거래 확인창 제출 helper를 `hts-action.ps1`로 이동했다.
+- `HtsActionContext`가 Session, Safety, Run context를 명시적으로 보유하며 이동된 UI 함수는 orchestration 지역 상태를 참조하지 않는다.
+- Action 모듈은 원시 action 결과만 반환하고 테스트 판정 또는 리포트 생성을 수행하지 않는다.

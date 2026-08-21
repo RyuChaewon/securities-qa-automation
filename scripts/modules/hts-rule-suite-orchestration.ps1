@@ -347,16 +347,16 @@ $targetRuleDependencies = [pscustomobject]@{
     GetChildWindows = { param([Int64]$Hwnd) @(Get-ChildWindows $Hwnd) }
     GetFlaUiActionableControls = { param($Screen) @(Get-FlaUiActionableControls $Screen) }
     GetWindowInfo = { param([Int64]$Hwnd) Get-WindowInfo ([IntPtr]$Hwnd) }
-    ClickCenter = { param($Window, [bool]$DoubleClick) Click-Center $RuntimeContext $Window -DoubleClick:$DoubleClick }
-    SendKey = { param([byte]$Key) Send-Key $Key }
+    ClickCenter = { param($Window, [bool]$DoubleClick) Click-Center $actionContext $Window -DoubleClick:$DoubleClick }
+    SendKey = { param([byte]$Key) Send-Key $actionContext $Key }
     Sleep = { param([int]$Milliseconds) Start-Sleep -Milliseconds $Milliseconds }
     InvokeFlaUiControlAction = {
         param($Window, [string]$Action, [string]$Value, $Index, $Checked, [string]$Key)
-        Invoke-FlaUiControlAction $Window $Action -Value $Value -Index $Index -Checked $Checked -Key $Key
+        Invoke-FlaUiControlAction $actionContext $Window $Action -Value $Value -Index $Index -Checked $Checked -Key $Key
     }
     SetAutomationText = {
         param($Window, [string]$Value, [bool]$AlreadyFocused)
-        $success = Set-AutomationText $RuntimeContext $Window $Value -AlreadyFocused:$AlreadyFocused
+        $success = Set-AutomationText $actionContext $Window $Value -AlreadyFocused:$AlreadyFocused
         [pscustomobject]@{ success=[bool]$success; engine=[string]$RuntimeContext.LastTextAutomationEngine }
     }
 }
@@ -382,7 +382,7 @@ $actionDependencies = [pscustomobject]@{
     InvokeRuleControlPlanItem = { param($Navigation,$Screen,$PlanItem) Invoke-RuleControlPlanItem $targetRuleContext $Navigation $Screen $PlanItem }
     InvokeRuleDatasetVariable = { param($Window,[string]$Kind,[string]$Value,[string]$ValueMatch,[int]$MaxOptions) Invoke-RuleDatasetVariable $targetRuleContext $Window $Kind $Value $ValueMatch $MaxOptions }
 }
-$actionContext = New-HtsActionContext -SessionContext $sessionContext -Metrics $automationMetrics -Dependencies $actionDependencies
+$actionContext = New-HtsActionContext -SessionContext $sessionContext -Metrics $automationMetrics -Dependencies $actionDependencies -RuntimeContext $runtimeContext
 $observationDependencies = [pscustomobject]@{
     CreateSignalEvaluationCase = {
         param([string]$CaseId,[string]$EventType,[string]$Text,[string]$SourceCode,[string]$Source,$ExpectedOutcome)
@@ -426,6 +426,7 @@ $safetyDependencies = [pscustomobject]@{
     }
 }
 $safetyContext = New-HtsSafetyContext -AuditPath $inputBoundaryAuditPath -Dependencies $safetyDependencies
+$actionContext.SafetyContext = $safetyContext
 function Test-HtsPointInRect([int]$X,[int]$Y,$Rect){Test-HtsSafetyPointInRect $X $Y $Rect}
 function Clear-HtsInputSurface { Clear-HtsSafetyInputSurface -Context $safetyContext }
 function Set-HtsInputSurface($Window,[string]$Kind,[string]$Label=''){Set-HtsSafetyInputSurface -Context $safetyContext -Window $Window -Kind $Kind -Label $Label}
@@ -437,15 +438,6 @@ function Assert-HtsPhysicalPointOwner([int]$LogicalX,[int]$LogicalY,[int]$Physic
 function Assert-HtsPhysicalCursorTarget($ClickWindow,$PhysicalPoint){Assert-HtsSafetyCursorTarget -Context $safetyContext -ClickWindow $ClickWindow -PhysicalPoint $PhysicalPoint}
 
 # 기존 rule-control과 navigation 호출 계약을 보존하는 얇은 Action 어댑터다.
-function Invoke-FlaUiControlAction(
-    $Window,
-    [string]$Action,
-    [string]$Value = '',
-    [Nullable[int]]$Index = $null,
-    [Nullable[bool]]$Checked = $null,
-    [string]$Key = '') {
-    Invoke-HtsFlaUiControlAction -Context $actionContext -Window $Window -Action $Action -Value $Value -Index $Index -Checked $Checked -Key $Key
-}
 
 # 기존 탐색 구현의 호출 계약을 유지하되 실제 UIA3 탐색과 계측은 Discovery 모듈에 위임한다.
 function Get-FlaUiActionableControls($Screen) {
@@ -467,301 +459,17 @@ function Get-FlaUiActionableControls($Screen) {
 
 
 # 입력 직전 대상 프로세스를 전경으로 복구하고 다른 프로세스가 활성 상태면 입력을 차단한다.
-function Assert-HtsForeground {
-    if($safetyContext.MainHwnd -eq 0 -or $safetyContext.MainPid -eq 0){return}
-    $mainHwnd=[IntPtr][Int64]$safetyContext.MainHwnd
-    if(-not [TargetRuleNative]::IsWindow($mainHwnd)){
-        $replacement=$null
-        try{$replacement=Wait-HtsMainWindow -Context $sessionContext -TimeoutMs 15000}catch{}
-        if(-not $replacement){throw 'HTS_FOREGROUND_GUARD: HTS 메인 창이 사라졌고 새 메인 창도 찾지 못했습니다.'}
-        Set-HtsSafetySession -Context $safetyContext -Main $replacement
-        $mainHwnd=[IntPtr][Int64]$safetyContext.MainHwnd
-    }
-    $foreground=[TargetRuleNative]::GetForegroundWindow()
-    [uint32]$foregroundPid=0
-    $foregroundThread=if($foreground -ne [IntPtr]::Zero){[TargetRuleNative]::GetWindowThreadProcessId($foreground,[ref]$foregroundPid)}else{0}
-    if([int]$foregroundPid -eq [int]$safetyContext.MainPid){return}
-
-    [uint32]$targetPid=0
-    $targetThread=[TargetRuleNative]::GetWindowThreadProcessId($mainHwnd,[ref]$targetPid)
-    $currentThread=[TargetRuleNative]::GetCurrentThreadId()
-    $attachedForeground=$false
-    $attachedTarget=$false
-    try{
-        if($foregroundThread -ne 0 -and $foregroundThread -ne $currentThread){$attachedForeground=[TargetRuleNative]::AttachThreadInput($currentThread,$foregroundThread,$true)}
-        if($targetThread -ne 0 -and $targetThread -ne $currentThread){$attachedTarget=[TargetRuleNative]::AttachThreadInput($currentThread,$targetThread,$true)}
-        [void][TargetRuleNative]::ShowWindow($mainHwnd,9)
-        [void][TargetRuleNative]::BringWindowToTop($mainHwnd)
-        [void][TargetRuleNative]::SetForegroundWindow($mainHwnd)
-    }finally{
-        if($attachedTarget){[void][TargetRuleNative]::AttachThreadInput($currentThread,$targetThread,$false)}
-        if($attachedForeground){[void][TargetRuleNative]::AttachThreadInput($currentThread,$foregroundThread,$false)}
-    }
-    Start-Sleep -Milliseconds 120
-    $foreground=[TargetRuleNative]::GetForegroundWindow()
-    $foregroundPid=0
-    if($foreground -ne [IntPtr]::Zero){[void][TargetRuleNative]::GetWindowThreadProcessId($foreground,[ref]$foregroundPid)}
-    if([int]$foregroundPid -ne [int]$safetyContext.MainPid){
-        [TargetRuleNative]::keybd_event([byte]$VK_MENU,0,0,[UIntPtr]::Zero)
-        [TargetRuleNative]::keybd_event([byte]$VK_MENU,0,$KEYEVENTF_KEYUP,[UIntPtr]::Zero)
-        [void][TargetRuleNative]::SetForegroundWindow($mainHwnd)
-        Start-Sleep -Milliseconds 120
-        $foreground=[TargetRuleNative]::GetForegroundWindow()
-        $foregroundPid=0
-        if($foreground -ne [IntPtr]::Zero){[void][TargetRuleNative]::GetWindowThreadProcessId($foreground,[ref]$foregroundPid)}
-    }
-    if([int]$foregroundPid -ne [int]$safetyContext.MainPid){
-        $positionFlags=[uint32]($SWP_NOSIZE -bor $SWP_NOMOVE)
-        [void][TargetRuleNative]::SetWindowPos($mainHwnd,$HWND_TOPMOST,0,0,0,0,$positionFlags)
-        [void][TargetRuleNative]::BringWindowToTop($mainHwnd)
-        [void][TargetRuleNative]::SetForegroundWindow($mainHwnd)
-        [void][TargetRuleNative]::SetWindowPos($mainHwnd,$HWND_NOTOPMOST,0,0,0,0,$positionFlags)
-        Start-Sleep -Milliseconds 150
-        $foreground=[TargetRuleNative]::GetForegroundWindow()
-        $foregroundPid=0
-        if($foreground -ne [IntPtr]::Zero){[void][TargetRuleNative]::GetWindowThreadProcessId($foreground,[ref]$foregroundPid)}
-    }
-    if([int]$foregroundPid -ne [int]$safetyContext.MainPid){
-        [TargetRuleNative]::SwitchToThisWindow($mainHwnd,$true)
-        Start-Sleep -Milliseconds 150
-        $foreground=[TargetRuleNative]::GetForegroundWindow()
-        $foregroundPid=0
-        if($foreground -ne [IntPtr]::Zero){[void][TargetRuleNative]::GetWindowThreadProcessId($foreground,[ref]$foregroundPid)}
-    }
-    if([int]$foregroundPid -ne [int]$safetyContext.MainPid){throw 'HTS_FOREGROUND_GUARD: HTS를 전경으로 확정하지 못해 입력을 차단했습니다.'}
-}
 
 # WindowFromPoint는 호출 프로세스의 DPI 좌표계를 사용하므로 논리 좌표로 최상단 HTS 창을 확인한다.
 # Per-Monitor DPI 문맥에서 실제 커서 위치가 고정된 대상 HWND 위인지 마지막으로 확인한다.
 # 전경·포커스 경계를 검증한 뒤 단일 가상 키의 누름과 해제를 전송한다.
-function Send-Key([byte]$Key) {
-    $foregroundReady=$false
-    $foregroundError=''
-    for($attempt=0;$attempt -lt 3;$attempt++){
-        try{Assert-HtsForeground;$foregroundReady=$true;break}catch{$foregroundError=$_.Exception.Message;Start-Sleep -Milliseconds 250}
-    }
-    if(-not $foregroundReady){Write-HtsInputBoundaryAudit 'Keyboard' 'BLOCKED' -1 -1 $foregroundError;throw $foregroundError}
-    try{Assert-HtsKeyboardScope}catch{Write-HtsInputBoundaryAudit 'Keyboard' 'BLOCKED' -1 -1 $_.Exception.Message;throw}
-    Write-HtsInputBoundaryAudit 'Keyboard' 'ALLOWED' -1 -1 ("VK={0}" -f $Key)
-    [TargetRuleNative]::keybd_event($Key, 0, 0, [UIntPtr]::Zero)
-    Start-Sleep -Milliseconds 30
-    [TargetRuleNative]::keybd_event($Key, 0, $KEYEVENTF_KEYUP, [UIntPtr]::Zero)
-    Start-Sleep -Milliseconds 30
-}
 
 # 물리 커서 이동이 제한된 세션에서도 화면번호 Edit HWND에 직접 포커스를 주고
 # 키 입력 범위를 검증한다. 화면 열기는 버튼 조작이 아닌 이 경로를 우선 사용한다.
-function Focus-HtsInputWindow($Window) {
-    if (-not $Window -or -not ($Window.PSObject.Properties.Name -contains 'hwnd') -or [Int64]$Window.hwnd -eq 0) {
-        throw 'INPUT_SCOPE_BLOCKED: 포커스 대상 HWND가 없습니다.'
-    }
-    $targetHwnd = [IntPtr][Int64]$Window.hwnd
-    if (-not [TargetRuleNative]::IsWindow($targetHwnd)) { throw 'INPUT_SCOPE_BLOCKED: 포커스 대상 HWND가 더 이상 유효하지 않습니다.' }
-    Assert-HtsForeground
-    [uint32]$targetPid = 0
-    $targetThread = [TargetRuleNative]::GetWindowThreadProcessId($targetHwnd, [ref]$targetPid)
-    if ([int]$targetPid -ne [int]$safetyContext.MainPid) { throw 'INPUT_SCOPE_BLOCKED: 포커스 대상이 HTS 프로세스에 속하지 않습니다.' }
-    $currentThread = [TargetRuleNative]::GetCurrentThreadId()
-    $attached = $false
-    try {
-        if ($targetThread -ne 0 -and $targetThread -ne $currentThread) {
-            $attached = [TargetRuleNative]::AttachThreadInput($currentThread, $targetThread, $true)
-        }
-        [void][TargetRuleNative]::SetFocus($targetHwnd)
-    } finally {
-        if ($attached) { [void][TargetRuleNative]::AttachThreadInput($currentThread, $targetThread, $false) }
-    }
-    $info = New-Object TargetRuleNative+GUITHREADINFO
-    $info.cbSize = [Runtime.InteropServices.Marshal]::SizeOf([type][TargetRuleNative+GUITHREADINFO])
-    [void][TargetRuleNative]::GetGUIThreadInfo(0, [ref]$info)
-    $focus = [Int64]$info.hwndFocus.ToInt64()
-    if ($focus -ne [Int64]$targetHwnd) {
-        $detail = "expected=$([Int64]$targetHwnd), actual=$focus, targetThread=$targetThread, currentThread=$currentThread, attached=$attached"
-        Write-HtsInputBoundaryAudit 'KeyboardFocus' 'BLOCKED' -1 -1 $detail
-        throw "INPUT_SCOPE_BLOCKED: 화면번호 입력창 포커스를 검증하지 못했습니다. $detail"
-    }
-    Write-HtsInputBoundaryAudit 'KeyboardFocus' 'ALLOWED' -1 -1 "targetHwnd=$([Int64]$targetHwnd)"
-}
 
 # 최신 창 좌표의 중심점을 계산하고 클릭 경계 감사 후 왼쪽 클릭을 전송한다.
-function Click-Center($RuntimeContext, $Window, [switch]$DoubleClick) {
-    $foregroundReady=$false
-    $foregroundError=''
-    for($attempt=0;$attempt -lt 3;$attempt++){
-        try{Assert-HtsForeground;$foregroundReady=$true;break}catch{$foregroundError=$_.Exception.Message;Start-Sleep -Milliseconds 250}
-    }
-    if(-not $foregroundReady){Write-HtsInputBoundaryAudit 'MouseClick' 'BLOCKED' -1 -1 $foregroundError;throw $foregroundError}
-    $clickWindow=$Window
-    if($Window -and $Window.PSObject.Properties.Name -contains 'hwnd' -and [Int64]$Window.hwnd -ne 0){
-        if(-not [TargetRuleNative]::IsWindow([IntPtr][Int64]$Window.hwnd)){throw 'INPUT_SCOPE_BLOCKED: 클릭 직전에 대상 HWND가 사라졌습니다.'}
-        $clickWindow=Get-WindowInfo ([IntPtr][Int64]$Window.hwnd)
-    }
-    $x = [int](($clickWindow.rect.left + $clickWindow.rect.right) / 2)
-    $y = [int](($clickWindow.rect.top + $clickWindow.rect.bottom) / 2)
-    try{Assert-HtsClickScope $clickWindow $x $y}catch{Write-HtsInputBoundaryAudit 'MouseClick' 'BLOCKED' $x $y $_.Exception.Message;throw}
-    $physicalPoint = New-Object TargetRuleNative+POINT
-    $physicalPoint.X = $x
-    $physicalPoint.Y = $y
-    $mainHwnd = [IntPtr][Int64]$safetyContext.MainHwnd
-    $converted = $mainHwnd -ne [IntPtr]::Zero -and [TargetRuleNative]::LogicalToPhysicalPointForPerMonitorDPI($mainHwnd,[ref]$physicalPoint)
-    if (-not $converted) {
-        $dpi = if ($mainHwnd -ne [IntPtr]::Zero) { [int][TargetRuleNative]::GetDpiForWindow($mainHwnd) } else { 96 }
-        if ($dpi -ne 96) {
-            $message = "DPI_POINT_CONVERSION_FAILED: logical=($x,$y), dpi=$dpi"
-            Write-HtsInputBoundaryAudit 'MouseClick' 'BLOCKED' $x $y $message
-            throw $message
-        }
-    }
-    $physicalX = [int]$physicalPoint.X
-    $physicalY = [int]$physicalPoint.Y
-    $ownerReady=$false
-    $ownerError=''
-    for($attempt=0;$attempt -lt 3;$attempt++){
-        try{
-            Assert-HtsForeground
-            Assert-HtsPhysicalPointOwner $x $y $physicalX $physicalY
-            $ownerReady=$true
-            break
-        }catch{
-            $ownerError=$_.Exception.Message
-            Start-Sleep -Milliseconds 200
-        }
-    }
-    if(-not $ownerReady){
-        Write-HtsInputBoundaryAudit 'MouseClick' 'BLOCKED' $physicalX $physicalY $ownerError
-        throw $ownerError
-    }
-    $targetName = if($clickWindow.rawTitle){[string]$clickWindow.rawTitle}else{[string]$clickWindow.className}
-    $previousDpiContext=[TargetRuleNative]::SetThreadDpiAwarenessContext([IntPtr](-4))
-    if($previousDpiContext -eq [IntPtr]::Zero){
-        $message="DPI_THREAD_CONTEXT_FAILED: logical=($x,$y), physical=($physicalX,$physicalY)"
-        Write-HtsInputBoundaryAudit 'MouseClick' 'BLOCKED' $physicalX $physicalY $message
-        throw $message
-    }
-    $actualPoint=New-Object TargetRuleNative+POINT
-    $targetHit=$null
-    try {
-        $cursorSet = $false
-        if ($RuntimeContext.VisiblePointerMotion) {
-            $startPoint = New-Object TargetRuleNative+POINT
-            if ([TargetRuleNative]::GetPhysicalCursorPos([ref]$startPoint)) {
-                $distance = [Math]::Sqrt([Math]::Pow($physicalX-[int]$startPoint.X,2)+[Math]::Pow($physicalY-[int]$startPoint.Y,2))
-                $motionSteps = [Math]::Min(24,[Math]::Max(8,[int][Math]::Ceiling($distance/70)))
-                for ($motionStep=1; $motionStep -le $motionSteps; $motionStep++) {
-                    $ratio = $motionStep/[double]$motionSteps
-                    $motionX = [int][Math]::Round([int]$startPoint.X+(($physicalX-[int]$startPoint.X)*$ratio))
-                    $motionY = [int][Math]::Round([int]$startPoint.Y+(($physicalY-[int]$startPoint.Y)*$ratio))
-                    if (-not [TargetRuleNative]::SetPhysicalCursorPos($motionX,$motionY)) { break }
-                    $cursorSet = $motionStep -eq $motionSteps
-                    Start-Sleep -Milliseconds 30
-                }
-            }
-        } else {
-            $cursorSet = [TargetRuleNative]::SetPhysicalCursorPos($physicalX,$physicalY)
-        }
-        if(-not $cursorSet){throw "PHYSICAL_CURSOR_SET_FAILED: logical=($x,$y), physical=($physicalX,$physicalY)"}
-        if(-not [TargetRuleNative]::GetPhysicalCursorPos([ref]$actualPoint) -or [Math]::Abs([int]$actualPoint.X-$physicalX)-gt1 -or [Math]::Abs([int]$actualPoint.Y-$physicalY)-gt1){
-            throw "PHYSICAL_CURSOR_VERIFY_FAILED: expected=($physicalX,$physicalY), actual=($([int]$actualPoint.X),$([int]$actualPoint.Y))"
-        }
-        $targetHit=Assert-HtsPhysicalCursorTarget $clickWindow $actualPoint
-        if ($RuntimeContext.PointerDwellMilliseconds -gt 0) { Start-Sleep -Milliseconds $RuntimeContext.PointerDwellMilliseconds }
-        if(-not [TargetRuleNative]::SendLeftClick()){
-            $nativeError=[Runtime.InteropServices.Marshal]::GetLastWin32Error()
-            throw "SEND_INPUT_CLICK_FAILED: logical=($x,$y), physical=($physicalX,$physicalY), win32Error=$nativeError"
-        }
-        if ($DoubleClick) {
-            Start-Sleep -Milliseconds 60
-            Assert-HtsForeground
-            if(-not [TargetRuleNative]::SendLeftClick()){
-                $nativeError=[Runtime.InteropServices.Marshal]::GetLastWin32Error()
-                throw "SEND_INPUT_DOUBLE_CLICK_FAILED: logical=($x,$y), physical=($physicalX,$physicalY), win32Error=$nativeError"
-            }
-        }
-    } catch {
-        Write-HtsInputBoundaryAudit 'MouseClick' 'BLOCKED' $physicalX $physicalY $_.Exception.Message
-        throw
-    } finally {
-        [void][TargetRuleNative]::SetThreadDpiAwarenessContext($previousDpiContext)
-    }
-    Write-HtsInputBoundaryAudit 'MouseClick' 'ALLOWED' $physicalX $physicalY "$targetName; logical=($x,$y); physicalTarget=($physicalX,$physicalY); physicalVerified=($([int]$actualPoint.X),$([int]$actualPoint.Y)); targetHwnd=$([Int64]$targetHit.targetHwnd); hitHwnd=$([Int64]$targetHit.hitHwnd); dpiThreadContext=PER_MONITOR_AWARE_V2; coordinateSpace=physical; inputEngine=SendInput; clickCount=$(if($DoubleClick){2}else{1}); visiblePointerMotion=$([bool]$RuntimeContext.VisiblePointerMotion); dwellMs=$([int]$RuntimeContext.PointerDwellMilliseconds)"
-    Start-Sleep -Milliseconds 120
-}
 
 # FlaUI UIA3 ValuePattern을 우선 사용하고 비지원 사용자 정의 입력만 Win32/키보드로 보완한다.
-function Set-AutomationText($RuntimeContext, $Window, [string]$Value, [switch]$Sensitive, [switch]$AlreadyFocused) {
-    $RuntimeContext.LastTextAutomationEngine = 'Win32 fallback'
-    $scopeWindow=$Window
-    if($Window -and $Window.PSObject.Properties.Name -contains 'hwnd' -and [Int64]$Window.hwnd -ne 0){
-        if(-not [TargetRuleNative]::IsWindow([IntPtr][Int64]$Window.hwnd)){throw 'INPUT_SCOPE_BLOCKED: 입력 직전에 대상 HWND가 사라졌습니다.'}
-        $scopeWindow=Get-WindowInfo ([IntPtr][Int64]$Window.hwnd)
-    }
-    $scopeX=[int](($scopeWindow.rect.left+$scopeWindow.rect.right)/2)
-    $scopeY=[int](($scopeWindow.rect.top+$scopeWindow.rect.bottom)/2)
-    Assert-HtsClickScope $scopeWindow $scopeX $scopeY
-    if (-not ([Int64]$Window.hwnd -eq 0 -and $Window.className -eq "ConfiguredVisualHotspot")) {
-        $flaUiResult = Invoke-FlaUiControlAction $Window 'setText' -Value $Value
-        if ([bool]$flaUiResult.success -and [bool]$flaUiResult.verified) {
-            $RuntimeContext.LastTextAutomationEngine = 'FlaUI.UIA3'
-            return $true
-        }
-    }
-    if ([Int64]$Window.hwnd -eq 0 -and $Window.className -eq "ConfiguredVisualHotspot") {
-        if ($Sensitive) { return $false }
-        if (-not $AlreadyFocused) { Click-Center $RuntimeContext $Window }
-        Assert-HtsKeyboardScope
-        [TargetRuleNative]::keybd_event([byte]$VK_CONTROL, 0, 0, [UIntPtr]::Zero)
-        Send-Key ([byte]$VK_A)
-        [TargetRuleNative]::keybd_event([byte]$VK_CONTROL, 0, $KEYEVENTF_KEYUP, [UIntPtr]::Zero)
-        Send-Key ([byte]$VK_BACK)
-        Assert-HtsKeyboardScope
-        [Windows.Forms.SendKeys]::SendWait($Value)
-        Start-Sleep -Milliseconds 200
-        return $true
-    }
-    [void][TargetRuleNative]::SendMessage([IntPtr][Int64]$Window.hwnd, $WM_SETTEXT, [IntPtr]::Zero, $Value)
-    Start-Sleep -Milliseconds 150
-    $current = Get-WindowInfo ([IntPtr][Int64]$Window.hwnd)
-    $length = [TargetRuleNative]::SendMessage([IntPtr][Int64]$Window.hwnd, $WM_GETTEXTLENGTH, [IntPtr]::Zero, [IntPtr]::Zero).ToInt64()
-    $sentByVirtualKeys = $false
-    $needsFallback = if ($Sensitive) { $length -le 0 } else { [string]$current.rawTitle -ne $Value }
-    if ($needsFallback) {
-        $inputPoint = [pscustomobject]@{rect=[pscustomobject]@{left=$Window.rect.left;right=[Math]::Min($Window.rect.right,$Window.rect.left+48);top=$Window.rect.top;bottom=$Window.rect.bottom}}
-        if (-not $AlreadyFocused) { Click-Center $RuntimeContext $inputPoint }
-        Assert-HtsKeyboardScope
-        [TargetRuleNative]::keybd_event([byte]$VK_CONTROL, 0, 0, [UIntPtr]::Zero)
-        Send-Key ([byte]$VK_A)
-        [TargetRuleNative]::keybd_event([byte]$VK_CONTROL, 0, $KEYEVENTF_KEYUP, [UIntPtr]::Zero)
-        Send-Key ([byte]$VK_BACK)
-        if ($Sensitive -or $Value -match '^[0-9]+$') {
-            foreach ($ch in $Value.ToCharArray()) {
-                if ($ch -notmatch '[0-9]') { return $false }
-                Send-Key ([byte](0x30 + [int][string]$ch))
-            }
-            $sentByVirtualKeys = $true
-        } else {
-            Assert-HtsKeyboardScope
-            [Windows.Forms.SendKeys]::SendWait($Value)
-        }
-        Start-Sleep -Milliseconds 150
-        $current = Get-WindowInfo ([IntPtr][Int64]$Window.hwnd)
-        if (-not $Sensitive -and [string]$current.rawTitle -notlike "*$Value*") {
-            Click-Center $RuntimeContext $inputPoint
-            Assert-HtsKeyboardScope
-            [TargetRuleNative]::keybd_event([byte]$VK_CONTROL,0,0,[UIntPtr]::Zero)
-            Send-Key ([byte]$VK_A)
-            [TargetRuleNative]::keybd_event([byte]$VK_CONTROL,0,$KEYEVENTF_KEYUP,[UIntPtr]::Zero)
-            [Windows.Forms.Clipboard]::SetText($Value)
-            [TargetRuleNative]::keybd_event([byte]$VK_CONTROL,0,0,[UIntPtr]::Zero)
-            Send-Key ([byte]$VK_V)
-            [TargetRuleNative]::keybd_event([byte]$VK_CONTROL,0,$KEYEVENTF_KEYUP,[UIntPtr]::Zero)
-            Start-Sleep -Milliseconds 150
-            $current = Get-WindowInfo ([IntPtr][Int64]$Window.hwnd)
-            $sentByVirtualKeys = $true
-        }
-        $length = [TargetRuleNative]::SendMessage([IntPtr][Int64]$Window.hwnd, $WM_GETTEXTLENGTH, [IntPtr]::Zero, [IntPtr]::Zero).ToInt64()
-    }
-    return $(if ($Sensitive) { $length -gt 0 -or $sentByVirtualKeys } elseif ([string]$current.rawTitle -eq $Value) { $true } else { $sentByVirtualKeys })
-}
 
 # 화면 수명주기: 번호 입력, 대상 창 식별, 연계 창 정리와 순차 종료를 한 화면 단위로 관리한다.
 
@@ -852,65 +560,8 @@ function Invoke-HtsRawObservationEvaluation(
 
 # 승인된 거래 실행에서만 주문 확인창을 식별한다. 입력 검증·시스템 오류와
 # 의미가 모호한 '취소' 단독 버튼은 제출 대상으로 인정하지 않는다.
-function Test-HtsTransactionalConfirmationDialog($Dialog, $PlanItem) {
-    if (-not $Dialog -or -not $PlanItem) { return $false }
-    $messageText = ((@([string]$Dialog.title) + @($Dialog.messageLines)) | Where-Object { $_ }) -join ' | '
-    if (Test-SystemFailureSignal $messageText -or Test-InputValidationSignal $messageText) { return $false }
-    if ([string]$Dialog.classification -ne '확인 요청') { return $false }
-
-    $logicalName = [string]$PlanItem.controlLogicalName
-    $verbPattern = switch ($logicalName) {
-        'BTN_Ord_Buy' { '매수|주문' }
-        'BTN_Ord_Sell' { '매도|주문' }
-        'BTN_Ord_Mod' { '정정|주문' }
-        'BTN_Ord_Can' { '취소\s*주문|주문\s*취소|취소' }
-        default { '주문|정정|취소|전송' }
-    }
-    if ($messageText -notmatch $verbPattern) { return $false }
-
-    $positiveButtonPattern = '^(확인|예|Yes|주문|주문전송|전송|매수주문|매도주문|정정주문|취소주문)$'
-    @($Dialog.buttons | Where-Object { [string]$_ -match $positiveButtonPattern }).Count -gt 0
-}
 
 # 거래 확인창의 명시적 승인 버튼을 실제 마우스 경로로 누르고 창이 닫혔는지 검증한다.
-function Submit-HtsTransactionalDialog($RuntimeContext, $Dialog, $PlanItem) {
-    $positiveButtonPattern = '^(확인|예|Yes|주문|주문전송|전송|매수주문|매도주문|정정주문|취소주문)$'
-    $buttons = @(Get-ChildWindows ([Int64]$Dialog.window.hwnd) | Where-Object {
-        $_.visible -and $_.enabled -and $_.className -like '*Button*' -and $_.rawTitle -match $positiveButtonPattern
-    } | Sort-Object @{Expression={
-        if ($_.rawTitle -match '^(매수주문|매도주문|정정주문|취소주문)$') { 0 }
-        elseif ($_.rawTitle -match '^(확인|예|Yes)$') { 1 }
-        else { 2 }
-    }}, {$_.rect.left})
-    if ($buttons.Count -eq 0) {
-        return [pscustomobject]@{success=$false;errorCode='TRANSACTION_CONFIRM_BUTTON_NOT_FOUND';output='거래 확인창에서 명시적 승인 버튼을 찾지 못했습니다.'}
-    }
-
-    $savedHwnd=[Int64]$safetyContext.ActiveInputSurfaceHwnd
-    $savedKind=[string]$safetyContext.ActiveInputSurfaceKind
-    $savedLabel=[string]$safetyContext.ActiveInputSurfaceLabel
-    try {
-        Set-HtsInputSurface $Dialog.window 'Dialog' "HTS 거래 확인창: $($Dialog.title)"
-        [void][TargetRuleNative]::ShowWindow([IntPtr][Int64]$Dialog.window.hwnd, 9)
-        [void][TargetRuleNative]::SetForegroundWindow([IntPtr][Int64]$Dialog.window.hwnd)
-        Click-Center $RuntimeContext $buttons[0]
-        Start-Sleep -Milliseconds 800
-        $closed = -not [TargetRuleNative]::IsWindow([IntPtr][Int64]$Dialog.window.hwnd)
-        [pscustomobject]@{
-            success=$closed
-            errorCode=$(if($closed){''}else{'TRANSACTION_CONFIRM_DIALOG_REMAINED'})
-            output=$(if($closed){"거래 확인 버튼 '$([string]$buttons[0].rawTitle)'을 눌러 제출했습니다."}else{'승인 버튼 클릭 후 거래 확인창이 닫히지 않았습니다.'})
-        }
-    } catch {
-        [pscustomobject]@{success=$false;errorCode='TRANSACTION_CONFIRM_CLICK_FAILED';output=$_.Exception.Message}
-    } finally {
-        if($savedHwnd -ne 0 -and [TargetRuleNative]::IsWindow([IntPtr]$savedHwnd)){
-            try{Set-HtsInputSurface (Get-WindowInfo ([IntPtr]$savedHwnd)) $savedKind $savedLabel}catch{Clear-HtsInputSurface}
-        }else{
-            Clear-HtsInputSurface
-        }
-    }
-}
 
 # 하나의 팝업·로그 신호를 판정하지 않고 원시 Observation 계약으로 분류한다.
 # 대화상자의 제목·본문·버튼을 합쳐 공통 Observation 분류기로 전달한다.
@@ -993,8 +644,8 @@ function Dismiss-HtsDialogs($RuntimeContext, $Main, [string]$Secret = "") {
                 $_.visible -and $_.enabled -and $_.className -like "*Button*" -and $_.rawTitle -match '^(취소|아니오|No|닫기|Close)$'
             } | Sort-Object @{Expression={if($_.rawTitle -match '^(취소|아니오|No)$'){0}else{1}}}, {$_.rect.left})
             if ($safeButtons.Count -gt 0) {
-                $dismissResult=Invoke-FlaUiControlAction $safeButtons[0] 'invoke'
-                if(-not ([bool]$dismissResult.success -and [bool]$dismissResult.verified)){Click-Center $RuntimeContext $safeButtons[0]}
+                $dismissResult=Invoke-FlaUiControlAction $actionContext $safeButtons[0] 'invoke'
+                if(-not ([bool]$dismissResult.success -and [bool]$dismissResult.verified)){Click-Center $actionContext $safeButtons[0]}
             } else {
                 [void][TargetRuleNative]::SendMessage([IntPtr][Int64]$dialog.window.hwnd, $WM_CLOSE, [IntPtr]::Zero, [IntPtr]::Zero)
             }
@@ -1286,12 +937,12 @@ $navigationDependencies = [pscustomobject]@{
     SetScreenNumber = { param($ScreenEdit, [string]$ScreenNumber) Set-HtsScreenNumber $ScreenEdit $ScreenNumber }
     InvokeControlAction = {
         param($Window, [string]$Action, [string]$Key)
-        Invoke-FlaUiControlAction $Window $Action -Key $Key
+        Invoke-FlaUiControlAction $actionContext $Window $Action -Key $Key
     }
     TestInputAccess = { param($Window) Test-HtsScreenNavigationInputAccess $Window }
-    ClickCenter = { param($Window) Click-Center $RuntimeContext $Window }
-    SendEnter = { Send-Key ([byte]$VK_RETURN) }
-    FocusInputWindow = { param($Window) Focus-HtsInputWindow $Window }
+    ClickCenter = { param($Window) Click-Center $actionContext $Window }
+    SendEnter = { Send-Key $actionContext ([byte]$VK_RETURN) }
+    FocusInputWindow = { param($Window) Focus-HtsInputWindow $actionContext $Window }
     Sleep = { param([int]$Milliseconds) Start-Sleep -Milliseconds $Milliseconds }
     GetNow = { Get-Date }
     GetWindowProcessId = {
@@ -1546,7 +1197,7 @@ for ($caseIndex = 0; $caseIndex -lt $cases.Count; $caseIndex++) {
                 $accountStrategies = if ($case.screen.locators -and $case.screen.locators.account) { $case.screen.locators.account } else { $dataset.defaultLocators.account }
                 $accountControl = Resolve-HtsRoleControl -Context $bindingContext -Screen $screen -Role 'account' -Strategies $accountStrategies
                 if ($accountControl -and [Int64]$accountControl.hwnd -ne 0) { $claimedHwnds[[Int64]$accountControl.hwnd] = $true }
-                if ($accountControl -and (Set-AutomationText $RuntimeContext $accountControl ([string]$case.account.accountNumber))) {
+                if ($accountControl -and (Set-AutomationText $actionContext $accountControl ([string]$case.account.accountNumber))) {
                     Add-HtsActionRecord $reportingContext $actions "setAccount" "PASS" "account" "계좌번호를 입력했으며 결과에는 마스킹했습니다."
                 } else {
                     Add-HtsActionRecord $reportingContext $actions "setAccount" "PENDING" "account" "신뢰도 높은 계좌 입력칸을 찾지 못했습니다." "LOCATOR_NOT_RESOLVED"
@@ -1559,7 +1210,7 @@ for ($caseIndex = 0; $caseIndex -lt $cases.Count; $caseIndex++) {
                 if (-not $secret) {
                     Add-HtsActionRecord $reportingContext $actions "setPassword" "PENDING" "password" "비밀번호 환경 변수가 설정되지 않았습니다." "SECRET_NOT_SET"
                     $pendingReasons.Add("비밀번호 환경 변수")
-                } elseif ($passwordControl -and (Set-AutomationText $RuntimeContext $passwordControl $secret -Sensitive)) {
+                } elseif ($passwordControl -and (Set-AutomationText $actionContext $passwordControl $secret -Sensitive)) {
                     Add-HtsActionRecord $reportingContext $actions "setPassword" "PASS" "password" "비밀번호를 입력했으며 값은 기록하지 않았습니다."
                 } else {
                     Add-HtsActionRecord $reportingContext $actions "setPassword" "PENDING" "password" "신뢰도 높은 비밀번호 입력칸을 찾지 못했습니다." "LOCATOR_NOT_RESOLVED"
@@ -1862,7 +1513,7 @@ for ($caseIndex = 0; $caseIndex -lt $cases.Count; $caseIndex++) {
                             $transactionPreRecordedHwnds = @($transactionDialogs | ForEach-Object { [Int64]$_.window.hwnd })
                             $eligibleTransactionDialogs = @($transactionDialogs | Where-Object { Test-HtsTransactionalConfirmationDialog $_ $planItem })
                             if ($eligibleTransactionDialogs.Count -eq 1) {
-                                $transactionSubmit = Submit-HtsTransactionalDialog $RuntimeContext $eligibleTransactionDialogs[0] $planItem
+                                $transactionSubmit = Submit-HtsTransactionalDialog $actionContext $eligibleTransactionDialogs[0] $planItem
                                 $invoke.output = "$([string]$invoke.output); $([string]$transactionSubmit.output)"
                                 if (-not [bool]$transactionSubmit.success) {
                                     $invoke.success = $false
@@ -1987,9 +1638,9 @@ for ($caseIndex = 0; $caseIndex -lt $cases.Count; $caseIndex++) {
                         [void](Focus-HtsRequestedScreen $navigationContext $main $screen $requestedScreenNumber)
                         $liveTabQuery=if($tabOrderQueryControl){Resolve-RuleLiveControl $targetRuleContext $navigationContext $screen $tabOrderQueryControl}else{$null}
                         if($liveTabQuery){
-                            $queryResult=Invoke-FlaUiControlAction $liveTabQuery 'invoke'
-                            if(-not ([bool]$queryResult.success -and [bool]$queryResult.verified)){Click-Center $RuntimeContext $liveTabQuery}
-                        }else{Send-Key ([byte]$VK_F12)}
+                            $queryResult=Invoke-FlaUiControlAction $actionContext $liveTabQuery 'invoke'
+                            if(-not ([bool]$queryResult.success -and [bool]$queryResult.verified)){Click-Center $actionContext $liveTabQuery}
+                        }else{Send-Key $actionContext ([byte]$VK_F12)}
                         Start-Sleep -Milliseconds ([Math]::Max(500,[int]$dataset.executionPolicy.actionTimeoutMs))
                         $queryTriggered = $true
                         $mapQueryExecuted = $true
@@ -2167,9 +1818,9 @@ for ($caseIndex = 0; $caseIndex -lt $cases.Count; $caseIndex++) {
                             break
                         }
                         try {
-                            $queryResult=Invoke-FlaUiControlAction $queryControl 'invoke'
+                            $queryResult=Invoke-FlaUiControlAction $actionContext $queryControl 'invoke'
                             $queryActionEngine=if([bool]$queryResult.success -and [bool]$queryResult.verified){'FlaUI.UIA3'}else{'Win32 fallback'}
-                            if($queryActionEngine -eq 'Win32 fallback'){Click-Center $RuntimeContext $queryControl}
+                            if($queryActionEngine -eq 'Win32 fallback'){Click-Center $actionContext $queryControl}
                             $mapQueryExecuted = $true
                         } catch {
                             $guardMessage=Protect-Text $_.Exception.Message $secret
@@ -2257,7 +1908,7 @@ for ($caseIndex = 0; $caseIndex -lt $cases.Count; $caseIndex++) {
                     $mapQueryExecuted = $true
                 } else {
                     if(Focus-HtsRequestedScreen $navigationContext $main $screen $requestedScreenNumber){
-                        Send-Key ([byte]$VK_F12)
+                        Send-Key $actionContext ([byte]$VK_F12)
                         Start-Sleep -Milliseconds ([Math]::Max(500,[int]$dataset.executionPolicy.actionTimeoutMs))
                         Add-HtsActionRecord $reportingContext $actions "invokeQuery" "PASS" "F12" "활성 조회 버튼을 찾지 못해 화면의 F12 조회 단축키를 실행했습니다."
                         $mapQueryExecuted = $true

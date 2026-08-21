@@ -37,7 +37,11 @@ $dependencies = [pscustomobject]@{
     InvokeRuleControlPlanItem = { param($Navigation,$Screen,$PlanItem) [void]$script:adapterCalls.Add('plan'); [pscustomobject]@{status='SUCCEEDED';planItem=$PlanItem} }
     InvokeRuleDatasetVariable = { param($Window,[string]$Kind,[string]$Value,[string]$Match,[int]$Max) [void]$script:adapterCalls.Add("dataset:${Kind}:${Value}"); $true }
 }
-$context = New-HtsActionContext -SessionContext ([pscustomobject]@{name='fake'}) -Metrics $metrics -Dependencies $dependencies
+$runtimeContext = [pscustomobject]@{name='fake-runtime'}
+$safetyContext = [pscustomobject]@{name='fake-safety'}
+$context = New-HtsActionContext -SessionContext ([pscustomobject]@{name='fake'}) -Metrics $metrics -Dependencies $dependencies -RuntimeContext $runtimeContext -SafetyContext $safetyContext
+Assert-Equal 'fake-runtime' ([string]$context.RuntimeContext.name) 'action context retains explicit run context'
+Assert-Equal 'fake-safety' ([string]$context.SafetyContext.name) 'action context retains explicit safety context'
 
 $success = Invoke-HtsFlaUiControlAction -Context $context -Window $window -Action 'selectIndex' -Index 2
 Assert-True ([bool]$success.success -and [bool]$success.verified) 'verified bridge result is returned unchanged'
@@ -72,5 +76,10 @@ Assert-True ($script:adapterCalls.Contains('plan') -and $script:adapterCalls.Con
 $moduleText = Get-Content -LiteralPath (Join-Path $root 'scripts\modules\hts-action.ps1') -Raw
 Assert-True ($moduleText -notmatch '\$script:|\$global:') 'action module has no global or script-scoped runtime state'
 Assert-True ($moduleText -notmatch 'ResultEvaluator|TestResult|Set-Content|Add-Content') 'action module cannot evaluate or report results'
+foreach ($name in @('Invoke-FlaUiControlAction','Send-Key','Click-Center','Set-AutomationText','Submit-HtsTransactionalDialog')) {
+    Assert-True ($moduleText -match "function $name") "action owns $name"
+}
+$orchestrationText = Get-Content -LiteralPath (Join-Path $root 'scripts\modules\hts-rule-suite-orchestration.ps1') -Raw
+Assert-True ($orchestrationText -notmatch 'function Invoke-FlaUiControlAction|function Click-Center|function Set-AutomationText') 'orchestration no longer defines UI action implementations'
 
 Write-Output "HTS_ACTION_TESTS=PASS assertions=$script:assertions"
