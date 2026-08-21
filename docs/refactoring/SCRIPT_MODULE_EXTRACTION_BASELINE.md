@@ -352,3 +352,9 @@ target rule adapter
 - Action의 물리 입력 helper는 실행별 `SafetyContext`를 `hts-safety.ps1`의 함수에 명시적으로 전달한다.
 - FlaUI action dependency와 orchestration의 화면 전환 경로도 같은 Safety 구현을 사용하며 별도 허용·차단 분기를 갖지 않는다.
 - 전체 PowerShell parser 56파일 오류 0, 16개 회귀 스위트 PASS, Approved TestPack dry-run 14 assertion PASS를 확인했다. 실제 HTS 입력은 실행하지 않았다.
+
+### Observation 정규화 adapter 정리
+
+- orchestration에 남아 있던 메시지·기대값·오류 정규화 adapter 9개를 제거하고 `hts-observation.ps1`의 단일 구현을 직접 호출한다.
+- 상태가 필요한 정규화 호출은 실행별 `ObservationContext`를 명시적으로 전달한다.
+- Observation 모듈에는 ResultEvaluator 호출이나 파일 리포트 생성 분기를 추가하지 않았으며 기존 분류·기대값 규칙을 그대로 유지했다.

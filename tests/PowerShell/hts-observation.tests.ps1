@@ -69,5 +69,8 @@ Assert-True (-not ('N001' -match $regex)) 'non-failure installed code is exclude
 $moduleText=Get-Content -LiteralPath (Join-Path $root 'scripts\modules\hts-observation.ps1') -Raw
 Assert-True ($moduleText -notmatch '\$script:|\$global:') 'observation module has no global or script-scoped runtime state'
 Assert-True ($moduleText -notmatch 'Invoke-RuleResultEvaluation|Invoke-RuleSignalEvaluation|Set-Content|Add-Content') 'observation module cannot evaluate or report results'
+$orchestrationText=Get-Content -LiteralPath (Join-Path $root 'scripts\modules\hts-rule-suite-orchestration.ps1') -Raw
+Assert-True ($orchestrationText-notmatch'function (Get-MapOracleMessageMatch|Get-InstallationErrorCodeMatch|Get-RuleExpectedOutcome|Test-SystemFailureSignal|Test-InputValidationSignal|Get-HtsSignalObservation|Get-HtsDialogObservation|Add-OracleObservation|Get-MapOracleErrorRegex)') 'orchestration no longer owns observation normalization adapters'
+Assert-True ($orchestrationText-match'New-HtsSignalObservation -Context \$observationContext') 'orchestration passes explicit observation context to normalization'
 
 Write-Output "HTS_OBSERVATION_TESTS=PASS assertions=$script:assertions"

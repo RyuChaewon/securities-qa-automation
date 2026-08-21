@@ -392,22 +392,6 @@ $observationDependencies = [pscustomobject]@{
 }
 $observationContext = New-HtsObservationContext -MapCatalog $mapCatalog -Dependencies $observationDependencies
 
-# 기존 실행 루프 호출 계약을 유지하면서 메시지 정규화와 case-local 관찰 상태는 Observation 모듈에 위임한다.
-function Get-MapOracleMessageMatch([string]$Text,$MapOracle) { Get-HtsMapOracleMessageMatch -Text $Text -MapOracle $MapOracle }
-function Get-InstallationErrorCodeMatch([string]$Text) { Get-HtsInstallationErrorCodeMatch -Context $observationContext -Text $Text }
-function Get-RuleExpectedOutcome($Option,$FallbackPatterns=@()) { Get-HtsExpectedOutcome -Option $Option -FallbackPatterns $FallbackPatterns }
-function Test-SystemFailureSignal([string]$Text) { Test-HtsSystemFailureSignal -Text $Text }
-function Test-InputValidationSignal([string]$Text) { Test-HtsInputValidationSignal -Text $Text }
-function Get-HtsSignalObservation([string]$Text,$MapOracle,$ExpectedOutcome,[regex]$ErrorRegex,[string]$FallbackClassification='') {
-    New-HtsSignalObservation -Context $observationContext -Text $Text -MapOracle $MapOracle -ExpectedOutcome $ExpectedOutcome -ErrorRegex $ErrorRegex -FallbackClassification $FallbackClassification
-}
-function Get-HtsDialogObservation($Dialog,$MapOracle,$ExpectedOutcome,[regex]$ErrorRegex) {
-    New-HtsDialogObservation -Context $observationContext -Dialog $Dialog -MapOracle $MapOracle -ExpectedOutcome $ExpectedOutcome -ErrorRegex $ErrorRegex
-}
-function Add-OracleObservation($List,$Observation,[string]$Stage,[string]$ControlId='',[string]$OptionId='') {
-    Add-HtsOracleObservation -Context $observationContext -List $List -Observation $Observation -Stage $Stage -ControlId $ControlId -OptionId $OptionId
-}
-function Get-MapOracleErrorRegex([regex]$BaseRegex,$MapOracle) { Get-HtsObservationErrorRegex -Context $observationContext -BaseRegex $BaseRegex -MapOracle $MapOracle }
 $safetyDependencies = [pscustomobject]@{
     IsWindow = { param([Int64]$Hwnd) [TargetRuleNative]::IsWindow([IntPtr]$Hwnd) }
     GetWindowInfo = { param([Int64]$Hwnd) Get-WindowInfo ([IntPtr]$Hwnd) }
@@ -661,8 +645,8 @@ function Add-PopupObservations($List, $Dialogs, $Main, [string]$CaseId, [string]
         foreach ($pattern in @($ExpectedPatterns)) {
             if ($pattern -and $dialog.text -match [string]$pattern) { $expected=$true; break }
         }
-        $mapMatch = Get-MapOracleMessageMatch ([string]$dialog.text) $MapOracle
-        $installedMatch = Get-InstallationErrorCodeMatch ([string]$dialog.text)
+        $mapMatch = Get-HtsMapOracleMessageMatch ([string]$dialog.text) $MapOracle
+        $installedMatch = Get-HtsInstallationErrorCodeMatch -Context $observationContext ([string]$dialog.text)
         $classification = if ($installedMatch) {
             switch ([string]$installedMatch.classification) {
                 'Authentication' { '인증 오류' }
@@ -800,8 +784,8 @@ function Get-LogErrors($Before, [regex]$ErrorRegex, [string]$Secret, $MapOracle 
             $reader = New-Object IO.StreamReader($stream, [Text.Encoding]::Default)
             $tokens = if ($MapOracle) { @($MapOracle.requestNames) + @($MapOracle.transactionCodes) } else { @() }
             foreach ($line in @($reader.ReadToEnd() -split "`r?`n" | Where-Object { -not [string]::IsNullOrWhiteSpace($_) })) {
-                $installedMatch = Get-InstallationErrorCodeMatch ([string]$line)
-                $mapMessage = Get-MapOracleMessageMatch ([string]$line) $MapOracle
+                $installedMatch = Get-HtsInstallationErrorCodeMatch -Context $observationContext ([string]$line)
+                $mapMessage = Get-HtsMapOracleMessageMatch ([string]$line) $MapOracle
                 $isCandidate=($line -match $ErrorRegex) -or ($line -match '자동\s*로그아웃\s*후|세션\s*만료') -or $installedMatch -or $mapMessage
                 if(-not $isCandidate){continue}
                 if ($installedMatch -and -not [bool]$installedMatch.isFailure) { continue }
@@ -833,7 +817,7 @@ function Get-ExplicitWindowErrors($Main, $BeforeErrorTexts, [regex]$ErrorRegex, 
         $texts = @($window.rawTitle) + @(Get-ChildWindows ([Int64]$window.hwnd) | ForEach-Object { $_.rawTitle })
         $matches = @($texts | Where-Object { $_ -and $_ -match $ErrorRegex })
         foreach ($match in $matches) {
-            $mapMessage = Get-MapOracleMessageMatch ([string]$match) $MapOracle
+            $mapMessage = Get-HtsMapOracleMessageMatch ([string]$match) $MapOracle
             if ($mapMessage -and -not [bool]$mapMessage.isExplicitError) { continue }
             $safe = Protect-Text $match $Secret
             if ($BeforeErrorTexts -notcontains $safe) { $rows.Add($safe) }
@@ -1082,7 +1066,7 @@ for ($caseIndex = 0; $caseIndex -lt $cases.Count; $caseIndex++) {
     $mapBehavior = if ($mapModel) { $mapModel.behavior } else { $null }
     $mapQueryExecuted = $false
     $mapReboundControls = 0
-    $caseErrorRegex = Get-MapOracleErrorRegex $errorRegex $mapOracle
+    $caseErrorRegex = Get-HtsObservationErrorRegex -Context $observationContext $errorRegex $mapOracle
     try {
         $previousPid = if ($main) { [int]$main.pid } else { 0 }
         $main = Wait-HtsMainWindow -Context $sessionContext
@@ -1211,7 +1195,7 @@ for ($caseIndex = 0; $caseIndex -lt $cases.Count; $caseIndex++) {
                 $dimension = if ($dimensionRows.Count -gt 0) { $dimensionRows[0] } else { [pscustomobject]@{name=$name;targetRole="condition:$name";controlKind="Auto";valueMatch="Value";required=$true;triggerQueryAfterChange=$true;sensitive=$false} }
                 $variableExpectation=if($case.variableExpectedOutcomes -and $case.variableExpectedOutcomes.ContainsKey($name)){$case.variableExpectedOutcomes[$name]}else{$null}
                 $variableOption=[pscustomobject]@{id="dataset-variable:$name";expectedOutcome=$variableExpectation}
-                $resolvedVariableExpectation=Get-RuleExpectedOutcome $variableOption @($case.screen.expectedPopupPatterns)
+                $resolvedVariableExpectation=Get-HtsExpectedOutcome $variableOption @($case.screen.expectedPopupPatterns)
                 foreach($pattern in @($resolvedVariableExpectation.messagePatterns)){
                     if($pattern -and -not $executedExpectationPatterns.Contains([string]$pattern)){$executedExpectationPatterns.Add([string]$pattern)}
                 }
@@ -1241,8 +1225,8 @@ for ($caseIndex = 0; $caseIndex -lt $cases.Count; $caseIndex++) {
                             throw "HTS_CONNECTION_LOST: 조건 입력 직후 연결 장애가 확인되어 사용자 판단 없이 실행을 중단했습니다. $([string]$variableConnectionDialogs[0].text)"
                         }
                         foreach($dialog in $variableDialogs){
-                            $observation=Get-HtsDialogObservation $dialog $mapOracle $resolvedVariableExpectation $caseErrorRegex
-                            Add-OracleObservation $oracleEvents $observation 'dataset-variable' "dataset-variable:$name" ([string]$resolvedVariableExpectation.expectationId)
+                            $observation=New-HtsDialogObservation -Context $observationContext $dialog $mapOracle $resolvedVariableExpectation $caseErrorRegex
+                            Add-HtsOracleObservation -Context $observationContext $oracleEvents $observation 'dataset-variable' "dataset-variable:$name" ([string]$resolvedVariableExpectation.expectationId)
                         }
                         [void](Dismiss-HtsDialogs $RuntimeContext $main $secret)
                     }
@@ -1349,7 +1333,7 @@ for ($caseIndex = 0; $caseIndex -lt $cases.Count; $caseIndex++) {
                     }
                     $planStarted = Get-Date
                     $option = $planItem.option
-                    $expectedOutcome=Get-RuleExpectedOutcome $option @($case.screen.expectedPopupPatterns)
+                    $expectedOutcome=Get-HtsExpectedOutcome $option @($case.screen.expectedPopupPatterns)
                     foreach($pattern in @($expectedOutcome.messagePatterns)){if($pattern -and -not $executedExpectationPatterns.Contains([string]$pattern)){$executedExpectationPatterns.Add([string]$pattern)}}
                     $requiredExpectationRecord=$null
                     if([string]$expectedOutcome.type -in @('ValidationRequired','FailureRequired')){
@@ -1509,8 +1493,8 @@ for ($caseIndex = 0; $caseIndex -lt $cases.Count; $caseIndex++) {
                                 }
                             } else {
                                 foreach ($transactionDialog in $transactionDialogs) {
-                                    $transactionObservation = Get-HtsDialogObservation $transactionDialog $mapOracle $expectedOutcome $caseErrorRegex
-                                    Add-OracleObservation $oracleEvents $transactionObservation 'transaction-confirmation' ([string]$planItem.control.controlId) ([string]$option.id)
+                                    $transactionObservation = New-HtsDialogObservation -Context $observationContext $transactionDialog $mapOracle $expectedOutcome $caseErrorRegex
+                                    Add-HtsOracleObservation -Context $observationContext $oracleEvents $transactionObservation 'transaction-confirmation' ([string]$planItem.control.controlId) ([string]$option.id)
                                 }
                                 $invoke.success = $false
                                 $invoke.errorCode = if ($eligibleTransactionDialogs.Count -gt 1) { 'TRANSACTION_CONFIRMATION_AMBIGUOUS' } else { 'TRANSACTION_CONFIRMATION_NOT_ELIGIBLE' }
@@ -1568,8 +1552,8 @@ for ($caseIndex = 0; $caseIndex -lt $cases.Count; $caseIndex++) {
                             throw "HTS_CONNECTION_LOST: 컨트롤 단계 직후 연결 장애가 확인되어 사용자 판단 없이 실행을 중단했습니다. $([string]$connectionDialogs[0].text)"
                         }
                         foreach ($dialog in $dialogsToRecord) {
-                            $observation=Get-HtsDialogObservation $dialog $mapOracle $expectedOutcome $caseErrorRegex
-                            Add-OracleObservation $oracleEvents $observation 'control' ([string]$planItem.control.controlId) ([string]$option.id)
+                            $observation=New-HtsDialogObservation -Context $observationContext $dialog $mapOracle $expectedOutcome $caseErrorRegex
+                            Add-HtsOracleObservation -Context $observationContext $oracleEvents $observation 'control' ([string]$planItem.control.controlId) ([string]$option.id)
                         }
                         $nextScenarioAction = if ($scenarioMode -and $planIndex + 1 -lt $queue.Count) { [string]$queue[$planIndex + 1].scenarioAction } else { '' }
                         if ($nextScenarioAction -notin @('AssertPopup','Restore')) {
@@ -1641,8 +1625,8 @@ for ($caseIndex = 0; $caseIndex -lt $cases.Count; $caseIndex++) {
                                 throw "HTS_CONNECTION_LOST: 조회 직후 연결 장애가 확인되어 사용자 판단 없이 실행을 중단했습니다. $([string]$queryConnectionDialogs[0].text)"
                             }
                             foreach($dialog in $queryDialogs){
-                                $observation=Get-HtsDialogObservation $dialog $mapOracle $expectedOutcome $caseErrorRegex
-                                Add-OracleObservation $oracleEvents $observation 'query-after-control' ([string]$planItem.control.controlId) ([string]$option.id)
+                                $observation=New-HtsDialogObservation -Context $observationContext $dialog $mapOracle $expectedOutcome $caseErrorRegex
+                                Add-HtsOracleObservation -Context $observationContext $oracleEvents $observation 'query-after-control' ([string]$planItem.control.controlId) ([string]$option.id)
                             }
                             [void](Dismiss-HtsDialogs $RuntimeContext $main $secret)
                         }
@@ -1828,15 +1812,15 @@ for ($caseIndex = 0; $caseIndex -lt $cases.Count; $caseIndex++) {
 
                         $queryDialogs=@(Get-HtsDialogs $RuntimeContext $main $secret)
                         if($queryDialogs.Count -gt 0){
-                            $caseExpectedOutcome=Get-RuleExpectedOutcome $null @(@($case.screen.expectedPopupPatterns)+@($executedExpectationPatterns))
+                            $caseExpectedOutcome=Get-HtsExpectedOutcome $null @(@($case.screen.expectedPopupPatterns)+@($executedExpectationPatterns))
                             Add-PopupObservations $popupObservations $queryDialogs $main $case.caseId $requestedScreenNumber $ReportDir @($caseExpectedOutcome.messagePatterns) $mapOracle
                             $requiredQueryConnectionDialogs = @($queryDialogs | Where-Object { Test-HtsConnectionDialog $_ })
                             if ($requiredQueryConnectionDialogs.Count -gt 0) {
                                 throw "HTS_CONNECTION_LOST: 필수 조회 직후 연결 장애가 확인되어 사용자 판단 없이 실행을 중단했습니다. $([string]$requiredQueryConnectionDialogs[0].text)"
                             }
                             foreach($dialog in $queryDialogs){
-                                $observation=Get-HtsDialogObservation $dialog $mapOracle $caseExpectedOutcome $caseErrorRegex
-                                Add-OracleObservation $oracleEvents $observation 'required-query'
+                                $observation=New-HtsDialogObservation -Context $observationContext $dialog $mapOracle $caseExpectedOutcome $caseErrorRegex
+                                Add-HtsOracleObservation -Context $observationContext $oracleEvents $observation 'required-query'
                             }
                             [void](Dismiss-HtsDialogs $RuntimeContext $main $secret)
                         }
@@ -1923,7 +1907,7 @@ for ($caseIndex = 0; $caseIndex -lt $cases.Count; $caseIndex++) {
             if ($automationIssues.Count -gt 0) { $pendingReasons.Add("자동 컨트롤 조작 일부 미완료($($automationIssues.Count)건)") }
         }
 
-        $caseExpectedOutcome=Get-RuleExpectedOutcome $null @(@($case.screen.expectedPopupPatterns)+@($executedExpectationPatterns))
+        $caseExpectedOutcome=Get-HtsExpectedOutcome $null @(@($case.screen.expectedPopupPatterns)+@($executedExpectationPatterns))
         $finalDialogs = @(Get-HtsDialogs $RuntimeContext $main $secret)
         if ($finalDialogs.Count -gt 0) {
             Add-PopupObservations $popupObservations $finalDialogs $main $case.caseId ([string]$case.screen.screenNumber) $ReportDir @($caseExpectedOutcome.messagePatterns) $mapOracle
@@ -1932,19 +1916,19 @@ for ($caseIndex = 0; $caseIndex -lt $cases.Count; $caseIndex++) {
                 throw "HTS_CONNECTION_LOST: 케이스 종료 전 연결 장애가 확인되어 사용자 판단 없이 실행을 중단했습니다. $([string]$finalConnectionDialogs[0].text)"
             }
             foreach ($dialog in $finalDialogs) {
-                $observation=Get-HtsDialogObservation $dialog $mapOracle $caseExpectedOutcome $caseErrorRegex
-                Add-OracleObservation $oracleEvents $observation 'final-dialog'
+                $observation=New-HtsDialogObservation -Context $observationContext $dialog $mapOracle $caseExpectedOutcome $caseErrorRegex
+                Add-HtsOracleObservation -Context $observationContext $oracleEvents $observation 'final-dialog'
             }
         }
         $windowErrors = @(Get-ExplicitWindowErrors $main $beforeErrorTexts $caseErrorRegex $secret $mapOracle)
         $logErrors = @(Get-LogErrors $logBefore $caseErrorRegex $secret $mapOracle)
         foreach ($message in $windowErrors) {
-            $observation=Get-HtsSignalObservation ([string]$message) $mapOracle $caseExpectedOutcome $caseErrorRegex
-            Add-OracleObservation $oracleEvents $observation 'window-text'
+            $observation=New-HtsSignalObservation -Context $observationContext ([string]$message) $mapOracle $caseExpectedOutcome $caseErrorRegex
+            Add-HtsOracleObservation -Context $observationContext $oracleEvents $observation 'window-text'
         }
         foreach ($message in $logErrors) {
-            $observation=Get-HtsSignalObservation ([string]$message) $mapOracle $caseExpectedOutcome $caseErrorRegex
-            Add-OracleObservation $oracleEvents $observation 'log'
+            $observation=New-HtsSignalObservation -Context $observationContext ([string]$message) $mapOracle $caseExpectedOutcome $caseErrorRegex
+            Add-HtsOracleObservation -Context $observationContext $oracleEvents $observation 'log'
         }
         # Windows PowerShell 5.1은 빈 제네릭 List<object>를 @()로 감쌀 때 바인더 예외를 낼 수 있어 배열로 명시 변환한다.
         foreach($queryRequired in $queryRequiredExpectations.ToArray()){
