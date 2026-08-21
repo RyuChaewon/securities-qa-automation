@@ -126,6 +126,7 @@ $physicalPlanPath = Join-Path $ReportDir "physical-plan.json"
     --plan $planPath `
     --control-plan $controlPlanPath `
     --runtime-fingerprint $runtimeFingerprint `
+    --test-pack $testPackFullPath `
     --out $bindingsPath | Out-Null
 $bindingExitCode = $LASTEXITCODE
 if ($bindingExitCode -notin @(0,3) -or -not (Test-Path -LiteralPath $bindingsPath)) {

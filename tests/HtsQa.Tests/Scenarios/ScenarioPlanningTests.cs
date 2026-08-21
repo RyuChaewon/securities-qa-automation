@@ -487,7 +487,10 @@ public sealed class ScenarioPlanningTests
                     ActionableControl("buy", "BTN_Ord_Buy", "HT010115", "428:173=0")
                 ]
             }
-        ], "installation");
+        ], "installation", new RuleTargetAdapterProfile
+        {
+            StatefulControls = [new() { StateContextPattern = "^order-tab:(buy|sell|modify-cancel|any)$" }]
+        });
 
         var binding = Assert.Single(bindings.Screens[0].Controls);
         Assert.Equal("HT010115|BTN_Ord_Buy|order-tab:buy", binding.BindingKey);

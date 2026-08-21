@@ -258,19 +258,19 @@ function Invoke-RuleControlPlanItem($Context, $NavigationContext, $Screen, $Plan
                 break
             }
             $logicalName = if ([string]$PlanItem.controlLogicalName) { [string]$PlanItem.controlLogicalName } else { [string]$control.name }
-            $orderTabProfile = Get-RuleOrderTabProfile $Context $screenNumber ([string]$PlanItem.mapScreenCode) $logicalName
-            $orderTabItem = Get-RuleOrderTabItem $orderTabProfile $option
-            if ($orderTabItem -and ([string]$live.className).StartsWith('AfxWnd',[StringComparison]::OrdinalIgnoreCase)) {
-                $x = [int]$live.rect.left + [int]$orderTabItem.x
-                $y = [int]$live.rect.top + [int]$orderTabProfile.y
+            $statefulControl = Get-HtsTargetStatefulControl $Context.TargetAdapter $screenNumber ([string]$PlanItem.mapScreenCode) $logicalName
+            $stateOption = Get-HtsTargetStateOption $statefulControl $option
+            if ($stateOption -and ([string]$live.className).StartsWith('AfxWnd',[StringComparison]::OrdinalIgnoreCase)) {
+                $x = [int]$live.rect.left + [int]$stateOption.x
+                $y = [int]$live.rect.top + [int]$statefulControl.y
                 Invoke-HtsTargetClick $Context ([pscustomobject]@{rect=[pscustomobject]@{left=$x-2;right=$x+2;top=$y-2;bottom=$y+2}})
-                Set-RuleOrderTabState $Context $screenNumber ([string]$PlanItem.mapScreenCode) ([string]$option.value)
+                Set-HtsTargetState $Context.TargetAdapter $statefulControl ([string]$option.value)
                 $coordinateFocusUsed=$true
                 $coordinateFocusVerified=$true
                 $actionEngine='CoordinateFocus + profiled owner-drawn tab'
                 Invoke-HtsTargetSleep $Context 500
                 $success=$true
-                $verificationNote=" 0101 주문 탭 프로필 좌표 ($([int]$orderTabItem.x),$([int]$orderTabProfile.y))를 사용했습니다."
+                $verificationNote=" Adapter state profile 좌표 ($([int]$stateOption.x),$([int]$statefulControl.y))를 사용했습니다."
                 break
             }
             if (-not $coordinateFocus) {

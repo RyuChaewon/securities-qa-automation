@@ -19,6 +19,14 @@ $script:assertions = 0
 $dataset = [pscustomobject]@{
     targetProfile = [pscustomobject]@{
         map = [pscustomobject]@{ initiallyActiveMapScreenCodes = @('HT010102', 'ht010101', 'HT010102') }
+        adapter = [pscustomobject]@{
+            statefulControls = @([pscustomobject]@{
+                screenId='0101';mapScreenCode='HT010115';logicalName='TAB_Ord';defaultValue=''
+                stateContextPattern='^order-tab:(buy|sell|modify-cancel|any)$'
+                options=@([pscustomobject]@{id='modify-cancel';value='2';stateContext='order-tab:modify-cancel'})
+            })
+            mapHosts=@();transactionalDialogs=$null
+        }
     }
     autoExploration = [pscustomobject]@{
         interactionStrategy = 'CoordinateFocus'
@@ -41,8 +49,9 @@ Assert-Equal 'HT010101' ([string]$models[0].screenCode) 'screen models remain so
 Assert-Equal 'HT010102' ([string](Get-RuleMapScreenModel -Context $context -ScreenNumber '0101' -MapScreenCode 'HT010102').screenCode) 'explicit map screen selection is preserved'
 Assert-Equal 'HT010101' ([string](Get-RuleMapScreenModel -Context $context -ScreenNumber '0101').screenCode) 'default map screen selection remains deterministic'
 
-Set-RuleOrderTabState -Context $context -ScreenNumber '0101' -MapScreenCode 'ht010115' -Value '2'
-Assert-Equal '2' (Get-RuleOrderTabState -Context $context -ScreenNumber '0101' -MapScreenCode 'HT010115') 'order-tab keys remain case insensitive'
+$stateControl = Get-HtsTargetStatefulControl $context.TargetAdapter '0101' 'ht010115' 'TAB_Ord'
+Set-HtsTargetState $context.TargetAdapter $stateControl '2'
+Assert-Equal '2' (Get-HtsTargetState $context.TargetAdapter $stateControl) 'adapter state keys remain case insensitive'
 
 $controls = @(
     [pscustomobject]@{ controlId='B';tabOrder=2;claimedByDataset=$false;dataRequired=$false;options=@([pscustomobject]@{id='b1'},[pscustomobject]@{id='b2'}) },
@@ -54,11 +63,11 @@ Assert-Equal 'A-a1' ([string]$plans[0].planItemId) 'plan ordering remains tabOrd
 Assert-Equal 'A-a2' ([string]$plans[1].planItemId) 'plan truncation remains deterministic'
 
 $secondContext = New-HtsTargetRuleContext -RootPath $root -Dataset $dataset -MapCatalog $mapCatalog
-Assert-Equal '' (Get-RuleOrderTabState -Context $secondContext -ScreenNumber '0101' -MapScreenCode 'HT010115') 'a new run context starts with isolated order-tab state'
-Assert-Equal '2' (Get-RuleOrderTabState -Context $context -ScreenNumber '0101' -MapScreenCode 'HT010115') 'creating another context does not mutate the first run'
+Assert-Equal '' (Get-HtsTargetState $secondContext.TargetAdapter (Get-HtsTargetStatefulControl $secondContext.TargetAdapter '0101' 'HT010115' 'TAB_Ord')) 'a new run context starts with isolated adapter state'
+Assert-Equal '2' (Get-HtsTargetState $context.TargetAdapter $stateControl) 'creating another context does not mutate the first run'
 Assert-True (Test-RuleRuntimeKindCompatible -PlannedKind 'Date' -RuntimeKind 'Text') 'representative pure compatibility behavior remains fixed'
 
-foreach ($path in @('hts-target-rule-context.ps1', 'hts-target-rule-discovery.ps1', 'hts-target-rule-binding.ps1', 'hts-target-rule-action.ps1')) {
+foreach ($path in @('hts-target-adapter.ps1', 'hts-target-rule-context.ps1', 'hts-target-rule-discovery.ps1', 'hts-target-rule-binding.ps1', 'hts-target-rule-action.ps1')) {
     $text = Get-Content -LiteralPath (Join-Path $root "scripts\modules\$path") -Raw
     Assert-True ($text -notmatch '\$script:') "$path has no script-scoped shared state"
 }

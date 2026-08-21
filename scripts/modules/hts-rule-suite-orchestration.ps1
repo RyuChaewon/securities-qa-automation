@@ -18,8 +18,8 @@ param(
     [switch]$VisiblePointerMotion,
     [ValidateRange(0, 3000)]
     [int]$PointerDwellMilliseconds = 0,
-    [ValidateSet('', '0', '1', '2')]
-    [string]$OrderTabStateOverride = '',
+    [Alias('OrderTabStateOverride')]
+    [string]$TargetStateOverride = '',
     [switch]$SubmitTransactionalDialogs,
     [switch]$DryRun,
     [switch]$PlanOnly,
@@ -258,7 +258,8 @@ $targetRuleDependencies = [pscustomobject]@{
 }
 $targetRuleContext = New-HtsTargetRuleContext -RootPath $root -Dataset $dataset -MapCatalog $mapCatalog -Dependencies $targetRuleDependencies
 $targetRuleContext.FastScenarioDiscovery = [bool]($scenarioMode -or $PlanOnly)
-if ($OrderTabStateOverride) { Set-RuleOrderTabState $targetRuleContext '0101' 'HT010115' $OrderTabStateOverride }
+if ($TargetStateOverride) { Set-HtsTargetInitialStateOverride $targetRuleContext.TargetAdapter $TargetStateOverride }
+$targetStateErrorCodes = @(Get-HtsTargetStateErrorCodes $targetRuleContext.TargetAdapter)
 $discoveryDependencies = [pscustomobject]@{
     InvokeBridgeRequest = { param($Context, $Request) Invoke-FlaUiBridgeRequest -Context $Context -Request $Request }
     GetMapScreenModel = { param([string]$ScreenNumber, [string]$MapScreenCode) Get-RuleMapScreenModel $targetRuleContext $ScreenNumber $MapScreenCode }
@@ -282,7 +283,7 @@ $actionDependencies = [pscustomobject]@{
     GetDialogs = { param($Observation,$Run,$MainWindow,[string]$SecretText) @(Get-HtsDialogs $Observation $Run $MainWindow $SecretText) }
     TestConnectionDialog = { param($Dialog) Test-HtsConnectionDialog $Dialog }
 }
-$actionContext = New-HtsActionContext -SessionContext $sessionContext -Metrics $automationMetrics -Dependencies $actionDependencies -RuntimeContext $runtimeContext
+$actionContext = New-HtsActionContext -SessionContext $sessionContext -Metrics $automationMetrics -Dependencies $actionDependencies -RuntimeContext $runtimeContext -TargetAdapterContext $targetRuleContext.TargetAdapter
 $observationDependencies = [pscustomobject]@{
     CreateSignalEvaluationCase = {
         param([string]$CaseId,[string]$EventType,[string]$Text,[string]$SourceCode,[string]$Source,$ExpectedOutcome)
@@ -857,10 +858,10 @@ for ($caseIndex = 0; $caseIndex -lt $cases.Count; $caseIndex++) {
                 }
 
                 $lastScenarioActionPopupHwnds = @()
-                # 주문 명령은 TAB_Ord의 Select + AssertSelected가 같은 케이스에서
-                # 성공한 상태에서만 실행한다. 탭 전환 실패 뒤의 좌표 클릭을 차단한다.
-                $verifiedOrderTabContexts = @{}
-                $pendingOrderTabContexts = @{}
+                # Adapter가 선언한 상태 의존 동작은 Select + AssertSelected가 같은 케이스에서
+                # 성공한 상태에서만 실행한다. 상태 전환 실패 뒤의 좌표 클릭을 차단한다.
+                $verifiedTargetStateContexts = @{}
+                $pendingTargetStateContexts = @{}
                 for ($planIndex=0; $planIndex -lt $queue.Count; $planIndex++) {
                     $planItem = $queue[$planIndex]
                     if ($scenarioMode -and [string]$planItem.status -ne 'READY' -and (Test-HtsRequestedScreen $navigationContext $screen ([string]$case.screen.screenNumber))) {
@@ -940,6 +941,9 @@ for ($caseIndex = 0; $caseIndex -lt $cases.Count; $caseIndex++) {
                     $navigationHandled = $false
                     $restorationFailed = $false
                     $unexpectedScreenClose = $false
+                    $targetStateContext = ''
+                    $isTargetStateSelection = $false
+                    $isTargetStateAssertion = $false
 
                     if(-not (Focus-HtsRequestedScreen $navigationContext $main $screen $requestedScreenNumber)){
                         $screen=Find-ScreenWindow $navigationContext $main $requestedScreenNumber
@@ -950,7 +954,7 @@ for ($caseIndex = 0; $caseIndex -lt $cases.Count; $caseIndex++) {
                         $planMapCode = ([string]$planItem.mapScreenCode).Trim().ToUpperInvariant()
                         if ($scenarioMode -and [string]$planItem.executionOrder -eq 'CoordinateFocus' -and $planMapCode -and
                             $RuntimeContext.InitiallyActiveMapScreenCodes.Count -gt 0 -and $RuntimeContext.InitiallyActiveMapScreenCodes -notcontains $planMapCode) {
-                            $mapStateBlockReason = "내부화면 $planMapCode 는 현재 0101의 초기 활성 MAP이 아니며 명시적 상태 전환 절차가 없습니다."
+                            $mapStateBlockReason = "내부화면 $planMapCode 는 현재 target의 초기 활성 MAP이 아니며 명시적 상태 전환 절차가 없습니다."
                         }
                         $transactionBlockReason = ''
                         if ([bool]$planItem.transactional) {
@@ -970,15 +974,16 @@ for ($caseIndex = 0; $caseIndex -lt $cases.Count; $caseIndex++) {
                                 }
                             }
                         }
-                        $orderTabContext = [string]$planItem.stateContext
-                        $isOrderTabContext = Test-RuleOrderTabContext $orderTabContext
-                        $isOrderTabSelection = $isOrderTabContext -and [string]$planItem.controlLogicalName -eq 'TAB_Ord' -and [string]$planItem.scenarioAction -eq 'Select'
-                        $isOrderTabAssertion = $isOrderTabContext -and [string]$planItem.controlLogicalName -eq 'TAB_Ord' -and [string]$planItem.scenarioAction -eq 'AssertSelected'
-                        $requiresVerifiedOrderTab = $isOrderTabContext -and -not $isOrderTabSelection -and -not $isOrderTabAssertion
+                        $targetStateContext = [string]$planItem.stateContext
+                        $statefulControl = Get-HtsTargetStatefulControlForContext $targetRuleContext.TargetAdapter $requestedScreenNumber $planMapCode $targetStateContext
+                        $isTargetStateContext = $null -ne $statefulControl
+                        $isTargetStateSelection = $isTargetStateContext -and [string]$planItem.controlLogicalName -eq [string]$statefulControl.logicalName -and [string]$planItem.scenarioAction -eq 'Select'
+                        $isTargetStateAssertion = $isTargetStateContext -and [string]$planItem.controlLogicalName -eq [string]$statefulControl.logicalName -and [string]$planItem.scenarioAction -eq 'AssertSelected'
+                        $requiresVerifiedTargetState = $isTargetStateContext -and -not $isTargetStateSelection -and -not $isTargetStateAssertion
                         if ($mapStateBlockReason) {
                             $invoke=[pscustomobject]@{success=$false;queryEligible=$false;errorCode='MAP_STATE_NOT_ACTIVATED';automationEngine='MAP state guard';output=$mapStateBlockReason}
-                        } elseif ($requiresVerifiedOrderTab -and -not $verifiedOrderTabContexts.ContainsKey($orderTabContext)) {
-                            $invoke=[pscustomobject]@{success=$false;queryEligible=$false;errorCode='ORDER_TAB_NOT_SELECTED';automationEngine='Order tab guard';output="주문 탭 상태 '$orderTabContext'의 Select + AssertSelected 성공 기록이 없어 해당 컨트롤 조작을 차단했습니다."}
+                        } elseif ($requiresVerifiedTargetState -and -not $verifiedTargetStateContexts.ContainsKey($targetStateContext)) {
+                            $invoke=[pscustomobject]@{success=$false;queryEligible=$false;errorCode=[string]$statefulControl.selectionRequiredErrorCode;automationEngine='Target state guard';output="Target state '$targetStateContext'의 Select + AssertSelected 성공 기록이 없어 해당 컨트롤 조작을 차단했습니다."}
                         } elseif ($transactionBlockReason) {
                             $invoke=[pscustomobject]@{success=$false;queryEligible=$false;errorCode='TRANSACTION_GUARD_BLOCKED';automationEngine='Transaction guard';output=$transactionBlockReason}
                         } elseif ([string]$planItem.scenarioAction -in @('AssertVisible','AssertEnabled','AssertSelected','AssertGrid')) {
@@ -990,7 +995,7 @@ for ($caseIndex = 0; $caseIndex -lt $cases.Count; $caseIndex++) {
                                 throw "HTS_CONNECTION_LOST: 복구 단계에서 연결 장애 팝업을 발견해 자동 닫기를 중단했습니다."
                             }
                             if ($restoreDialogs.Count -eq 0) {
-                                $invoke=[pscustomobject]@{success=$true;queryEligible=$false;errorCode='';automationEngine='Safe dialog restore';output='복구할 팝업이 없어 현재 0101 상태를 유지했습니다.'}
+                                $invoke=[pscustomobject]@{success=$true;queryEligible=$false;errorCode='';automationEngine='Safe dialog restore';output='복구할 팝업이 없어 현재 target 상태를 유지했습니다.'}
                             } else {
                                 $dismissedCount = Dismiss-HtsDialogs $actionContext $observationContext $RuntimeContext $main $secret
                                 $remainingRestoreDialogs = @(Get-HtsDialogs $observationContext $RuntimeContext $main $secret | Where-Object { -not (Test-HtsConnectionDialog $_) })
@@ -1030,7 +1035,7 @@ for ($caseIndex = 0; $caseIndex -lt $cases.Count; $caseIndex++) {
                         } else {
                             Add-PopupObservations $observationContext -List $popupObservations -Dialogs $transactionDialogs -Main $main -CaseId $case.caseId -ScreenNumber $requestedScreenNumber -ReportBase $ReportDir -ExpectedPatterns @($expectedOutcome.messagePatterns) -MapOracle $mapOracle
                             $transactionPreRecordedHwnds = @($transactionDialogs | ForEach-Object { [Int64]$_.window.hwnd })
-                            $eligibleTransactionDialogs = @($transactionDialogs | Where-Object { Test-HtsTransactionalConfirmationDialog $_ $planItem })
+                            $eligibleTransactionDialogs = @($transactionDialogs | Where-Object { Test-HtsTransactionalConfirmationDialog $actionContext $_ $planItem })
                             if ($eligibleTransactionDialogs.Count -eq 1) {
                                 $transactionSubmit = Submit-HtsTransactionalDialog $actionContext $eligibleTransactionDialogs[0] $planItem
                                 $invoke.output = "$([string]$invoke.output); $([string]$transactionSubmit.output)"
@@ -1050,13 +1055,13 @@ for ($caseIndex = 0; $caseIndex -lt $cases.Count; $caseIndex++) {
                         }
                     }
                     $isAssertionStep = [string]$planItem.scenarioAction -like 'Assert*'
-                    if ($isOrderTabSelection) {
-                        if ($invoke.success) { $pendingOrderTabContexts[$orderTabContext] = $true }
-                        else { $pendingOrderTabContexts.Remove($orderTabContext); $verifiedOrderTabContexts.Remove($orderTabContext) }
+                    if ($isTargetStateSelection) {
+                        if ($invoke.success) { $pendingTargetStateContexts[$targetStateContext] = $true }
+                        else { $pendingTargetStateContexts.Remove($targetStateContext); $verifiedTargetStateContexts.Remove($targetStateContext) }
                     }
-                    if ($isOrderTabAssertion) {
-                        if ($invoke.success -and $pendingOrderTabContexts.ContainsKey($orderTabContext)) { $verifiedOrderTabContexts[$orderTabContext] = $true }
-                        else { $verifiedOrderTabContexts.Remove($orderTabContext) }
+                    if ($isTargetStateAssertion) {
+                        if ($invoke.success -and $pendingTargetStateContexts.ContainsKey($targetStateContext)) { $verifiedTargetStateContexts[$targetStateContext] = $true }
+                        else { $verifiedTargetStateContexts.Remove($targetStateContext) }
                     }
                     if ($isAssertionStep -and -not $invoke.success) {
                         $errors.Add("$([string]$planItem.scenarioAction) 실패: $([string]$planItem.expectedObservation) ($([string]$invoke.errorCode))")
@@ -1070,7 +1075,7 @@ for ($caseIndex = 0; $caseIndex -lt $cases.Count; $caseIndex++) {
                         }
                     }
                     if (-not $invoke.success) { $automationIssues.Add("컨트롤 '$($planItem.control.name)'의 '$($option.displayValue)' 동작을 완료하지 못했습니다: $($invoke.errorCode)") }
-                    if (-not $invoke.success -and [string]$invoke.errorCode -in @('PHYSICAL_BINDING_DRIFT','SCENARIO_CONTROL_NOT_BOUND','CONTROL_STALE','CONTROL_AMBIGUOUS','CONTROL_OUTSIDE_TARGET_SURFACE','CHECK_STATE_UNVERIFIABLE','INPUT_GUARD_BLOCKED','TARGET_SCREEN_NOT_ACTIVE','COORDINATE_FOCUS_SCREEN_CHANGED','COORDINATE_FOCUS_NOT_CONFIRMED','MAP_STATE_NOT_ACTIVATED','ORDER_TAB_NOT_SELECTED','RESTORE_DIALOG_NOT_DISMISSED','TRANSACTION_CONFIRM_BUTTON_NOT_FOUND','TRANSACTION_CONFIRM_DIALOG_REMAINED','TRANSACTION_CONFIRM_CLICK_FAILED','TRANSACTION_CONFIRMATION_AMBIGUOUS','TRANSACTION_CONFIRMATION_NOT_ELIGIBLE')) {
+                    if (-not $invoke.success -and ([string]$invoke.errorCode -in @('PHYSICAL_BINDING_DRIFT','SCENARIO_CONTROL_NOT_BOUND','CONTROL_STALE','CONTROL_AMBIGUOUS','CONTROL_OUTSIDE_TARGET_SURFACE','CHECK_STATE_UNVERIFIABLE','INPUT_GUARD_BLOCKED','TARGET_SCREEN_NOT_ACTIVE','COORDINATE_FOCUS_SCREEN_CHANGED','COORDINATE_FOCUS_NOT_CONFIRMED','MAP_STATE_NOT_ACTIVATED','RESTORE_DIALOG_NOT_DISMISSED','TRANSACTION_CONFIRM_POLICY_NOT_FOUND','TRANSACTION_CONFIRM_BUTTON_NOT_FOUND','TRANSACTION_CONFIRM_DIALOG_REMAINED','TRANSACTION_CONFIRM_CLICK_FAILED','TRANSACTION_CONFIRMATION_AMBIGUOUS','TRANSACTION_CONFIRMATION_NOT_ELIGIBLE') -or $targetStateErrorCodes -contains [string]$invoke.errorCode)) {
                         $automationContractFailure = $true
                         if (-not $automationContractErrorCode) { $automationContractErrorCode = [string]$invoke.errorCode }
                     }

@@ -9,7 +9,8 @@ function New-HtsActionContext {
         [Parameter(Mandatory = $true)]$Metrics,
         [Parameter(Mandatory = $true)]$Dependencies,
         $RuntimeContext = $null,
-        $SafetyContext = $null
+        $SafetyContext = $null,
+        $TargetAdapterContext = $null
     )
 
     [pscustomobject]@{
@@ -18,6 +19,7 @@ function New-HtsActionContext {
         Dependencies = $Dependencies
         RuntimeContext = $RuntimeContext
         SafetyContext = $SafetyContext
+        TargetAdapter = $TargetAdapterContext
     }
 }
 
@@ -436,33 +438,36 @@ function Set-AutomationText($ActionContext, $Window, [string]$Value, [switch]$Se
     return $(if ($Sensitive) { $length -gt 0 -or $sentByVirtualKeys } elseif ([string]$current.rawTitle -eq $Value) { $true } else { $sentByVirtualKeys })
 }
 
-function Test-HtsTransactionalConfirmationDialog($Dialog, $PlanItem) {
-    if (-not $Dialog -or -not $PlanItem) { return $false }
+function Test-HtsTransactionalConfirmationDialog($ActionContext, $Dialog, $PlanItem) {
+    if (-not $ActionContext -or -not $Dialog -or -not $PlanItem) { return $false }
+    $policy = Get-HtsTargetTransactionalDialogPolicy $ActionContext.TargetAdapter
+    if (-not $policy) { return $false }
     $messageText = ((@([string]$Dialog.title) + @($Dialog.messageLines)) | Where-Object { $_ }) -join ' | '
-    if (Test-SystemFailureSignal $messageText -or Test-InputValidationSignal $messageText) { return $false }
-    if ([string]$Dialog.classification -ne '확인 요청') { return $false }
+    if (Test-HtsSystemFailureSignal $messageText -or Test-HtsInputValidationSignal $messageText) { return $false }
+    if ([string]$Dialog.classification -ne [string]$policy.confirmationClassification) { return $false }
 
     $logicalName = [string]$PlanItem.controlLogicalName
-    $verbPattern = switch ($logicalName) {
-        'BTN_Ord_Buy' { '매수|주문' }
-        'BTN_Ord_Sell' { '매도|주문' }
-        'BTN_Ord_Mod' { '정정|주문' }
-        'BTN_Ord_Can' { '취소\s*주문|주문\s*취소|취소' }
-        default { '주문|정정|취소|전송' }
-    }
+    $command = @($policy.commands | Where-Object { [string]::Equals([string]$_.logicalName,$logicalName,[StringComparison]::OrdinalIgnoreCase) } | Select-Object -First 1)[0]
+    $verbPattern = if ($command) { [string]$command.messagePattern } else { [string]$policy.fallbackMessagePattern }
+    if ([string]::IsNullOrWhiteSpace($verbPattern)) { return $false }
     if ($messageText -notmatch $verbPattern) { return $false }
 
-    $positiveButtonPattern = '^(확인|예|Yes|주문|주문전송|전송|매수주문|매도주문|정정주문|취소주문)$'
+    $positiveButtonPattern = [string]$policy.positiveButtonPattern
     @($Dialog.buttons | Where-Object { [string]$_ -match $positiveButtonPattern }).Count -gt 0
 }
 
 function Submit-HtsTransactionalDialog($ActionContext, $Dialog, $PlanItem) {
-    $positiveButtonPattern = '^(확인|예|Yes|주문|주문전송|전송|매수주문|매도주문|정정주문|취소주문)$'
+    $policy = Get-HtsTargetTransactionalDialogPolicy $ActionContext.TargetAdapter
+    if (-not $policy) {
+        return [pscustomobject]@{success=$false;errorCode='TRANSACTION_CONFIRM_POLICY_NOT_FOUND';output='TargetAdapter에 거래 확인 정책이 없습니다.'}
+    }
+    $positiveButtonPattern = [string]$policy.positiveButtonPattern
+    $priorityButtonPattern = [string]$policy.priorityButtonPattern
     $buttons = @(Invoke-HtsActionDependency -Context $ActionContext -Name 'GetChildWindows' -Arguments @([Int64]$Dialog.window.hwnd) | Where-Object {
         $_.visible -and $_.enabled -and $_.className -like '*Button*' -and $_.rawTitle -match $positiveButtonPattern
     } | Sort-Object @{Expression={
-        if ($_.rawTitle -match '^(매수주문|매도주문|정정주문|취소주문)$') { 0 }
-        elseif ($_.rawTitle -match '^(확인|예|Yes)$') { 1 }
+        if ($priorityButtonPattern -and $_.rawTitle -match $priorityButtonPattern) { 0 }
+        elseif ($_.rawTitle -match $positiveButtonPattern) { 1 }
         else { 2 }
     }}, {$_.rect.left})
     if ($buttons.Count -eq 0) {

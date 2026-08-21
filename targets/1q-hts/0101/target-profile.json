@@ -57,6 +57,9 @@
         "stateContextPattern": "^order-tab:(buy|sell|modify-cancel|any)$",
         "coordinateSpace": "boundControlClient",
         "defaultValue": "0",
+        "selectionRequiredErrorCode": "ORDER_TAB_NOT_SELECTED",
+        "profileValueMissingErrorCode": "ORDER_TAB_PROFILE_VALUE_MISSING",
+        "stateMismatchErrorCode": "ASSERT_ORDER_TAB_STATE_MISMATCH",
         "y": 11,
         "options": [
           {
@@ -129,11 +132,11 @@
         "allowOwnerDrawnKindOverride": true
       }
     ],
+    "mapAliases": { "HT010101": "HT010115" },
     "import": {
       "candidateSheetNames": ["0101_TC", "전체TC"],
       "requiredMapFamilyCount": 19,
-      "activeStateMapScreenCode": "HT010115",
-      "runtimeMapAliases": { "HT010101": "HT010115" }
+      "activeStateMapScreenCode": "HT010115"
     }
   }
 }

@@ -167,6 +167,7 @@ function Get-RuleTargetContext(
         ScreenDirectory = $screenDirectory
         MapFilePattern = [string]$profile.map.filePattern
         MapFamilyFiles = @($profile.map.familyFiles | ForEach-Object { [string]$_ } | Where-Object { $_ })
+        TargetAdapter = $profile.adapter
         TargetScreens = @($targetScreens)
     }
 }

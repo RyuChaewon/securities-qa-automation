@@ -20,48 +20,5 @@
       { "label": "하단-창-버튼", "topFromBottom": 38, "bottomFromBottom": 0 }
     ]
   },
-  "screens": {
-    "0101": {
-      "orderTabs": [
-        {
-          "mapScreenCode": "HT010115",
-          "controlLogicalName": "TAB_Ord",
-          "coordinateSpace": "boundControlClient",
-          "defaultValue": "0",
-          "y": 11,
-          "items": [
-            { "value": "0", "displayValue": "매수", "x": 28, "verificationControls": ["BTN_Ord_Buy"] },
-            { "value": "1", "displayValue": "매도", "x": 78, "verificationControls": ["BTN_Ord_Sell"] },
-            { "value": "2", "displayValue": "정정/취소", "x": 148, "verificationControls": ["BTN_Ord_Mod", "BTN_Ord_Can"] }
-          ]
-        }
-      ],
-      "mapHosts": [
-        {
-          "mapScreenCode": "HT010115",
-          "containerScreenCode": "HT010100",
-          "hostRole": "upperContent",
-          "mapOriginX": 0,
-          "mapOriginY": 0,
-          "clipMapHeight": 320,
-          "scale": 1.0,
-          "matchTolerancePx": 8,
-          "maxDimensionDeltaPx": 12,
-          "allowOwnerDrawnKindOverride": true
-        },
-        {
-          "mapScreenCode": "HT010103",
-          "containerScreenCode": "HT010100",
-          "hostRole": "selectedTabContent",
-          "tabIndex": 0,
-          "mapOriginX": 0,
-          "mapOriginY": 0,
-          "scale": 1.0,
-          "matchTolerancePx": 8,
-          "maxDimensionDeltaPx": 12,
-          "allowOwnerDrawnKindOverride": true
-        }
-      ]
-    }
-  }
+  "screens": {}
 }

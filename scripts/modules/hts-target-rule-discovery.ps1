@@ -65,43 +65,9 @@ function Test-RuleControlExecutionEligible($Control) {
         ((Test-RuleRuntimeKindCompatible ([string]$Control.controlKind) ([string]$Control.runtimeControlKind)) -or $ownerDrawnKindOverride)
 }
 
-# TAB_Ord의 상태는 owner-drawn 자식 HWND의 원시 stateContext와 일치하지 않을 수 있다.
-# 주문 탭 상태는 Select + AssertSelected 선행 단계로 실행기에서 검증하고, 여기서는
-# 동일 MAP/논리 컨트롤의 물리 바인딩을 유지한다.
-function Test-RuleStateContextMatch([string]$Expected, [string]$Actual) {
-    if ([string]::IsNullOrWhiteSpace($Expected)) { return $true }
-    if ($Expected -like 'order-tab:*') { return $true }
-    [string]::Equals($Actual,$Expected,[StringComparison]::OrdinalIgnoreCase)
-}
-
-function Test-RuleOrderTabContext([string]$StateContext) {
-    $StateContext -match '^order-tab:(buy|sell|modify-cancel|any)$'
-}
-
-# owner-drawn 주문 탭은 네이티브 TCM_* 메시지를 지원하지 않으므로 대상 프로필의
-# 실측 탭 헤더와 탭별 검증 컨트롤을 사용한다.
-function Get-RuleOrderTabProfile($Context, [string]$ScreenNumber, [string]$MapScreenCode, [string]$LogicalName) {
-    if (-not $Context.RegionConfig -or -not $Context.RegionConfig.screens -or
-        -not ($Context.RegionConfig.screens.PSObject.Properties.Name -contains $ScreenNumber)) { return $null }
-    @($Context.RegionConfig.screens.$ScreenNumber.orderTabs | Where-Object {
-        [string]::Equals([string]$_.mapScreenCode,$MapScreenCode,[StringComparison]::OrdinalIgnoreCase) -and
-        [string]::Equals([string]$_.controlLogicalName,$LogicalName,[StringComparison]::OrdinalIgnoreCase)
-    } | Select-Object -First 1)[0]
-}
-
-function Get-RuleOrderTabItem($Profile, $Option) {
-    if (-not $Profile -or -not $Option) { return $null }
-    @($Profile.items | Where-Object { [string]$_.value -eq [string]$Option.value } | Select-Object -First 1)[0]
-}
-
-function Set-RuleOrderTabState($Context, [string]$ScreenNumber, [string]$MapScreenCode, [string]$Value) {
-    if (-not $Context.OrderTabStateByScreenMap) { $Context.OrderTabStateByScreenMap = @{} }
-    $Context.OrderTabStateByScreenMap["$ScreenNumber|$($MapScreenCode.ToUpperInvariant())"] = $Value
-}
-
-function Get-RuleOrderTabState($Context, [string]$ScreenNumber, [string]$MapScreenCode) {
-    if (-not $Context.OrderTabStateByScreenMap) { return '' }
-    [string]$Context.OrderTabStateByScreenMap["$ScreenNumber|$($MapScreenCode.ToUpperInvariant())"]
+# Adapter가 선언한 state context는 owner-drawn 요소의 원시 context 대신 선행 선택 검증으로 다룬다.
+function Test-RuleStateContextMatch($Context, [string]$Expected, [string]$Actual) {
+    Test-HtsTargetStateContextMatch $Context.TargetAdapter $Expected $Actual
 }
 
 # 이름·역할·종류 일치도를 좌표 거리와 별개인 의미 점수로 계산한다.
@@ -120,12 +86,7 @@ function Get-RuleMapSemanticScore($MapControl, $RuntimeControl) {
 
 # MAP family의 각 내부 화면을 현재 컨테이너의 실제 호스트 영역에 고정한다.
 function Get-RuleMapHostPolicy($Context, [string]$ScreenNumber, [string]$MapScreenCode) {
-    if (-not $Context.RegionConfig -or -not $Context.RegionConfig.screens -or
-        -not ($Context.RegionConfig.screens.PSObject.Properties.Name -contains $ScreenNumber)) { return $null }
-    $screenPolicy = $Context.RegionConfig.screens.$ScreenNumber
-    @($screenPolicy.mapHosts | Where-Object {
-        [string]::Equals(([string]$_.mapScreenCode).Trim(),$MapScreenCode,[StringComparison]::OrdinalIgnoreCase)
-    } | Select-Object -First 1)[0]
+    Get-HtsTargetMapHost $Context.TargetAdapter $ScreenNumber $MapScreenCode
 }
 
 # 설정된 hostRole을 화면의 대형 owner-drawn 컨테이너와 선택 탭으로 재식별한다.
@@ -496,14 +457,14 @@ function Merge-RuleSingleMapBaseline($Context, $Screen, [string]$ScreenNumber, $
     $usedRuntime = @{}
     $merged = New-Object Collections.Generic.List[object]
     $actionableMapControls = @($mapModel.controls | Where-Object isActionable | Sort-Object definitionOrder)
-    $orderTabProfile = Get-RuleOrderTabProfile $Context $ScreenNumber ([string]$mapModel.screenCode) 'TAB_Ord'
-    $activeOrderTabValue = Get-RuleOrderTabState $Context $ScreenNumber ([string]$mapModel.screenCode)
-    if ($orderTabProfile -and $activeOrderTabValue) {
-        $activeOrderTabItem = @($orderTabProfile.items | Where-Object { [string]$_.value -eq $activeOrderTabValue } | Select-Object -First 1)[0]
-        $allOrderCommands = @($orderTabProfile.items | ForEach-Object { @($_.verificationControls) } | Sort-Object -Unique)
-        $activeOrderCommands = @($activeOrderTabItem.verificationControls)
+    $statefulControl = Get-HtsTargetStatefulControl $Context.TargetAdapter $ScreenNumber ([string]$mapModel.screenCode)
+    $activeStateValue = Get-HtsTargetState $Context.TargetAdapter $statefulControl
+    if ($statefulControl -and $activeStateValue) {
+        $activeStateOption = @($statefulControl.options | Where-Object { [string]$_.value -eq $activeStateValue } | Select-Object -First 1)[0]
+        $allStateCommands = @($statefulControl.options | ForEach-Object { @($_.verificationControls) } | Sort-Object -Unique)
+        $activeStateCommands = @($activeStateOption.verificationControls)
         $actionableMapControls = @($actionableMapControls | Where-Object {
-            $allOrderCommands -notcontains [string]$_.logicalName -or $activeOrderCommands -contains [string]$_.logicalName
+            $allStateCommands -notcontains [string]$_.logicalName -or $activeStateCommands -contains [string]$_.logicalName
         })
     }
     foreach ($mapControl in $actionableMapControls) {
@@ -623,7 +584,7 @@ function Merge-RuleSingleMapBaseline($Context, $Screen, [string]$ScreenNumber, $
     @($merged.ToArray() | Sort-Object tabOrder,controlId)
 }
 
-# 0101처럼 같은 화면번호를 공유하는 MAP family를 모두 보존하고 런타임 전용 컨트롤은 한 번만 추가한다.
+# 같은 화면 ID를 공유하는 MAP family를 모두 보존하고 런타임 전용 컨트롤은 한 번만 추가한다.
 function Merge-RuleMapBaseline($Context, $Screen, [string]$ScreenNumber, $RuntimeControls) {
     $runtimeRows = @($RuntimeControls)
     $models = @(Get-RuleMapScreenModels $Context $ScreenNumber)

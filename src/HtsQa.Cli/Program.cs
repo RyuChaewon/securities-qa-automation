@@ -168,9 +168,13 @@ int MaterializeScenarioBindings(string[] argv)
     var controlPlanPath = Full(Required(argv, "--control-plan"));
     var runtimeFingerprint = Required(argv, "--runtime-fingerprint");
     var outPath = Full(Required(argv, "--out"));
+    var testPackPath = GetOpt(argv, "--test-pack", "");
     var plan = JsonFile.Read<CompiledScenarioPlan>(planPath);
     var runtimeRows = JsonFile.Read<RuntimeControlPlanRow[]>(controlPlanPath);
-    var catalog = new ScenarioBindingMaterializer().Materialize(plan, runtimeRows, runtimeFingerprint);
+    var targetAdapter = string.IsNullOrWhiteSpace(testPackPath)
+        ? null
+        : JsonFile.Read<RuleTestPack>(Full(testPackPath)).DatasetSnapshot.TargetProfile.Adapter;
+    var catalog = new ScenarioBindingMaterializer().Materialize(plan, runtimeRows, runtimeFingerprint, targetAdapter);
     JsonFile.Write(outPath, catalog);
     Console.WriteLine(outPath);
     return catalog.Status == "READY" ? 0 : 3;

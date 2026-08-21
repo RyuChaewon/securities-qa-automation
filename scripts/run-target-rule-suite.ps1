@@ -18,8 +18,8 @@ param(
     [switch]$VisiblePointerMotion,
     [ValidateRange(0, 3000)]
     [int]$PointerDwellMilliseconds = 0,
-    [ValidateSet('', '0', '1', '2')]
-    [string]$OrderTabStateOverride = '',
+    [Alias('OrderTabStateOverride')]
+    [string]$TargetStateOverride = '',
     [switch]$SubmitTransactionalDialogs,
     [switch]$DryRun,
     [switch]$PlanOnly,

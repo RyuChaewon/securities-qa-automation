@@ -17,8 +17,8 @@ param(
     [switch]$VisiblePointerMotion,
     [ValidateRange(0, 3000)]
     [int]$PointerDwellMilliseconds = 0,
-    [ValidateSet('', '0', '1', '2')]
-    [string]$OrderTabStateOverride = '',
+    [Alias('OrderTabStateOverride')]
+    [string]$TargetStateOverride = '',
     [switch]$ShowCursor,
     [switch]$SubmitTransactionalDialogs,
     [int]$MaxCases = 10000,
@@ -173,7 +173,7 @@ $refreshPhysicalPlanBlock
     MaxCases = $MaxCases
     SkipExcel = `$true
     PointerDwellMilliseconds = $PointerDwellMilliseconds
-    OrderTabStateOverride = '$OrderTabStateOverride'
+    TargetStateOverride = '$TargetStateOverride'
   }
   if ('$resolvedScenarioPlanPath') { `$runParams.ScenarioPlanPath = '$resolvedScenarioPlanPath' }
   if (`$effectivePhysicalPlanPath) { `$runParams.PhysicalPlanPath = `$effectivePhysicalPlanPath }

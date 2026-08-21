@@ -15,11 +15,14 @@ function Assert-Equal($Expected, $Actual, [string]$Message) {
 }
 
 # hts-action의 기존 confirmation matcher만 분리해서 관찰한다. UI 함수는 호출하지 않는다.
-function Test-SystemFailureSignal([string]$Text) { $Text -match '시스템오류' }
-function Test-InputValidationSignal([string]$Text) { $Text -match '입력오류' }
+function Test-HtsSystemFailureSignal([string]$Text) { $Text -match '시스템오류' }
+function Test-HtsInputValidationSignal([string]$Text) { $Text -match '입력오류' }
+. (Join-Path $root 'scripts\modules\hts-target-adapter.ps1')
 . (Join-Path $root 'scripts\modules\hts-action.ps1')
 
 $script:assertions = 0
+$profile = Get-Content -LiteralPath (Join-Path $root 'targets\1q-hts\0101\target-profile.json') -Raw -Encoding UTF8 | ConvertFrom-Json
+$actionContext = [pscustomobject]@{ TargetAdapter = New-HtsTargetAdapterContext $profile }
 $dialog = [pscustomobject]@{
     title = '매수주문 확인'
     messageLines = @('주문 내용을 확인하세요')
@@ -27,7 +30,7 @@ $dialog = [pscustomobject]@{
     buttons = @('확인', '취소')
 }
 $buyPlan = [pscustomobject]@{ controlLogicalName = 'BTN_Ord_Buy' }
-Assert-True (Test-HtsTransactionalConfirmationDialog $dialog $buyPlan) 'matching command confirmation remains recognized'
+Assert-True (Test-HtsTransactionalConfirmationDialog $actionContext $dialog $buyPlan) 'matching command confirmation remains recognized'
 
 # 현 matcher의 "주문" 대체 분기가 verb를 넓게 허용하는 것도 이동 중 의미 변경을 막기 위해 기록한다.
 $broadDialog = [pscustomobject]@{
@@ -36,14 +39,14 @@ $broadDialog = [pscustomobject]@{
     classification = '확인 요청'
     buttons = @('확인')
 }
-Assert-True (Test-HtsTransactionalConfirmationDialog $broadDialog $buyPlan) 'legacy broad order-token fallback is characterized'
+Assert-True (Test-HtsTransactionalConfirmationDialog $actionContext $broadDialog $buyPlan) 'legacy broad order-token fallback is characterized'
 $invalidDialog = [pscustomobject]@{
     title = '입력오류'
     messageLines = @('값을 확인하세요')
     classification = '확인 요청'
     buttons = @('확인')
 }
-Assert-True (-not (Test-HtsTransactionalConfirmationDialog $invalidDialog $buyPlan)) 'validation dialog is never treated as a transactional confirmation'
+Assert-True (-not (Test-HtsTransactionalConfirmationDialog $actionContext $invalidDialog $buyPlan)) 'validation dialog is never treated as a transactional confirmation'
 
 $summary = Get-Content -LiteralPath (Join-Path $root 'outputs\0101_automation\import-summary.json') -Raw -Encoding UTF8 | ConvertFrom-Json
 $package = Get-Content -LiteralPath (Join-Path $root 'outputs\0101_automation\generated-scenarios.json') -Raw -Encoding UTF8 | ConvertFrom-Json

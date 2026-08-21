@@ -470,7 +470,8 @@ public sealed class ScenarioBindingMaterializer
     public ScenarioBindingCatalog Materialize(
         CompiledScenarioPlan plan,
         RuntimeControlPlanRow[] runtimeRows,
-        string runtimeInstallationFingerprint)
+        string runtimeInstallationFingerprint,
+        RuleTargetAdapterProfile? targetAdapter = null)
     {
         if (!plan.SourceInstallationFingerprint.Equals(runtimeInstallationFingerprint, StringComparison.OrdinalIgnoreCase))
             throw new InvalidDataException("컴파일 계획과 런타임 HTS 설치 fingerprint가 일치하지 않습니다.");
@@ -486,7 +487,7 @@ public sealed class ScenarioBindingMaterializer
             var bindings = new List<ScenarioControlBinding>();
             foreach (var requirement in screen.BindingRequirements)
             {
-                var matching = runtimeControls.Where(control => Matches(control, requirement)).ToArray();
+                var matching = runtimeControls.Where(control => Matches(control, requirement, targetAdapter)).ToArray();
                 var actionable = matching.Where(IsRuntimeActionable).ToArray();
                 var runtimeCandidates = matching.Where(x => !x.DefinitionSource.Equals("MAP", StringComparison.OrdinalIgnoreCase)).ToArray();
                 ScenarioBindingStatus status;
@@ -671,24 +672,24 @@ public sealed class ScenarioBindingMaterializer
         };
     }
 
-    private static bool Matches(RuleDiscoveredControl control, ScenarioBindingRequirement requirement)
+    private static bool Matches(RuleDiscoveredControl control, ScenarioBindingRequirement requirement, RuleTargetAdapterProfile? targetAdapter)
     {
         var logicalMatch = string.Equals(control.Name, requirement.LogicalName, StringComparison.OrdinalIgnoreCase) ||
             string.Equals(control.MapModelId, requirement.LogicalName, StringComparison.OrdinalIgnoreCase) ||
             control.ControlId.EndsWith($":{requirement.LogicalName}", StringComparison.OrdinalIgnoreCase);
-        var mapMatch = string.IsNullOrWhiteSpace(requirement.MapScreenCode) ||
-            string.Equals(control.MapScreenCode, requirement.MapScreenCode, StringComparison.OrdinalIgnoreCase);
-        var stateMatch = StateContextMatches(requirement.StateContext, control.StateContext);
+        var requiredMap = RuleTargetAdapterMatcher.ResolveMapScreenCode(targetAdapter, requirement.MapScreenCode);
+        var candidateMap = RuleTargetAdapterMatcher.ResolveMapScreenCode(targetAdapter, control.MapScreenCode);
+        var mapMatch = string.IsNullOrWhiteSpace(requiredMap) || string.Equals(candidateMap, requiredMap, StringComparison.OrdinalIgnoreCase);
+        var stateMatch = StateContextMatches(requirement.StateContext, control.StateContext, targetAdapter);
         return logicalMatch && mapMatch && stateMatch;
     }
 
-    // Order-tab state is an execution precondition, not a property exposed by every
-    // owner-drawn child HWND. The runner enforces Select + AssertSelected before a
-    // state-scoped command; binding still retains the state in its compound key.
-    private static bool StateContextMatches(string? required, string? candidate)
+    // Adapter-declared state is an execution precondition that owner-drawn child HWNDs may not expose.
+    // The runner verifies the state transition while binding retains it in the compound key.
+    private static bool StateContextMatches(string? required, string? candidate, RuleTargetAdapterProfile? targetAdapter)
     {
         if (string.IsNullOrWhiteSpace(required)) return true;
-        if (required.StartsWith("order-tab:", StringComparison.OrdinalIgnoreCase)) return true;
+        if (RuleTargetAdapterMatcher.IsStateContext(targetAdapter, required)) return true;
         return string.Equals(candidate, required, StringComparison.OrdinalIgnoreCase);
     }
 

@@ -36,6 +36,9 @@ public sealed record RuleTargetStatefulControl
     public string StateContextPattern { get; init; } = "";
     public string CoordinateSpace { get; init; } = "";
     public string DefaultValue { get; init; } = "";
+    public string SelectionRequiredErrorCode { get; init; } = "TARGET_STATE_NOT_SELECTED";
+    public string ProfileValueMissingErrorCode { get; init; } = "TARGET_STATE_PROFILE_VALUE_MISSING";
+    public string StateMismatchErrorCode { get; init; } = "TARGET_STATE_MISMATCH";
     public int Y { get; init; }
     public RuleTargetStateOption[] Options { get; init; } = [];
 }
@@ -76,7 +79,6 @@ public sealed record RuleTargetImportProfile
     public string[] CandidateSheetNames { get; init; } = [];
     public int RequiredMapFamilyCount { get; init; }
     public string ActiveStateMapScreenCode { get; init; } = "";
-    public Dictionary<string, string> RuntimeMapAliases { get; init; } = [];
 }
 
 /// <summary>대상별 업무 의미를 generic engine에 전달하는 versioned adapter 계약이다.</summary>
@@ -90,7 +92,34 @@ public sealed record RuleTargetAdapterProfile
     public RuleTargetStatefulControl[] StatefulControls { get; init; } = [];
     public RuleTargetTransactionalDialogs? TransactionalDialogs { get; init; }
     public RuleTargetMapHost[] MapHosts { get; init; } = [];
+    public Dictionary<string, string> MapAliases { get; init; } = [];
     public RuleTargetImportProfile? Import { get; init; }
+}
+
+/// <summary>Core 계획기가 adapter의 map alias와 state-context 의미를 동일하게 적용하게 한다.</summary>
+public static class RuleTargetAdapterMatcher
+{
+    public static string ResolveMapScreenCode(RuleTargetAdapterProfile? adapter, string? mapScreenCode)
+    {
+        var value = mapScreenCode ?? "";
+        if (adapter is null) return value;
+        return adapter.MapAliases.TryGetValue(value, out var resolved) ? resolved : value;
+    }
+
+    public static bool IsStateContext(RuleTargetAdapterProfile? adapter, string? stateContext)
+    {
+        if (adapter is null || string.IsNullOrWhiteSpace(stateContext)) return false;
+        foreach (var control in adapter.StatefulControls)
+        {
+            try
+            {
+                if (!string.IsNullOrWhiteSpace(control.StateContextPattern) &&
+                    Regex.IsMatch(stateContext, control.StateContextPattern, RegexOptions.CultureInvariant)) return true;
+            }
+            catch (ArgumentException) { return false; }
+        }
+        return false;
+    }
 }
 
 /// <summary>adapter의 구조와 정규식을 UI 실행 전에 검증한다.</summary>
@@ -133,6 +162,9 @@ public static class RuleTargetAdapterValidator
                 issues.Add(new("RULE.ADAPTER_STATEFUL_CONTROL", "Stateful controls require identity, host and at least one option.", Field: "targetProfile.adapter.statefulControls"));
             if (!adapterScreens.Contains(control.ScreenId))
                 issues.Add(new("RULE.ADAPTER_STATEFUL_SCREEN", $"Stateful control screen {control.ScreenId} is not declared by the adapter.", Field: "targetProfile.adapter.statefulControls"));
+            if (string.IsNullOrWhiteSpace(control.SelectionRequiredErrorCode) || string.IsNullOrWhiteSpace(control.ProfileValueMissingErrorCode) ||
+                string.IsNullOrWhiteSpace(control.StateMismatchErrorCode))
+                issues.Add(new("RULE.ADAPTER_STATE_ERROR_CODE", "Stateful controls require non-empty compatibility error codes.", Field: "targetProfile.adapter.statefulControls"));
             AddRegex(control.StateContextPattern, "RULE.ADAPTER_STATE_PATTERN", "targetProfile.adapter.statefulControls.stateContextPattern", issues);
             AddRequiredUnique(control.Options.Select(x => x.Id), "RULE.ADAPTER_STATE_OPTION_ID", "targetProfile.adapter.statefulControls.options.id", issues);
             AddRequiredUnique(control.Options.Select(x => x.Value), "RULE.ADAPTER_STATE_OPTION_VALUE", "targetProfile.adapter.statefulControls.options.value", issues);
@@ -157,6 +189,8 @@ public static class RuleTargetAdapterValidator
         if (adapter.MapHosts.Any(x => string.IsNullOrWhiteSpace(x.ScreenId) || string.IsNullOrWhiteSpace(x.MapScreenCode) ||
                                       string.IsNullOrWhiteSpace(x.ContainerScreenCode) || string.IsNullOrWhiteSpace(x.HostRole) || x.Scale <= 0))
             issues.Add(new("RULE.ADAPTER_MAP_HOST", "Adapter map hosts require screen, map, container, role and positive scale.", Field: "targetProfile.adapter.mapHosts"));
+        if (adapter.MapAliases.Any(x => string.IsNullOrWhiteSpace(x.Key) || string.IsNullOrWhiteSpace(x.Value)))
+            issues.Add(new("RULE.ADAPTER_MAP_ALIAS", "Adapter map aliases require non-empty source and target values.", Field: "targetProfile.adapter.mapAliases"));
 
         return issues;
     }

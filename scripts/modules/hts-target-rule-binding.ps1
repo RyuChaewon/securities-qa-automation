@@ -49,7 +49,7 @@ function Get-RuleScenarioPlanItems($Context, $Controls, $ScenarioCase) {
                     [string]::Equals($candidateModelId,$logicalName,[StringComparison]::OrdinalIgnoreCase) -or
                     $candidateControlId.EndsWith(":$logicalName",[StringComparison]::OrdinalIgnoreCase)
                 $mapMatches = -not $mapScreenCode -or [string]::Equals($candidateMapCode,$mapScreenCode,[StringComparison]::OrdinalIgnoreCase)
-                $stateMatches = Test-RuleStateContextMatch $stateContext $candidateState
+                $stateMatches = Test-RuleStateContextMatch $Context $stateContext $candidateState
                 if ($nameMatches -and $mapMatches -and $stateMatches) { $candidateRows.Add($candidate) }
             }
             $candidates = @($candidateRows.ToArray() | Sort-Object @{Expression={if([string]$_.definitionSource -eq 'MAP+Runtime'){0}elseif([string]$_.definitionSource -eq 'RuntimeOnly'){1}else{2}}},tabOrder)
@@ -151,7 +151,7 @@ function Resolve-RuleLiveControl($Context, $NavigationContext, $Screen, $Planned
                 [string]$_.controlId -eq $expectedControlId -and
                 (-not $expectedSignature -or [string]$_.locatorSignature -eq $expectedSignature) -and
                 (-not $expectedMapCode -or [string]$_.mapScreenCode -eq $expectedMapCode) -and
-                (Test-RuleStateContextMatch $expectedState ([string]$_.stateContext)) -and
+                (Test-RuleStateContextMatch $Context $expectedState ([string]$_.stateContext)) -and
                 (-not $expectedName -or $candidateName -eq $expectedName) -and
                 (Test-RuleControlExecutionEligible $_)
         })
@@ -292,14 +292,14 @@ function Invoke-RuleControlAssertion($Context, $NavigationContext, $Screen, $Pla
         $expectedIndex = if ($PlanItem.option) { [int]$PlanItem.option.index } else { 0 }
         $kind = [string]$control.controlKind
         $logicalName = if ([string]$PlanItem.controlLogicalName) { [string]$PlanItem.controlLogicalName } else { [string]$control.name }
-        $orderTabProfile = if ($kind -eq 'Tab') { Get-RuleOrderTabProfile $Context (Get-HtsNavigationScreenNumber -Context $NavigationContext -Window $Screen) ([string]$PlanItem.mapScreenCode) $logicalName } else { $null }
-        if ($orderTabProfile -and ([string]$live.className).StartsWith('AfxWnd',[StringComparison]::OrdinalIgnoreCase)) {
-            $orderTabItem = Get-RuleOrderTabItem $orderTabProfile $PlanItem.option
-            if (-not $orderTabItem) {
-                return [pscustomobject]@{success=$false;queryEligible=$false;errorCode='ORDER_TAB_PROFILE_VALUE_MISSING';automationEngine='MAP+Runtime state';output="주문 탭 프로필에 값 '$([string]$PlanItem.option.value)'이 없습니다."}
+        $statefulControl = if ($kind -eq 'Tab') { Get-HtsTargetStatefulControl $Context.TargetAdapter (Get-HtsNavigationScreenNumber -Context $NavigationContext -Window $Screen) ([string]$PlanItem.mapScreenCode) $logicalName } else { $null }
+        if ($statefulControl -and ([string]$live.className).StartsWith('AfxWnd',[StringComparison]::OrdinalIgnoreCase)) {
+            $stateOption = Get-HtsTargetStateOption $statefulControl $PlanItem.option
+            if (-not $stateOption) {
+                return [pscustomobject]@{success=$false;queryEligible=$false;errorCode=[string]$statefulControl.profileValueMissingErrorCode;automationEngine='MAP+Runtime state';output="Adapter state profile에 값 '$([string]$PlanItem.option.value)'이 없습니다."}
             }
             $refreshedControls = @(Get-RuleDiscoveredControls $Context $Screen (Get-HtsNavigationScreenNumber -Context $NavigationContext -Window $Screen))
-            $verifiedControls = @($orderTabItem.verificationControls | Where-Object {
+            $verifiedControls = @($stateOption.verificationControls | Where-Object {
                 $verificationName = [string]$_
                 @($refreshedControls | Where-Object {
                     [string]$_.mapScreenCode -eq [string]$PlanItem.mapScreenCode -and
@@ -309,9 +309,9 @@ function Invoke-RuleControlAssertion($Context, $NavigationContext, $Screen, $Pla
             })
             $success = $verifiedControls.Count -gt 0
             return [pscustomobject]@{
-                success=$success;queryEligible=$false;errorCode=$(if($success){''}else{'ASSERT_ORDER_TAB_STATE_MISMATCH'})
+                success=$success;queryEligible=$false;errorCode=$(if($success){''}else{[string]$statefulControl.stateMismatchErrorCode})
                 automationEngine='MAP+Runtime state'
-                output="orderTab=$([string]$orderTabItem.displayValue), verifiedControls=$($verifiedControls -join ','), expectedControls=$(@($orderTabItem.verificationControls) -join ',')"
+                output="targetState=$([string]$stateOption.displayValue), verifiedControls=$($verifiedControls -join ','), expectedControls=$(@($stateOption.verificationControls) -join ',')"
             }
         }
         $actual = -1

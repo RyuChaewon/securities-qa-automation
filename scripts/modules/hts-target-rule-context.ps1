@@ -4,7 +4,7 @@
 #>
 function New-HtsTargetRuleContext([string]$RootPath, $Dataset, $MapCatalog = $null, $Dependencies = $null) {
     $regionConfig = $null
-    $orderTabStateByScreenMap = @{}
+    $targetAdapter = New-HtsTargetAdapterContext $Dataset.targetProfile
     $activeMapScreenCodes = @($Dataset.targetProfile.map.initiallyActiveMapScreenCodes | ForEach-Object {
         ([string]$_).Trim().ToUpperInvariant()
     } | Where-Object { $_ } | Select-Object -Unique)
@@ -15,24 +15,17 @@ function New-HtsTargetRuleContext([string]$RootPath, $Dataset, $MapCatalog = $nu
         $regionPath = if ([IO.Path]::IsPathRooted($regionFile)) { $regionFile } else { Join-Path $RootPath $regionFile }
         if (Test-Path -LiteralPath $regionPath) {
             $regionConfig = Get-Content -LiteralPath $regionPath -Raw -Encoding UTF8 | ConvertFrom-Json
-            foreach ($screenProperty in @($regionConfig.screens.PSObject.Properties)) {
-                foreach ($orderTab in @($screenProperty.Value.orderTabs)) {
-                    if (-not [string]::IsNullOrWhiteSpace([string]$orderTab.defaultValue)) {
-                        $orderTabStateByScreenMap["$([string]$screenProperty.Name)|$(([string]$orderTab.mapScreenCode).ToUpperInvariant())"] = [string]$orderTab.defaultValue
-                    }
-                }
-            }
         }
     }
 
     [pscustomobject]@{
         RootPath = $RootPath
         Dataset = $Dataset
+        TargetAdapter = $targetAdapter
         RegionConfig = $regionConfig
         MapCatalog = $MapCatalog
         MapTransformCache = @{}
         ActualTabOrderCache = @{}
-        OrderTabStateByScreenMap = $orderTabStateByScreenMap
         ActiveMapScreenCodes = $activeMapScreenCodes
         CurrentInteractionStrategy = $interactionStrategy
         FastScenarioDiscovery = $false
