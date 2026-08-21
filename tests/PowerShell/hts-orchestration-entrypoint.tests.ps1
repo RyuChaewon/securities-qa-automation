@@ -28,7 +28,7 @@ $validationIndex=$orchestrationText.IndexOf('validate-test-pack',[StringComparis
 $sessionIndex=$orchestrationText.IndexOf('Start-FlaUiBridge',[StringComparison]::Ordinal)
 Assert-True ($validationIndex-ge0) 'orchestration retains approved TestPack validation'
 Assert-True ($sessionIndex-gt$validationIndex) 'TestPack validation remains before any FlaUI session start'
-foreach($module in @('hts-session.ps1','hts-navigation.ps1','hts-discovery.ps1','hts-binding.ps1','hts-action.ps1','hts-observation.ps1','hts-safety.ps1','hts-reporting.ps1')){
+foreach($module in @('hts-session.ps1','hts-navigation.ps1','hts-discovery.ps1','hts-binding.ps1','hts-action.ps1','hts-observation.ps1','hts-safety.ps1','hts-reporting.ps1','hts-runtime-context.ps1')){
     Assert-True ($orchestrationText.Contains($module)) "orchestration composes $module"
 }
 

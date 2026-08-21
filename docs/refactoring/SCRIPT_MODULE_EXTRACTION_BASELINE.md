@@ -317,3 +317,9 @@ target rule adapter
 - `hts-reporting.ps1`로 파일 SHA-256, 민감정보 마스킹, 계좌 fingerprint, 상대 증거 경로, action trace와 workbook export를 이동했다.
 - workbook exporter와 execution trace 경로는 `HtsReportingContext`로 명시적으로 전달되며 orchestration의 `$script:executionTracePath`를 제거했다.
 - Reporting은 완성된 결과와 action 증거만 기록하고 UI 입력 또는 ResultEvaluator 호출을 수행하지 않는다.
+
+### Run context 단계
+
+- `hts-runtime-context.ps1`이 target window 규칙, 화면/MAP 정규식, 초기 MAP 목록, 포인터 표시·대기 정책과 마지막 텍스트 입력 엔진을 실행별로 소유한다.
+- 관련 helper는 `RuntimeContext`를 명시적으로 받으며 orchestration의 `$script:` 참조는 0개다.
+- 독립 context 두 개를 만든 회귀 테스트로 정규식·입력 정책·텍스트 엔진 증거가 실행 간 공유되지 않음을 확인했다.
