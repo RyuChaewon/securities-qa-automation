@@ -89,5 +89,10 @@ $explorationSource = Get-Content -LiteralPath (Join-Path $root 'scripts\modules\
 Assert-True ($navigationSource -notmatch '\$script:') 'navigation module has no script-scoped mutable state'
 Assert-True ($navigationSource -notmatch 'ResultEvaluator|TestResult|Set-Content|Add-Content|Export-Rule') 'navigation module has no evaluation or reporting logic'
 Assert-True ($explorationSource -notmatch 'activeHtsMainHwnd|\bGet-HtsScreenNumber\b|\bFocus-HtsRequestedScreen\b') 'exploration receives navigation explicitly instead of runner globals'
+foreach ($name in @('Find-ScreenNumberEdit','Set-HtsScreenNumber','Open-HtsScreen','Find-ScreenWindow','Focus-HtsRequestedScreen','Close-HtsScreen')) {
+    Assert-True ($navigationSource -match "function $name") "navigation owns $name"
+}
+$orchestrationSource = Get-Content -LiteralPath (Join-Path $root 'scripts\modules\hts-rule-suite-orchestration.ps1') -Raw -Encoding UTF8
+Assert-True ($orchestrationSource -notmatch 'function Open-HtsScreen|function Find-ScreenWindow|function Close-HtsScreen') 'orchestration no longer defines navigation operations'
 
 Write-Output "HTS_NAVIGATION_TESTS=PASS assertions=$script:assertions"

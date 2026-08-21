@@ -328,3 +328,9 @@ target rule adapter
 
 - `Get-WindowInfo`, `Get-TopWindows`, `Get-ChildWindows`를 orchestration에서 `hts-session.ps1`로 이동했다.
 - 함수명과 반환 객체 형태는 유지했으며 Session 모듈은 평가·리포트 로직을 포함하지 않는다.
+
+### Navigation 잔여 helper 이동
+
+- 화면번호 입력칸 탐색·검증, 화면 열기/식별/포커스, 연계 화면 계산과 화면 종료 호환 함수를 `hts-navigation.ps1`로 이동했다.
+- 기존 암묵적 `$navigationContext` 참조는 각 함수의 `NavigationContext` 파라미터로 바꿨다.
+- orchestration은 Navigation 함수의 호출 순서만 선택하고 화면 탐색·종료 구현을 정의하지 않는다.

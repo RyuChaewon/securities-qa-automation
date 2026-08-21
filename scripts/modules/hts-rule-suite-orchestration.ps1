@@ -413,7 +413,7 @@ $safetyDependencies = [pscustomobject]@{
     GetWindowInfo = { param([Int64]$Hwnd) Get-WindowInfo ([IntPtr]$Hwnd) }
     IsChild = { param([Int64]$Parent,[Int64]$Child) [TargetRuleNative]::IsChild([IntPtr]$Parent,[IntPtr]$Child) }
     GetWindowProcessId = { param([Int64]$Hwnd) [uint32]$windowProcessId=0;[void][TargetRuleNative]::GetWindowThreadProcessId([IntPtr]$Hwnd,[ref]$windowProcessId);[int]$windowProcessId }
-    GetScreenNumber = { param($Window) Get-HtsScreenNumber $Window }
+    GetScreenNumber = { param($Window) Get-HtsScreenNumber $navigationContext $Window }
     GetContentPolicy = { param([string]$ScreenNumber) Get-RuleContentPolicy $targetRuleContext $ScreenNumber }
     TestContentControl = { param($Window,$Screen,$Policy) Test-RuleContentControl $Window $Screen $Policy }
     GetKeyboardFocusHwnd = { $info=New-Object TargetRuleNative+GUITHREADINFO;$info.cbSize=[Runtime.InteropServices.Marshal]::SizeOf([type][TargetRuleNative+GUITHREADINFO]);[void][TargetRuleNative]::GetGUIThreadInfo(0,[ref]$info);[Int64]$info.hwndFocus.ToInt64() }
@@ -461,71 +461,10 @@ function Get-FlaUiActionableControls($Screen) {
 # 지정 부모 아래의 네이티브 자식 HWND를 재귀 열거한다.
 
 # 메인 상단의 화면 ID 입력칸 후보를 위치와 현재 값 형식으로 정렬한다.
-function Find-ScreenNumberEdit($RuntimeContext, $Main) {
-    if ([int]$Main.rect.left -le -30000 -or [int]$Main.rect.top -le -30000) {
-        [void][TargetRuleNative]::ShowWindow([IntPtr][Int64]$Main.hwnd, 9)
-        [void][TargetRuleNative]::SetForegroundWindow([IntPtr][Int64]$Main.hwnd)
-        Start-Sleep -Milliseconds 500
-        $Main = Get-WindowInfo ([IntPtr][Int64]$Main.hwnd)
-    }
-    $edit = Get-ChildWindows ([Int64]$Main.hwnd) | Where-Object {
-        $_.visible -and $_.enabled -and $_.className -eq "Edit" -and
-        $_.rect.left -lt ($Main.rect.left + 250) -and $_.rect.top -lt ($Main.rect.top + 90) -and $_.rect.width -ge 35 -and $_.rect.width -le 180
-    } | Sort-Object @{ Expression = { if ($RuntimeContext.TargetScreenIdRegex.IsMatch([string]$_.rawTitle)) { 0 } else { 1 } } }, { $_.rect.top }, { $_.rect.left } | Select-Object -First 1
-    if (-not $edit) { throw "HTS 화면번호 입력칸을 찾을 수 없습니다." }
-    $edit
-}
 
 # 화면번호 입력부는 일부 HTS 버전에서 owner-drawn 래퍼에 포함된다. UIA 성공만으로
 # 입력 완료를 인정하지 않고, 창 메시지 접근성과 업무 화면 생성 결과를 함께 확인한다.
-function Test-HtsScreenNavigationInputAccess($ScreenEdit) {
-    $targetHwnd = [IntPtr][Int64]$ScreenEdit.hwnd
-    [IntPtr]$messageResult = [IntPtr]::Zero
-    $completed = [TargetRuleNative]::SendMessageTimeout($targetHwnd, $WM_GETTEXTLENGTH, [IntPtr]::Zero, [IntPtr]::Zero, 0x0002, 1200, [ref]$messageResult)
-    $nativeError = [Runtime.InteropServices.Marshal]::GetLastWin32Error()
-    if ($completed -eq [IntPtr]::Zero -and $nativeError -eq 5) {
-        throw "HTS_UI_ACCESS_DENIED: 화면번호 입력부 HWND=$([Int64]$ScreenEdit.hwnd)에 대한 Win32 메시지가 Access denied(5)로 차단되었습니다. HTS와 같은 권한 수준에서 실행해야 합니다."
-    }
-    if ($completed -eq [IntPtr]::Zero) {
-        throw "SCREEN_NAVIGATION_INPUT_UNAVAILABLE: 화면번호 입력부 HWND=$([Int64]$ScreenEdit.hwnd) 접근을 확인하지 못했습니다. win32Error=$nativeError"
-    }
-    [int]$messageResult.ToInt64()
-}
 
-function Set-HtsScreenNumber($ScreenEdit, [string]$ScreenNumber) {
-    [void](Test-HtsScreenNavigationInputAccess $ScreenEdit)
-    $uiaResult = Invoke-FlaUiControlAction $ScreenEdit 'setText' -Value $ScreenNumber
-    Start-Sleep -Milliseconds 180
-    $current = Get-WindowInfo ([IntPtr][Int64]$ScreenEdit.hwnd)
-    if ([string]$current.rawTitle -eq $ScreenNumber) {
-        Write-HtsInputBoundaryAudit 'ScreenNavigationText' 'ALLOWED' -1 -1 "engine=FlaUI.UIA3; value=$ScreenNumber; nativeTextVerified=True"
-        return
-    }
-
-    [IntPtr]$messageResult = [IntPtr]::Zero
-    $completed = [TargetRuleNative]::SendMessageTimeoutText([IntPtr][Int64]$ScreenEdit.hwnd, $WM_SETTEXT, [IntPtr]::Zero, $ScreenNumber, 0x0002, 1200, [ref]$messageResult)
-    $nativeError = [Runtime.InteropServices.Marshal]::GetLastWin32Error()
-    if ($completed -eq [IntPtr]::Zero -and $nativeError -eq 5) {
-        throw "HTS_UI_ACCESS_DENIED: UIA 화면번호 입력 결과를 네이티브로 확인하지 못했고 WM_SETTEXT도 Access denied(5)로 차단되었습니다. HTS와 같은 권한 수준에서 실행해야 합니다."
-    }
-    $current = Get-WindowInfo ([IntPtr][Int64]$ScreenEdit.hwnd)
-    if ([string]$current.rawTitle -eq $ScreenNumber) {
-        Write-HtsInputBoundaryAudit 'ScreenNavigationText' 'ALLOWED' -1 -1 "engine=Win32; value=$ScreenNumber; nativeTextVerified=True"
-        return
-    }
-    if ([bool]$uiaResult.success -and [bool]$uiaResult.verified) {
-        # 이 입력부는 값을 owner-drawn 래퍼에 그려 native window text가 비어 있을 수 있다.
-        # 값 입력은 UIA 패턴으로 확인하고, 뒤이어 업무 화면 생성으로 종단 간 검증한다.
-        Write-HtsInputBoundaryAudit 'ScreenNavigationText' 'ALLOWED' -1 -1 "engine=FlaUI.UIA3; value=$ScreenNumber; nativeTextVerified=False; ownerDrawn=True; screenCreationPending=True"
-        return
-    }
-    if ($completed -ne [IntPtr]::Zero) {
-        Write-HtsInputBoundaryAudit 'ScreenNavigationText' 'ALLOWED' -1 -1 "engine=Win32; value=$ScreenNumber; nativeTextVerified=False; ownerDrawn=True; screenCreationPending=True"
-        return
-    }
-    $uiaDetail = "success=$([bool]$uiaResult.success), verified=$([bool]$uiaResult.verified)"
-    throw "SCREEN_NAVIGATION_TEXT_UNVERIFIED: 화면번호 '$ScreenNumber' 입력을 확인하지 못했습니다. $uiaDetail; nativeText='$([string]$current.rawTitle)'; win32Error=$nativeError"
-}
 
 # 입력 직전 대상 프로세스를 전경으로 복구하고 다른 프로세스가 활성 상태면 입력을 차단한다.
 function Assert-HtsForeground {
@@ -825,73 +764,31 @@ function Set-AutomationText($RuntimeContext, $Window, [string]$Value, [switch]$S
 }
 
 # 화면 수명주기: 번호 입력, 대상 창 식별, 연계 창 정리와 순차 종료를 한 화면 단위로 관리한다.
-function Open-HtsScreen($Main, $ScreenEdit, [string]$ScreenNumber) {
-    Open-HtsNavigationScreen -Context $navigationContext -Main $Main -ScreenEdit $ScreenEdit -ScreenNumber $ScreenNumber
-}
 
 # 요청 화면 ID가 제목에 표시된 가장 큰 자식 창을 대상 화면으로 선택한다.
-function Find-ScreenWindow($Main, [string]$ScreenNumber) {
-    Find-HtsNavigationScreenWindow -Context $navigationContext -Main $Main -ScreenNumber $ScreenNumber
-}
 
 # targetProfile 화면 정규식으로 자식 창 제목에서 화면 ID를 추출한다.
-function Get-HtsScreenNumber($Window) {
-    Get-HtsNavigationScreenNumber -Context $navigationContext -Window $Window
-}
 
 # 대상 화면 형식과 최소 콘텐츠 크기를 만족하는 열린 업무 화면을 나열한다.
-function Get-HtsScreenWindows($Main) {
-    @(Get-HtsNavigationScreenWindows -Context $navigationContext -Main $Main)
-}
 
 # HWND가 살아 있고 현재 제목의 화면 ID가 요청값과 같은지 확인한다.
-function Test-HtsRequestedScreen($Screen, [string]$ScreenNumber) {
-    Test-HtsNavigationRequestedScreen -Context $navigationContext -Screen $Screen -ScreenNumber $ScreenNumber
-}
 
 # MDI 활성화와 전경 복구 후 요청 화면을 현재 입력 콘텐츠로 등록한다.
-function Focus-HtsRequestedScreen($Main, $Screen, [string]$ScreenNumber) {
-    Focus-HtsNavigationRequestedScreen -Context $navigationContext -Main $Main -Screen $Screen -ScreenNumber $ScreenNumber
-}
 
 # 조작 중 추가로 열린 화면을 요청 화면과 분리해 연계 화면으로 반환한다.
-function Get-HtsLinkedScreens($Main, [string]$RequestedScreenNumber) {
-    @(Get-HtsNavigationLinkedScreens -Context $navigationContext -Main $Main -RequestedScreenNumber $RequestedScreenNumber)
-}
 
 # 요청 화면을 제외한 연계 화면을 닫고 실제 종료된 수를 반환한다.
-function Close-HtsLinkedScreens($Main, [string]$RequestedScreenNumber) {
-    Close-HtsNavigationLinkedScreens -Context $navigationContext -Main $Main -RequestedScreenNumber $RequestedScreenNumber
-}
 
 # 후보 화면 안의 입력 가능 자식 수를 계산해 실제 콘텐츠가 있는 창을 우선한다.
-function Get-HtsInputSurfaceScore($Window) {
-    Get-HtsNavigationInputSurfaceScore -Context $navigationContext -Window $Window
-}
 
 # 정확한 화면 ID, 새 HWND와 입력 가능 컨트롤 수를 조합해 콘텐츠 표면을 결정한다.
-function Find-BestHtsContentSurface($Main, $RequestedWindow, [string]$RequestedScreenNumber, [Int64[]]$BaselineScreenHwnds = @()) {
-    Find-HtsNavigationBestContentSurface -Context $navigationContext -Main $Main -RequestedWindow $RequestedWindow -RequestedScreenNumber $RequestedScreenNumber -BaselineScreenHwnds $BaselineScreenHwnds
-}
 
 # 대상 프로세스의 자식 화면에만 WM_CLOSE를 보내고 HWND 소멸까지 확인한다.
-function Close-HtsScreen($Screen) {
-    Close-HtsNavigationScreen -Context $navigationContext -Screen $Screen
-}
 
 # 새 케이스 시작 전에 targetProfile 형식의 기존 업무 화면을 모두 정리한다.
-function Close-ExistingTargetScreens($Main) {
-    Close-HtsNavigationExistingTargetScreens -Context $navigationContext -Main $Main
-}
 
-function Test-PreservedTargetScreen($Window) {
-    Test-HtsNavigationPreservedTargetScreen -Context $navigationContext -Window $Window
-}
 
 # 화면번호 입력을 가릴 수 있는 화면검색 오버레이만 선택적으로 닫는다.
-function Close-ScreenSearchOverlays($Main) {
-    Close-HtsNavigationSearchOverlays -Context $navigationContext -Main $Main
-}
 
 # 팝업 관찰: 현재 HTS 프로세스의 새 대화상자를 읽고 민감 문구를 제거한 관찰 객체를 만든다.
 function Get-HtsDialogs($RuntimeContext, $Main, [string]$Secret = "") {
@@ -1029,7 +926,7 @@ function Add-LinkedScreenObservations($RuntimeContext, $List, $LinkedScreens, $M
     } | Where-Object {$_} | Sort-Object -Unique)
     foreach($linked in @($LinkedScreens)){
         $index++
-        $linkedNumber=Get-HtsScreenNumber $linked
+        $linkedNumber=Get-HtsScreenNumber $navigationContext $linked
         $children=@(Get-ChildWindows ([Int64]$linked.hwnd) | Where-Object { $_.visible -and $_.rawTitle })
         $buttons=@($children | Where-Object { $_.className -like '*Button*' } | ForEach-Object { Protect-Text $_.rawTitle $Secret } | Sort-Object -Unique)
         $messages=@($children | Where-Object { $_.className -notlike '*Button*' } | ForEach-Object { Protect-Text $_.rawTitle $Secret } | Sort-Object -Unique | Select-Object -First 30)
@@ -1476,15 +1373,15 @@ try {
     Write-Output $ReportDir
     return
 }
-$initialSearchOverlaysClosed = Close-ScreenSearchOverlays $main
+$initialSearchOverlaysClosed = Close-ScreenSearchOverlays $navigationContext $main
 $initialScreensPreserved = 0
 if ($reuseExistingTargetScreenRequested) {
-    $preservedTargetScreenHwnds = @(Get-HtsScreenWindows $main | ForEach-Object { [Int64]$_.hwnd } | Select-Object -Unique)
+    $preservedTargetScreenHwnds = @(Get-HtsScreenWindows $navigationContext $main | ForEach-Object { [Int64]$_.hwnd } | Select-Object -Unique)
     [void](Set-HtsNavigationPreservedScreens -Context $navigationContext -Hwnds $preservedTargetScreenHwnds)
     $initialScreensPreserved = $navigationContext.PreservedTargetScreenHwnds.Count
     $initialScreensClosed = 0
 } else {
-    $initialScreensClosed = Close-ExistingTargetScreens $main
+    $initialScreensClosed = Close-ExistingTargetScreens $navigationContext $main
 }
 $results = New-Object Collections.Generic.List[object]
 
@@ -1559,14 +1456,14 @@ for ($caseIndex = 0; $caseIndex -lt $cases.Count; $caseIndex++) {
         if ($startupConnectionDialogs.Count -gt 0) {
             throw "HTS_CONNECTION_LOST: 연결 장애 대화상자가 남아 있어 사용자 판단 없이 실행을 중단했습니다. $([string]$startupConnectionDialogs[0].text)"
         }
-        [void](Close-ScreenSearchOverlays $main)
+        [void](Close-ScreenSearchOverlays $navigationContext $main)
         $logBefore = Get-LogState
         $beforeErrorTexts = @(Get-ErrorWindowTexts $main $caseErrorRegex $secret)
         if ($reuseScenarioScreen -or $reuseExistingTargetScreenRequested) {
-            $requestedScreenWindow = Find-ScreenWindow $main ([string]$case.screen.screenNumber)
-            $screen = if ($requestedScreenWindow) { Find-BestHtsContentSurface $main $requestedScreenWindow ([string]$case.screen.screenNumber) @() } else { $null }
+            $requestedScreenWindow = Find-ScreenWindow $navigationContext $main ([string]$case.screen.screenNumber)
+            $screen = if ($requestedScreenWindow) { Find-BestHtsContentSurface $navigationContext $main $requestedScreenWindow ([string]$case.screen.screenNumber) @() } else { $null }
             if ($screen) {
-                $usedExistingTargetScreen = Test-PreservedTargetScreen $requestedScreenWindow
+                $usedExistingTargetScreen = Test-PreservedTargetScreen $navigationContext $requestedScreenWindow
                 if ($usedExistingTargetScreen) {
                     Add-HtsActionRecord $reportingContext $actions 'attachExistingScreen' 'PASS' ([string]$case.screen.screenNumber) '사용자가 미리 열어둔 대상 화면에 연결했으며 화면번호 재입력을 수행하지 않았습니다.'
                 } else {
@@ -1578,27 +1475,27 @@ for ($caseIndex = 0; $caseIndex -lt $cases.Count; $caseIndex++) {
                 Add-HtsActionRecord $reportingContext $actions 'attachExistingScreen' 'PENDING' ([string]$case.screen.screenNumber) '기존 대상 화면이 없어 화면번호 재입력 없이 실행을 보류했습니다.' 'EXISTING_SCREEN_REQUIRED'
             } else {
                 $screenEdit = Find-ScreenNumberEdit $RuntimeContext $main
-                Open-HtsScreen $main $screenEdit ([string]$case.screen.screenNumber)
+                Open-HtsScreen $navigationContext $main $screenEdit ([string]$case.screen.screenNumber)
                 $openedTargetScreenForRun = $true
-                $requestedScreenWindow = Find-ScreenWindow $main ([string]$case.screen.screenNumber)
-                $screen = Find-BestHtsContentSurface $main $requestedScreenWindow ([string]$case.screen.screenNumber) @()
+                $requestedScreenWindow = Find-ScreenWindow $navigationContext $main ([string]$case.screen.screenNumber)
+                $screen = Find-BestHtsContentSurface $navigationContext $main $requestedScreenWindow ([string]$case.screen.screenNumber) @()
                 $openAction = if($reuseScenarioScreen){'reopenMissingScenarioScreen'}else{'openTargetScreen'}
                 $openMessage = if($reuseScenarioScreen){'같은 화면의 다음 케이스 전에 대상 화면이 사라져 다시 열었습니다.'}else{'실행 중인 HTS 메인 창의 화면번호 입력란으로 대상 화면을 열었습니다.'}
                 Add-HtsActionRecord $reportingContext $actions $openAction $(if($screen){'PASS'}else{'FAIL'}) ([string]$case.screen.screenNumber) $openMessage $(if($screen){''}else{'SCREEN_NOT_VISIBLE'})
             }
         } else {
-            $leftoverScreensClosed=Close-ExistingTargetScreens $main
+            $leftoverScreensClosed=Close-ExistingTargetScreens $navigationContext $main
             if($leftoverScreensClosed -gt 0){Add-HtsActionRecord $reportingContext $actions 'cleanupPreviousScreens' 'PASS' 'HTS sibling windows' "이전 화면에서 남은 HTS 내부 창 $leftoverScreensClosed개를 정리했습니다."}
-            $remainingBeforeOpen=@(Get-HtsScreenWindows $main)
+            $remainingBeforeOpen=@(Get-HtsScreenWindows $navigationContext $main)
             if($remainingBeforeOpen.Count -gt 0){
                 throw "SCREEN_SEQUENCE_GUARD: 이전 화면 $($remainingBeforeOpen.Count)개가 남아 있어 다음 화면 열기를 차단했습니다."
             }
             $baselineScreenHwnds=@(Get-ChildWindows ([Int64]$main.hwnd) | Where-Object { $_.visible -and $RuntimeContext.TargetScreenTitleRegex.IsMatch([string]$_.rawTitle) } | ForEach-Object { [Int64]$_.hwnd })
             $screenEdit = Find-ScreenNumberEdit $RuntimeContext $main
-            Open-HtsScreen $main $screenEdit ([string]$case.screen.screenNumber)
+            Open-HtsScreen $navigationContext $main $screenEdit ([string]$case.screen.screenNumber)
             $openedTargetScreenForRun = $true
-            $requestedScreenWindow = Find-ScreenWindow $main ([string]$case.screen.screenNumber)
-            $screen = Find-BestHtsContentSurface $main $requestedScreenWindow ([string]$case.screen.screenNumber) $baselineScreenHwnds
+            $requestedScreenWindow = Find-ScreenWindow $navigationContext $main ([string]$case.screen.screenNumber)
+            $screen = Find-BestHtsContentSurface $navigationContext $main $requestedScreenWindow ([string]$case.screen.screenNumber) $baselineScreenHwnds
         }
         if (-not $screen) {
             $openConnectionDialogs = @(Get-HtsConnectionDialogs $RuntimeContext $main $secret)
@@ -1616,7 +1513,7 @@ for ($caseIndex = 0; $caseIndex -lt $cases.Count; $caseIndex++) {
                 if ($dialog.text) { $errors.Add($dialog.text) }
             }
         } else {
-            if(-not (Focus-HtsRequestedScreen $main $screen ([string]$case.screen.screenNumber))){
+            if(-not (Focus-HtsRequestedScreen $navigationContext $main $screen ([string]$case.screen.screenNumber))){
                 throw "INPUT_SCOPE_BLOCKED: [$($case.screen.screenNumber)] 대상 화면을 활성 입력 표면으로 고정하지 못했습니다."
             }
             Add-HtsActionRecord $reportingContext $actions "openScreen" "PASS" ([string]$case.screen.screenNumber) $(if($usedExistingTargetScreen){'기존 화면을 재호출하지 않고 활성화했습니다.'}else{'화면 창이 열렸습니다.'})
@@ -1796,7 +1693,7 @@ for ($caseIndex = 0; $caseIndex -lt $cases.Count; $caseIndex++) {
                 $pendingOrderTabContexts = @{}
                 for ($planIndex=0; $planIndex -lt $queue.Count; $planIndex++) {
                     $planItem = $queue[$planIndex]
-                    if ($scenarioMode -and [string]$planItem.status -ne 'READY' -and (Test-HtsRequestedScreen $screen ([string]$case.screen.screenNumber))) {
+                    if ($scenarioMode -and [string]$planItem.status -ne 'READY' -and (Test-HtsRequestedScreen $navigationContext $screen ([string]$case.screen.screenNumber))) {
                         $scenarioRefresh = @(Get-HtsDiscoveredControls -Context $discoveryContext -Screen $screen -ScreenNumber ([string]$case.screen.screenNumber) -ClaimedHwnds $claimedHwnds)
                         foreach ($refreshedControl in $scenarioRefresh) {
                             if (@($discoveredControls | Where-Object { [string]$_.controlId -eq [string]$refreshedControl.controlId -and [string]$_.stateContext -eq [string]$refreshedControl.stateContext }).Count -eq 0) {
@@ -1874,11 +1771,11 @@ for ($caseIndex = 0; $caseIndex -lt $cases.Count; $caseIndex++) {
                     $restorationFailed = $false
                     $unexpectedScreenClose = $false
 
-                    if(-not (Focus-HtsRequestedScreen $main $screen $requestedScreenNumber)){
-                        $screen=Find-ScreenWindow $main $requestedScreenNumber
+                    if(-not (Focus-HtsRequestedScreen $navigationContext $main $screen $requestedScreenNumber)){
+                        $screen=Find-ScreenWindow $navigationContext $main $requestedScreenNumber
                     }
-                    if(Test-HtsRequestedScreen $screen $requestedScreenNumber){
-                        [void](Focus-HtsRequestedScreen $main $screen $requestedScreenNumber)
+                    if(Test-HtsRequestedScreen $navigationContext $screen $requestedScreenNumber){
+                        [void](Focus-HtsRequestedScreen $navigationContext $main $screen $requestedScreenNumber)
                         $mapStateBlockReason = ''
                         $planMapCode = ([string]$planItem.mapScreenCode).Trim().ToUpperInvariant()
                         if ($scenarioMode -and [string]$planItem.executionOrder -eq 'CoordinateFocus' -and $planMapCode -and
@@ -2041,25 +1938,25 @@ for ($caseIndex = 0; $caseIndex -lt $cases.Count; $caseIndex++) {
                         }
                     }
 
-                    $linkedScreens=@(Get-HtsLinkedScreens $main $requestedScreenNumber)
+                    $linkedScreens=@(Get-HtsLinkedScreens $navigationContext $main $requestedScreenNumber)
                     if($linkedScreens.Count -gt 0){
                         Add-LinkedScreenObservations $RuntimeContext $popupObservations $linkedScreens $main $case.caseId $requestedScreenNumber $ReportDir $secret @($planItem.control.mapNavigationTargets)
                         $linkedTitles=@($linkedScreens | ForEach-Object { [string]$_.rawTitle }) -join ', '
-                        $linkedClosed=Close-HtsLinkedScreens $main $requestedScreenNumber
+                        $linkedClosed=Close-HtsLinkedScreens $navigationContext $main $requestedScreenNumber
                         $navigationHandled=$true
-                        $screen=Find-ScreenWindow $main $requestedScreenNumber
+                        $screen=Find-ScreenWindow $navigationContext $main $requestedScreenNumber
                         if(-not $screen){
                             $screenEdit=Find-ScreenNumberEdit $RuntimeContext $main
-                            Open-HtsScreen $main $screenEdit $requestedScreenNumber
-                            $screen=Find-ScreenWindow $main $requestedScreenNumber
+                            Open-HtsScreen $navigationContext $main $screenEdit $requestedScreenNumber
+                            $screen=Find-ScreenWindow $navigationContext $main $requestedScreenNumber
                             $screenReopened=($null -ne $screen)
                         }
-                        if($screen){[void](Focus-HtsRequestedScreen $main $screen $requestedScreenNumber)}
-                        $restorationFailed=-not (Test-HtsRequestedScreen $screen $requestedScreenNumber)
+                        if($screen){[void](Focus-HtsRequestedScreen $navigationContext $main $screen $requestedScreenNumber)}
+                        $restorationFailed=-not (Test-HtsRequestedScreen $navigationContext $screen $requestedScreenNumber)
                         Add-HtsActionRecord $reportingContext $actions 'restoreAfterNavigation' $(if($restorationFailed){'PENDING'}else{'PASS'}) $requestedScreenNumber "연계 화면을 관찰하고 $linkedClosed/$($linkedScreens.Count)개를 닫은 뒤 대상 화면을 복원했습니다: $linkedTitles" $(if($restorationFailed){'TARGET_RESTORE_FAILED'}else{''})
                     }
 
-                    $screenAlive=Test-HtsRequestedScreen $screen $requestedScreenNumber
+                    $screenAlive=Test-HtsRequestedScreen $navigationContext $screen $requestedScreenNumber
                     if(-not $screenAlive -and -not $navigationHandled){
                         $isButtonTransition=$invoke.success -and [string]$planItem.control.controlKind -eq 'Button' -and (
                             [string]$planItem.control.mapSemanticRole -eq 'Navigation' -or @($planItem.control.mapNavigationTargets).Count -gt 0
@@ -2072,10 +1969,10 @@ for ($caseIndex = 0; $caseIndex -lt $cases.Count; $caseIndex++) {
                             $errors.Add("컨트롤 조작 중 [$requestedScreenNumber] 화면이 예기치 않게 닫혔습니다.")
                         }
                         $screenEdit=Find-ScreenNumberEdit $RuntimeContext $main
-                        Open-HtsScreen $main $screenEdit $requestedScreenNumber
-                        $screen=Find-ScreenWindow $main $requestedScreenNumber
+                        Open-HtsScreen $navigationContext $main $screenEdit $requestedScreenNumber
+                        $screen=Find-ScreenWindow $navigationContext $main $requestedScreenNumber
                         $screenReopened=($null -ne $screen)
-                        $screenAlive=Test-HtsRequestedScreen $screen $requestedScreenNumber
+                        $screenAlive=Test-HtsRequestedScreen $navigationContext $screen $requestedScreenNumber
                         if($isButtonTransition){
                             $restorationFailed=-not $screenAlive
                             Add-HtsActionRecord $reportingContext $actions 'restoreAfterUnnumberedTransition' $(if($restorationFailed){'PENDING'}else{'PASS'}) $requestedScreenNumber '버튼 조작으로 발생한 번호 없는 콘텐츠 전환을 기록하고 대상 화면을 다시 열었습니다.' $(if($restorationFailed){'TARGET_RESTORE_FAILED'}else{''})
@@ -2087,7 +1984,7 @@ for ($caseIndex = 0; $caseIndex -lt $cases.Count; $caseIndex++) {
 
                     $triggerQueryForPlanItem = if ($scenarioMode) { [bool]$planItem.triggerQueryAfterChange } else { [bool]$dataset.autoExploration.triggerQueryAfterStateChange }
                     if ($invoke.success -and $invoke.queryEligible -and -not $navigationHandled -and $screenAlive -and $triggerQueryForPlanItem) {
-                        [void](Focus-HtsRequestedScreen $main $screen $requestedScreenNumber)
+                        [void](Focus-HtsRequestedScreen $navigationContext $main $screen $requestedScreenNumber)
                         $liveTabQuery=if($tabOrderQueryControl){Resolve-RuleLiveControl $targetRuleContext $navigationContext $screen $tabOrderQueryControl}else{$null}
                         if($liveTabQuery){
                             $queryResult=Invoke-FlaUiControlAction $liveTabQuery 'invoke'
@@ -2110,31 +2007,31 @@ for ($caseIndex = 0; $caseIndex -lt $cases.Count; $caseIndex++) {
                             }
                             [void](Dismiss-HtsDialogs $RuntimeContext $main $secret)
                         }
-                        $queryLinkedScreens=@(Get-HtsLinkedScreens $main $requestedScreenNumber)
+                        $queryLinkedScreens=@(Get-HtsLinkedScreens $navigationContext $main $requestedScreenNumber)
                         if($queryLinkedScreens.Count -gt 0){
                             Add-LinkedScreenObservations $RuntimeContext $popupObservations $queryLinkedScreens $main $case.caseId $requestedScreenNumber $ReportDir $secret @($planItem.control.mapNavigationTargets)
-                            $queryLinkedClosed=Close-HtsLinkedScreens $main $requestedScreenNumber
+                            $queryLinkedClosed=Close-HtsLinkedScreens $navigationContext $main $requestedScreenNumber
                             $navigationHandled=$true
-                            $screen=Find-ScreenWindow $main $requestedScreenNumber
+                            $screen=Find-ScreenWindow $navigationContext $main $requestedScreenNumber
                             if(-not $screen){
                                 $screenEdit=Find-ScreenNumberEdit $RuntimeContext $main
-                                Open-HtsScreen $main $screenEdit $requestedScreenNumber
-                                $screen=Find-ScreenWindow $main $requestedScreenNumber
+                                Open-HtsScreen $navigationContext $main $screenEdit $requestedScreenNumber
+                                $screen=Find-ScreenWindow $navigationContext $main $requestedScreenNumber
                                 $screenReopened=($null -ne $screen)
                             }
-                            if($screen){[void](Focus-HtsRequestedScreen $main $screen $requestedScreenNumber)}
-                            $restorationFailed=-not (Test-HtsRequestedScreen $screen $requestedScreenNumber)
+                            if($screen){[void](Focus-HtsRequestedScreen $navigationContext $main $screen $requestedScreenNumber)}
+                            $restorationFailed=-not (Test-HtsRequestedScreen $navigationContext $screen $requestedScreenNumber)
                             Add-HtsActionRecord $reportingContext $actions 'restoreAfterQueryNavigation' $(if($restorationFailed){'PENDING'}else{'PASS'}) $requestedScreenNumber "조회 후 열린 연계 화면 $queryLinkedClosed/$($queryLinkedScreens.Count)개를 닫고 대상 화면을 복원했습니다." $(if($restorationFailed){'TARGET_RESTORE_FAILED'}else{''})
                         }
-                        $screenAlive=Test-HtsRequestedScreen $screen $requestedScreenNumber
+                        $screenAlive=Test-HtsRequestedScreen $navigationContext $screen $requestedScreenNumber
                         if(-not $screenAlive -and $queryLinkedScreens.Count -eq 0){
                             Add-UnnumberedTransitionObservation $RuntimeContext $popupObservations $main $case.caseId $requestedScreenNumber $ReportDir $secret
                             $navigationHandled=$true
                             $screenEdit=Find-ScreenNumberEdit $RuntimeContext $main
-                            Open-HtsScreen $main $screenEdit $requestedScreenNumber
-                            $screen=Find-ScreenWindow $main $requestedScreenNumber
+                            Open-HtsScreen $navigationContext $main $screenEdit $requestedScreenNumber
+                            $screen=Find-ScreenWindow $navigationContext $main $requestedScreenNumber
                             $screenReopened=($null -ne $screen)
-                            $screenAlive=Test-HtsRequestedScreen $screen $requestedScreenNumber
+                            $screenAlive=Test-HtsRequestedScreen $navigationContext $screen $requestedScreenNumber
                             $restorationFailed=-not $screenAlive
                             Add-HtsActionRecord $reportingContext $actions 'restoreAfterQueryTransition' $(if($restorationFailed){'PENDING'}else{'PASS'}) $requestedScreenNumber '조회 후 번호 없는 콘텐츠 전환을 기록하고 대상 화면을 다시 열었습니다.' $(if($restorationFailed){'TARGET_RESTORE_FAILED'}else{''})
                         }
@@ -2200,7 +2097,7 @@ for ($caseIndex = 0; $caseIndex -lt $cases.Count; $caseIndex++) {
                         screenshotPath=$shot; elapsedMs=[int64]((Get-Date)-$planStarted).TotalMilliseconds
                     })
 
-                    if (-not $scenarioMode -and (Test-HtsRequestedScreen $screen ([string]$case.screen.screenNumber))) {
+                    if (-not $scenarioMode -and (Test-HtsRequestedScreen $navigationContext $screen ([string]$case.screen.screenNumber))) {
                         $refreshed = @(Get-HtsDiscoveredControls -Context $discoveryContext -Screen $screen -ScreenNumber ([string]$case.screen.screenNumber) -ClaimedHwnds $claimedHwnds)
                         $newPlans = New-Object Collections.Generic.List[object]
                         foreach ($refreshedControl in $refreshed) {
@@ -2251,12 +2148,12 @@ for ($caseIndex = 0; $caseIndex -lt $cases.Count; $caseIndex++) {
 
             if (-not $PlanOnly -and -not $scenarioMode) {
                 $requestedScreenNumber=[string]$case.screen.screenNumber
-                if(-not (Focus-HtsRequestedScreen $main $screen $requestedScreenNumber)){
-                    $screen=Find-ScreenWindow $main $requestedScreenNumber
+                if(-not (Focus-HtsRequestedScreen $navigationContext $main $screen $requestedScreenNumber)){
+                    $screen=Find-ScreenWindow $navigationContext $main $requestedScreenNumber
                 }
                 $queryStrategies = if ($case.screen.locators -and $case.screen.locators.query) { $case.screen.locators.query } else { $dataset.defaultLocators.query }
-                $queryControls = if(Test-HtsRequestedScreen $screen $requestedScreenNumber){@(Get-HtsRequiredQueryControls -Context $bindingContext -Screen $screen -Strategies $queryStrategies)}else{@()}
-                if($tabOrderQueryControl -and (Test-HtsRequestedScreen $screen $requestedScreenNumber)){
+                $queryControls = if(Test-HtsRequestedScreen $navigationContext $screen $requestedScreenNumber){@(Get-HtsRequiredQueryControls -Context $bindingContext -Screen $screen -Strategies $queryStrategies)}else{@()}
+                if($tabOrderQueryControl -and (Test-HtsRequestedScreen $navigationContext $screen $requestedScreenNumber)){
                     $liveTabQuery=Resolve-RuleLiveControl $targetRuleContext $navigationContext $screen $tabOrderQueryControl
                     if($liveTabQuery){$queryControls=@($liveTabQuery)+@($queryControls)}
                 }
@@ -2265,7 +2162,7 @@ for ($caseIndex = 0; $caseIndex -lt $cases.Count; $caseIndex++) {
                     for ($queryIndex=0; $queryIndex -lt $queryControls.Count; $queryIndex++) {
                         $queryStarted=Get-Date
                         $queryControl=$queryControls[$queryIndex]
-                        if(-not (Focus-HtsRequestedScreen $main $screen $requestedScreenNumber)){
+                        if(-not (Focus-HtsRequestedScreen $navigationContext $main $screen $requestedScreenNumber)){
                             $automationIssues.Add('필수 조회 직전에 대상 화면을 활성화하지 못했습니다: TARGET_SCREEN_NOT_ACTIVE')
                             break
                         }
@@ -2304,30 +2201,30 @@ for ($caseIndex = 0; $caseIndex -lt $cases.Count; $caseIndex++) {
                             }
                             [void](Dismiss-HtsDialogs $RuntimeContext $main $secret)
                         }
-                        $queryLinkedScreens=@(Get-HtsLinkedScreens $main $requestedScreenNumber)
+                        $queryLinkedScreens=@(Get-HtsLinkedScreens $navigationContext $main $requestedScreenNumber)
                         $queryNavigationHandled=$false
                         if($queryLinkedScreens.Count -gt 0){
                             Add-LinkedScreenObservations $RuntimeContext $popupObservations $queryLinkedScreens $main $case.caseId $requestedScreenNumber $ReportDir $secret @($tabOrderQueryControl.mapNavigationTargets)
-                            $queryLinkedClosed=Close-HtsLinkedScreens $main $requestedScreenNumber
+                            $queryLinkedClosed=Close-HtsLinkedScreens $navigationContext $main $requestedScreenNumber
                             $queryNavigationHandled=$true
-                            $screen=Find-ScreenWindow $main $requestedScreenNumber
+                            $screen=Find-ScreenWindow $navigationContext $main $requestedScreenNumber
                             if(-not $screen){
                                 $screenEdit=Find-ScreenNumberEdit $RuntimeContext $main
-                                Open-HtsScreen $main $screenEdit $requestedScreenNumber
-                                $screen=Find-ScreenWindow $main $requestedScreenNumber
+                                Open-HtsScreen $navigationContext $main $screenEdit $requestedScreenNumber
+                                $screen=Find-ScreenWindow $navigationContext $main $requestedScreenNumber
                             }
-                            if($screen){[void](Focus-HtsRequestedScreen $main $screen $requestedScreenNumber)}
-                            Add-HtsActionRecord $reportingContext $actions 'restoreAfterRequiredQuery' $(if(Test-HtsRequestedScreen $screen $requestedScreenNumber){'PASS'}else{'PENDING'}) $requestedScreenNumber "필수 조회 후 열린 연계 화면 $queryLinkedClosed/$($queryLinkedScreens.Count)개를 닫고 대상 화면을 복원했습니다." $(if(Test-HtsRequestedScreen $screen $requestedScreenNumber){''}else{'TARGET_RESTORE_FAILED'})
+                            if($screen){[void](Focus-HtsRequestedScreen $navigationContext $main $screen $requestedScreenNumber)}
+                            Add-HtsActionRecord $reportingContext $actions 'restoreAfterRequiredQuery' $(if(Test-HtsRequestedScreen $navigationContext $screen $requestedScreenNumber){'PASS'}else{'PENDING'}) $requestedScreenNumber "필수 조회 후 열린 연계 화면 $queryLinkedClosed/$($queryLinkedScreens.Count)개를 닫고 대상 화면을 복원했습니다." $(if(Test-HtsRequestedScreen $navigationContext $screen $requestedScreenNumber){''}else{'TARGET_RESTORE_FAILED'})
                         }
-                        $queryAlive=Test-HtsRequestedScreen $screen $requestedScreenNumber
+                        $queryAlive=Test-HtsRequestedScreen $navigationContext $screen $requestedScreenNumber
                         if(-not $queryAlive -and -not $queryNavigationHandled){
                             Add-UnnumberedTransitionObservation $RuntimeContext $popupObservations $main $case.caseId $requestedScreenNumber $ReportDir $secret
                             $queryNavigationHandled=$true
                             $screenEdit=Find-ScreenNumberEdit $RuntimeContext $main
-                            Open-HtsScreen $main $screenEdit $requestedScreenNumber
-                            $screen=Find-ScreenWindow $main $requestedScreenNumber
-                            if($screen){[void](Focus-HtsRequestedScreen $main $screen $requestedScreenNumber)}
-                            $queryAlive=Test-HtsRequestedScreen $screen $requestedScreenNumber
+                            Open-HtsScreen $navigationContext $main $screenEdit $requestedScreenNumber
+                            $screen=Find-ScreenWindow $navigationContext $main $requestedScreenNumber
+                            if($screen){[void](Focus-HtsRequestedScreen $navigationContext $main $screen $requestedScreenNumber)}
+                            $queryAlive=Test-HtsRequestedScreen $navigationContext $screen $requestedScreenNumber
                             Add-HtsActionRecord $reportingContext $actions 'restoreAfterRequiredQueryTransition' $(if($queryAlive){'PASS'}else{'PENDING'}) $requestedScreenNumber '필수 조회 후 번호 없는 콘텐츠 전환을 기록하고 대상 화면을 다시 열었습니다.' $(if($queryAlive){''}else{'TARGET_RESTORE_FAILED'})
                         }
                         $queryObservationKind=if($queryAlive){'Success'}elseif($queryNavigationHandled){'EvidenceMissing'}else{'ProductFailure'}
@@ -2359,7 +2256,7 @@ for ($caseIndex = 0; $caseIndex -lt $cases.Count; $caseIndex++) {
                     Add-HtsActionRecord $reportingContext $actions 'invokeQuery' 'PASS' '탭오더 조회 이력' "탭오더 순회 중 식별된 활성 조회 버튼 $completedTabQueries개를 실제 클릭했습니다."
                     $mapQueryExecuted = $true
                 } else {
-                    if(Focus-HtsRequestedScreen $main $screen $requestedScreenNumber){
+                    if(Focus-HtsRequestedScreen $navigationContext $main $screen $requestedScreenNumber){
                         Send-Key ([byte]$VK_F12)
                         Start-Sleep -Milliseconds ([Math]::Max(500,[int]$dataset.executionPolicy.actionTimeoutMs))
                         Add-HtsActionRecord $reportingContext $actions "invokeQuery" "PASS" "F12" "활성 조회 버튼을 찾지 못해 화면의 F12 조회 단축키를 실행했습니다."
@@ -2506,16 +2403,16 @@ for ($caseIndex = 0; $caseIndex -lt $cases.Count; $caseIndex++) {
     } elseif ($remainingDialogs.Count -gt 0) {
         Add-HtsActionRecord $reportingContext $actions "closeScreen" "PENDING" ([string]$case.screen.screenNumber) "모달 대화상자가 남아 있어 HTS 종료 위험을 피하도록 화면 닫기를 차단했습니다." "DIALOG_BLOCKS_SCREEN_CLOSE"
         $pendingReasons.Add("모달 대화상자 후 화면 닫기 차단")
-    } elseif ($retainScenarioScreen -and (Test-HtsRequestedScreen $screen ([string]$case.screen.screenNumber))) {
+    } elseif ($retainScenarioScreen -and (Test-HtsRequestedScreen $navigationContext $screen ([string]$case.screen.screenNumber))) {
         Add-HtsActionRecord $reportingContext $actions 'retainScreenForNextScenario' 'PASS' ([string]$case.screen.screenNumber) '같은 화면의 다음 시나리오 케이스를 위해 현재 화면을 유지했습니다.'
-    } elseif ($PreserveTargetScreenAfterRun -and (Test-HtsRequestedScreen $screen ([string]$case.screen.screenNumber))) {
+    } elseif ($PreserveTargetScreenAfterRun -and (Test-HtsRequestedScreen $navigationContext $screen ([string]$case.screen.screenNumber))) {
         Add-HtsActionRecord $reportingContext $actions 'preserveTargetScreenAfterRun' 'PASS' ([string]$case.screen.screenNumber) $(if($openedTargetScreenForRun){'자동화가 연 대상 화면을 후속 확인을 위해 닫지 않고 유지했습니다.'}else{'현재 대상 화면을 후속 확인을 위해 닫지 않고 유지했습니다.'})
-    } elseif ($usedExistingTargetScreen -and (Test-PreservedTargetScreen (Find-ScreenWindow $main ([string]$case.screen.screenNumber)))) {
+    } elseif ($usedExistingTargetScreen -and (Test-PreservedTargetScreen $navigationContext (Find-ScreenWindow $navigationContext $main ([string]$case.screen.screenNumber)))) {
         Add-HtsActionRecord $reportingContext $actions 'preserveExistingScreen' 'PASS' ([string]$case.screen.screenNumber) '사용자가 미리 열어둔 화면이므로 테스트 종료 후에도 닫지 않고 유지했습니다.'
     } else {
-        $screenToClose=if(Test-HtsRequestedScreen $screen ([string]$case.screen.screenNumber)){$screen}else{Find-ScreenWindow $main ([string]$case.screen.screenNumber)}
+        $screenToClose=if(Test-HtsRequestedScreen $navigationContext $screen ([string]$case.screen.screenNumber)){$screen}else{Find-ScreenWindow $navigationContext $main ([string]$case.screen.screenNumber)}
         if ($screenToClose) {
-            if (Close-HtsScreen $screenToClose) {
+            if (Close-HtsScreen $navigationContext $screenToClose) {
                 Add-HtsActionRecord $reportingContext $actions "closeScreen" "PASS" ([string]$case.screen.screenNumber) "테스트를 마친 화면을 의도적으로 닫았습니다."
             } else {
                 Add-HtsActionRecord $reportingContext $actions "closeScreen" "PENDING" ([string]$case.screen.screenNumber) "테스트를 마친 화면을 닫지 못했습니다." "SCREEN_CLOSE_PENDING"
@@ -2523,9 +2420,9 @@ for ($caseIndex = 0; $caseIndex -lt $cases.Count; $caseIndex++) {
             }
         }
         if($main -and [TargetRuleNative]::IsWindow([IntPtr][Int64]$main.hwnd)){
-            $siblingScreensClosed=Close-ExistingTargetScreens $main
+            $siblingScreensClosed=Close-ExistingTargetScreens $navigationContext $main
             if($siblingScreensClosed -gt 0){Add-HtsActionRecord $reportingContext $actions 'closeSiblingScreens' 'PASS' 'HTS sibling windows' "테스트 중 새로 열린 형제·연계 내부 창 $siblingScreensClosed개를 함께 닫았습니다."}
-            $remainingAfterClose=@(Get-HtsScreenWindows $main)
+            $remainingAfterClose=@(Get-HtsScreenWindows $navigationContext $main)
             if($remainingAfterClose.Count -gt 0){
                 Add-HtsActionRecord $reportingContext $actions 'verifySequentialClose' 'PENDING' ([string]$case.screen.screenNumber) "번호 창 $($remainingAfterClose.Count)개가 남아 다음 화면 열기를 차단해야 합니다." 'SCREEN_SEQUENCE_CLOSE_PENDING'
                 $pendingReasons.Add('순차 화면 닫기 미완료')

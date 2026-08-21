@@ -287,3 +287,124 @@ function Close-HtsNavigationSearchOverlays {
     }
     $closed
 }
+
+# Rule-suite navigation adapters with explicit contexts.
+function Find-ScreenNumberEdit($RuntimeContext, $Main) {
+    if ([int]$Main.rect.left -le -30000 -or [int]$Main.rect.top -le -30000) {
+        [void][TargetRuleNative]::ShowWindow([IntPtr][Int64]$Main.hwnd, 9)
+        [void][TargetRuleNative]::SetForegroundWindow([IntPtr][Int64]$Main.hwnd)
+        Start-Sleep -Milliseconds 500
+        $Main = Get-WindowInfo ([IntPtr][Int64]$Main.hwnd)
+    }
+    $edit = Get-ChildWindows ([Int64]$Main.hwnd) | Where-Object {
+        $_.visible -and $_.enabled -and $_.className -eq "Edit" -and
+        $_.rect.left -lt ($Main.rect.left + 250) -and $_.rect.top -lt ($Main.rect.top + 90) -and $_.rect.width -ge 35 -and $_.rect.width -le 180
+    } | Sort-Object @{ Expression = { if ($RuntimeContext.TargetScreenIdRegex.IsMatch([string]$_.rawTitle)) { 0 } else { 1 } } }, { $_.rect.top }, { $_.rect.left } | Select-Object -First 1
+    if (-not $edit) { throw "HTS 화면번호 입력칸을 찾을 수 없습니다." }
+    $edit
+}
+
+function Test-HtsScreenNavigationInputAccess($ScreenEdit) {
+    $targetHwnd = [IntPtr][Int64]$ScreenEdit.hwnd
+    [IntPtr]$messageResult = [IntPtr]::Zero
+    $completed = [TargetRuleNative]::SendMessageTimeout($targetHwnd, $WM_GETTEXTLENGTH, [IntPtr]::Zero, [IntPtr]::Zero, 0x0002, 1200, [ref]$messageResult)
+    $nativeError = [Runtime.InteropServices.Marshal]::GetLastWin32Error()
+    if ($completed -eq [IntPtr]::Zero -and $nativeError -eq 5) {
+        throw "HTS_UI_ACCESS_DENIED: 화면번호 입력부 HWND=$([Int64]$ScreenEdit.hwnd)에 대한 Win32 메시지가 Access denied(5)로 차단되었습니다. HTS와 같은 권한 수준에서 실행해야 합니다."
+    }
+    if ($completed -eq [IntPtr]::Zero) {
+        throw "SCREEN_NAVIGATION_INPUT_UNAVAILABLE: 화면번호 입력부 HWND=$([Int64]$ScreenEdit.hwnd) 접근을 확인하지 못했습니다. win32Error=$nativeError"
+    }
+    [int]$messageResult.ToInt64()
+}
+
+function Set-HtsScreenNumber($ScreenEdit, [string]$ScreenNumber) {
+    [void](Test-HtsScreenNavigationInputAccess $ScreenEdit)
+    $uiaResult = Invoke-FlaUiControlAction $ScreenEdit 'setText' -Value $ScreenNumber
+    Start-Sleep -Milliseconds 180
+    $current = Get-WindowInfo ([IntPtr][Int64]$ScreenEdit.hwnd)
+    if ([string]$current.rawTitle -eq $ScreenNumber) {
+        Write-HtsInputBoundaryAudit 'ScreenNavigationText' 'ALLOWED' -1 -1 "engine=FlaUI.UIA3; value=$ScreenNumber; nativeTextVerified=True"
+        return
+    }
+
+    [IntPtr]$messageResult = [IntPtr]::Zero
+    $completed = [TargetRuleNative]::SendMessageTimeoutText([IntPtr][Int64]$ScreenEdit.hwnd, $WM_SETTEXT, [IntPtr]::Zero, $ScreenNumber, 0x0002, 1200, [ref]$messageResult)
+    $nativeError = [Runtime.InteropServices.Marshal]::GetLastWin32Error()
+    if ($completed -eq [IntPtr]::Zero -and $nativeError -eq 5) {
+        throw "HTS_UI_ACCESS_DENIED: UIA 화면번호 입력 결과를 네이티브로 확인하지 못했고 WM_SETTEXT도 Access denied(5)로 차단되었습니다. HTS와 같은 권한 수준에서 실행해야 합니다."
+    }
+    $current = Get-WindowInfo ([IntPtr][Int64]$ScreenEdit.hwnd)
+    if ([string]$current.rawTitle -eq $ScreenNumber) {
+        Write-HtsInputBoundaryAudit 'ScreenNavigationText' 'ALLOWED' -1 -1 "engine=Win32; value=$ScreenNumber; nativeTextVerified=True"
+        return
+    }
+    if ([bool]$uiaResult.success -and [bool]$uiaResult.verified) {
+        # 이 입력부는 값을 owner-drawn 래퍼에 그려 native window text가 비어 있을 수 있다.
+        # 값 입력은 UIA 패턴으로 확인하고, 뒤이어 업무 화면 생성으로 종단 간 검증한다.
+        Write-HtsInputBoundaryAudit 'ScreenNavigationText' 'ALLOWED' -1 -1 "engine=FlaUI.UIA3; value=$ScreenNumber; nativeTextVerified=False; ownerDrawn=True; screenCreationPending=True"
+        return
+    }
+    if ($completed -ne [IntPtr]::Zero) {
+        Write-HtsInputBoundaryAudit 'ScreenNavigationText' 'ALLOWED' -1 -1 "engine=Win32; value=$ScreenNumber; nativeTextVerified=False; ownerDrawn=True; screenCreationPending=True"
+        return
+    }
+    $uiaDetail = "success=$([bool]$uiaResult.success), verified=$([bool]$uiaResult.verified)"
+    throw "SCREEN_NAVIGATION_TEXT_UNVERIFIED: 화면번호 '$ScreenNumber' 입력을 확인하지 못했습니다. $uiaDetail; nativeText='$([string]$current.rawTitle)'; win32Error=$nativeError"
+}
+
+function Open-HtsScreen($NavigationContext, $Main, $ScreenEdit, [string]$ScreenNumber) {
+    Open-HtsNavigationScreen -Context $navigationContext -Main $Main -ScreenEdit $ScreenEdit -ScreenNumber $ScreenNumber
+}
+
+function Find-ScreenWindow($NavigationContext, $Main, [string]$ScreenNumber) {
+    Find-HtsNavigationScreenWindow -Context $navigationContext -Main $Main -ScreenNumber $ScreenNumber
+}
+
+function Get-HtsScreenNumber($NavigationContext, $Window) {
+    Get-HtsNavigationScreenNumber -Context $navigationContext -Window $Window
+}
+
+function Get-HtsScreenWindows($NavigationContext, $Main) {
+    @(Get-HtsNavigationScreenWindows -Context $navigationContext -Main $Main)
+}
+
+function Test-HtsRequestedScreen($NavigationContext, $Screen, [string]$ScreenNumber) {
+    Test-HtsNavigationRequestedScreen -Context $navigationContext -Screen $Screen -ScreenNumber $ScreenNumber
+}
+
+function Focus-HtsRequestedScreen($NavigationContext, $Main, $Screen, [string]$ScreenNumber) {
+    Focus-HtsNavigationRequestedScreen -Context $navigationContext -Main $Main -Screen $Screen -ScreenNumber $ScreenNumber
+}
+
+function Get-HtsLinkedScreens($NavigationContext, $Main, [string]$RequestedScreenNumber) {
+    @(Get-HtsNavigationLinkedScreens -Context $navigationContext -Main $Main -RequestedScreenNumber $RequestedScreenNumber)
+}
+
+function Close-HtsLinkedScreens($NavigationContext, $Main, [string]$RequestedScreenNumber) {
+    Close-HtsNavigationLinkedScreens -Context $navigationContext -Main $Main -RequestedScreenNumber $RequestedScreenNumber
+}
+
+function Get-HtsInputSurfaceScore($NavigationContext, $Window) {
+    Get-HtsNavigationInputSurfaceScore -Context $navigationContext -Window $Window
+}
+
+function Find-BestHtsContentSurface($NavigationContext, $Main, $RequestedWindow, [string]$RequestedScreenNumber, [Int64[]]$BaselineScreenHwnds = @()) {
+    Find-HtsNavigationBestContentSurface -Context $navigationContext -Main $Main -RequestedWindow $RequestedWindow -RequestedScreenNumber $RequestedScreenNumber -BaselineScreenHwnds $BaselineScreenHwnds
+}
+
+function Close-HtsScreen($NavigationContext, $Screen) {
+    Close-HtsNavigationScreen -Context $navigationContext -Screen $Screen
+}
+
+function Close-ExistingTargetScreens($NavigationContext, $Main) {
+    Close-HtsNavigationExistingTargetScreens -Context $navigationContext -Main $Main
+}
+
+function Test-PreservedTargetScreen($NavigationContext, $Window) {
+    Test-HtsNavigationPreservedTargetScreen -Context $navigationContext -Window $Window
+}
+
+function Close-ScreenSearchOverlays($NavigationContext, $Main) {
+    Close-HtsNavigationSearchOverlays -Context $navigationContext -Main $Main
+}
