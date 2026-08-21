@@ -141,3 +141,8 @@ function Get-HtsDiscoveredControls {
 
     @(Invoke-HtsDiscoveryDependency -Context $Context -Name 'GetRuleDiscoveredControls' -Arguments @($Screen, $ScreenNumber, $ClaimedHwnds))
 }
+
+# Rule-suite discovery adapter.
+function Get-FlaUiActionableControls($DiscoveryContext, $Screen) {
+    @(Get-HtsFlaUiActionableControls -Context $DiscoveryContext -Screen $Screen)
+}

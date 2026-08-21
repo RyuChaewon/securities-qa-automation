@@ -340,3 +340,8 @@ target rule adapter
 - FlaUI 호환 호출, 전경 검증, 키 입력, 입력창 포커스, 물리 클릭, 텍스트 입력과 승인된 거래 확인창 제출 helper를 `hts-action.ps1`로 이동했다.
 - `HtsActionContext`가 Session, Safety, Run context를 명시적으로 보유하며 이동된 UI 함수는 orchestration 지역 상태를 참조하지 않는다.
 - Action 모듈은 원시 action 결과만 반환하고 테스트 판정 또는 리포트 생성을 수행하지 않는다.
+
+### Discovery 잔여 helper 이동
+
+- rule-suite의 FlaUI actionable snapshot 호환 함수를 `hts-discovery.ps1`로 이동하고 `DiscoveryContext`를 명시적으로 전달한다.
+- orchestration에는 UIA 탐색 구현이 남아 있지 않다.

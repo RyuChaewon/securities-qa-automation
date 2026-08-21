@@ -345,7 +345,7 @@ $sessionContext = New-HtsSessionContext `
 . (Join-Path $PSScriptRoot "rule-control-exploration.ps1")
 $targetRuleDependencies = [pscustomobject]@{
     GetChildWindows = { param([Int64]$Hwnd) @(Get-ChildWindows $Hwnd) }
-    GetFlaUiActionableControls = { param($Screen) @(Get-FlaUiActionableControls $Screen) }
+    GetFlaUiActionableControls = { param($Screen) @(Get-FlaUiActionableControls $discoveryContext $Screen) }
     GetWindowInfo = { param([Int64]$Hwnd) Get-WindowInfo ([IntPtr]$Hwnd) }
     ClickCenter = { param($Window, [bool]$DoubleClick) Click-Center $actionContext $Window -DoubleClick:$DoubleClick }
     SendKey = { param([byte]$Key) Send-Key $actionContext $Key }
@@ -440,9 +440,6 @@ function Assert-HtsPhysicalCursorTarget($ClickWindow,$PhysicalPoint){Assert-HtsS
 # 기존 rule-control과 navigation 호출 계약을 보존하는 얇은 Action 어댑터다.
 
 # 기존 탐색 구현의 호출 계약을 유지하되 실제 UIA3 탐색과 계측은 Discovery 모듈에 위임한다.
-function Get-FlaUiActionableControls($Screen) {
-    @(Get-HtsFlaUiActionableControls -Context $discoveryContext -Screen $Screen)
-}
 
 # 공통 창·입력 유틸리티: 민감정보 보호와 모든 물리 입력의 HTS 경계 검사를 담당한다.
 

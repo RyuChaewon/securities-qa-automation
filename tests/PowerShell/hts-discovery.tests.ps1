@@ -66,5 +66,8 @@ Assert-Throws { Get-HtsDiscoveryMapScreenModel -Context $missing -ScreenNumber '
 $moduleText = Get-Content -LiteralPath (Join-Path $root 'scripts\modules\hts-discovery.ps1') -Raw
 Assert-True ($moduleText -notmatch '\$script:|\$global:') 'discovery module has no global or script-scoped runtime state'
 Assert-True ($moduleText -notmatch 'TestResult|ResultEvaluator|Set-Content|Add-Content') 'discovery module cannot evaluate or report results'
+Assert-True ($moduleText -match 'function Get-FlaUiActionableControls') 'discovery owns the rule-suite UIA snapshot adapter'
+$orchestrationText = Get-Content -LiteralPath (Join-Path $root 'scripts\modules\hts-rule-suite-orchestration.ps1') -Raw
+Assert-True ($orchestrationText -notmatch 'function Get-FlaUiActionableControls') 'orchestration no longer defines UIA discovery'
 
 Write-Output "HTS_DISCOVERY_TESTS=PASS assertions=$script:assertions"
