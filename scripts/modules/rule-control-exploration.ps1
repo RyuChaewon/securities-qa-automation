@@ -1,7 +1,7 @@
 ﻿<#
 .SYNOPSIS target-specific rule control 모듈의 호환 진입점이다.
-.DESCRIPTION Discovery, Binding, Action 구현을 고정된 순서로 로드한다.
-.NOTES 기존 dot-source 소비자를 유지하며 실행 로직은 하위 모듈에만 둔다.
+.DESCRIPTION Context와 Discovery, Binding, Action 선언을 기존 소비자에게 한 번에 제공한다.
+.NOTES 하위 모듈은 독립적으로 로드할 수 있으며 실행 로직과 상태는 명시적 context에만 둔다.
 #>
 . (Join-Path $PSScriptRoot 'hts-target-rule-context.ps1')
 . (Join-Path $PSScriptRoot 'hts-target-rule-discovery.ps1')

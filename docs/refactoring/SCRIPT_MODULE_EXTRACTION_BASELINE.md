@@ -391,3 +391,17 @@ target rule adapter
 - orchestration은 Approved TestPack 검증과 dry-run 반환 이후에만 네이티브 계약을 초기화한다.
 - orchestration의 mutable Win32 상수 변수를 제거하고 실제 호출 지점에 고정된 계약값을 사용한다.
 - 정적 네이티브 계약 컴파일만 검증했으며 user32 입력·창 제어 함수와 실제 HTS는 실행하지 않았다.
+
+## 9. 최종 후속 검증 결과
+
+| 검증 | 결과 | 실행 경계 |
+|---|---|---|
+| `.NET 8 Release build` | PASS, 경고 0·오류 0 | 컴파일만 수행 |
+| `.NET unit tests` | PASS, 91/91 | Core/CLI/FlaUI Fake·단위 경로 |
+| PowerShell parser | PASS, 58파일 오류 0 | 정적 구문 검사 |
+| PowerShell regression | PASS, 17스위트 | 외부 테스트 모듈 없는 회귀 |
+| Approved TestPack dry-run | PASS, 14 assertion | 결과 `PENDING`, FlaUI action 0 |
+| source-layout | PENDING, 종료 코드 1 | 기존 `scripts/import-0101-testcases.ps1:7` 대상별 production 기본값 1건 |
+| 실제 HTS/FlaUI 실행 | 미실행 | 주문·거래·이체·출금 및 실제 UI 입력 전부 금지 |
+
+최종 구조에서 `run-target-rule-suite.ps1`은 공개 인자 전달만, `hts-rule-suite-orchestration.ps1`은 context 조립과 단계 순서만 담당한다. target-specific 호환 진입점은 선언 전용 모듈 네 개를 제공하며 해당 모듈은 역순 로드 characterization에서도 공유 상태 없이 동작한다.
