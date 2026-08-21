@@ -365,3 +365,9 @@ target rule adapter
 - 창 열거, 자식 창, 화면번호, 민감정보 보호, 상대 증거 경로와 시각 의존성은 `ObservationContext.Dependencies`로 전달한다.
 - 로그 fallback 경로는 context의 HTS 설치 루트로 제한하며 기존 로그 모드·오류 필터·민감 로그 비수집 규칙을 유지한다.
 - Fake 소유 대화상자에서 오류 분류와 secret 마스킹을 검증했고, 실제 HTS 또는 화면 캡처는 실행하지 않았다.
+
+### 대화상자 복구 Action 이동
+
+- 취소·아니오·닫기 버튼 또는 `WM_CLOSE`로 비거래 팝업을 복구하는 `Dismiss-HtsDialogs`를 `hts-action.ps1`로 이동했다.
+- 연결 끊김·재접속·프로그램 종료 팝업은 기존처럼 닫기 대상에서 제외한다.
+- Action은 대화상자 관찰과 Session helper를 직접 탐색하지 않고 명시적 dependency와 `ActionContext`/`ObservationContext`를 사용한다.

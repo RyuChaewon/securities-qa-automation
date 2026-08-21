@@ -381,6 +381,10 @@ $actionDependencies = [pscustomobject]@{
     WriteInputAudit = { param([string]$InputType,[string]$Status,[int]$X,[int]$Y,[string]$Detail) Write-HtsSafetyInputBoundaryAudit -Context $safetyContext -InputType $InputType -Status $Status -X $X -Y $Y -Detail $Detail }
     InvokeRuleControlPlanItem = { param($Navigation,$Screen,$PlanItem) Invoke-RuleControlPlanItem $targetRuleContext $Navigation $Screen $PlanItem }
     InvokeRuleDatasetVariable = { param($Window,[string]$Kind,[string]$Value,[string]$ValueMatch,[int]$MaxOptions) Invoke-RuleDatasetVariable $targetRuleContext $Window $Kind $Value $ValueMatch $MaxOptions }
+    GetChildWindows = { param([Int64]$Hwnd) @(Get-ChildWindows $Hwnd) }
+    GetWindowInfo = { param([Int64]$Hwnd) Get-WindowInfo ([IntPtr]$Hwnd) }
+    GetDialogs = { param($Observation,$Run,$MainWindow,[string]$SecretText) @(Get-HtsDialogs $Observation $Run $MainWindow $SecretText) }
+    TestConnectionDialog = { param($Dialog) Test-HtsConnectionDialog $Dialog }
 }
 $actionContext = New-HtsActionContext -SessionContext $sessionContext -Metrics $automationMetrics -Dependencies $actionDependencies -RuntimeContext $runtimeContext
 $observationDependencies = [pscustomobject]@{
@@ -522,40 +526,6 @@ function Invoke-HtsRawObservationEvaluation(
 
 
 # 현재 대상 프로세스 팝업의 취소 계열 버튼 또는 WM_CLOSE를 사용해 다음 동작을 복구한다.
-function Dismiss-HtsDialogs($RuntimeContext, $Main, [string]$Secret = "") {
-    $dismissed = 0
-    foreach ($dialog in @(Get-HtsDialogs $observationContext $RuntimeContext $Main $Secret)) {
-        if (Test-HtsConnectionDialog $dialog) { continue }
-        $savedHwnd=[Int64]$safetyContext.ActiveInputSurfaceHwnd
-        $savedKind=[string]$safetyContext.ActiveInputSurfaceKind
-        $savedLabel=[string]$safetyContext.ActiveInputSurfaceLabel
-        try {
-            Set-HtsSafetyInputSurface -Context $safetyContext -Window $dialog.window -Kind 'Dialog' -Label "HTS 대화상자: $($dialog.title)"
-            [void][TargetRuleNative]::ShowWindow([IntPtr][Int64]$dialog.window.hwnd, 9)
-            [void][TargetRuleNative]::SetForegroundWindow([IntPtr][Int64]$dialog.window.hwnd)
-            $safeButtons = @(Get-ChildWindows ([Int64]$dialog.window.hwnd) | Where-Object {
-                $_.visible -and $_.enabled -and $_.className -like "*Button*" -and $_.rawTitle -match '^(취소|아니오|No|닫기|Close)$'
-            } | Sort-Object @{Expression={if($_.rawTitle -match '^(취소|아니오|No)$'){0}else{1}}}, {$_.rect.left})
-            if ($safeButtons.Count -gt 0) {
-                $dismissResult=Invoke-FlaUiControlAction $actionContext $safeButtons[0] 'invoke'
-                if(-not ([bool]$dismissResult.success -and [bool]$dismissResult.verified)){Click-Center $actionContext $safeButtons[0]}
-            } else {
-                [void][TargetRuleNative]::SendMessage([IntPtr][Int64]$dialog.window.hwnd, $WM_CLOSE, [IntPtr]::Zero, [IntPtr]::Zero)
-            }
-        } catch {
-            continue
-        } finally {
-            if($savedHwnd -ne 0 -and [TargetRuleNative]::IsWindow([IntPtr]$savedHwnd)){
-                try{Set-HtsSafetyInputSurface -Context $safetyContext -Window (Get-WindowInfo ([IntPtr]$savedHwnd)) -Kind $savedKind -Label $savedLabel}catch{Clear-HtsSafetyInputSurface -Context $safetyContext}
-            }else{
-                Clear-HtsSafetyInputSurface -Context $safetyContext
-            }
-        }
-        Start-Sleep -Milliseconds 500
-        if (-not [TargetRuleNative]::IsWindow([IntPtr][Int64]$dialog.window.hwnd)) { $dismissed++ }
-    }
-    $dismissed
-}
 
 # 발견 팝업을 예상 패턴과 MAP 근거에 대조하고 스크린샷 경로를 함께 저장한다.
 
@@ -820,7 +790,7 @@ for ($caseIndex = 0; $caseIndex -lt $cases.Count; $caseIndex++) {
         if ($previousPid -ne 0 -and $main.pid -ne $previousPid) {
             Add-HtsActionRecord $reportingContext $actions "recoverMainWindow" "PASS" "hfrun" "재접속 후 새 HTS 메인 창을 찾아 실행을 계속했습니다."
         }
-        [void](Dismiss-HtsDialogs $RuntimeContext $main $secret)
+        [void](Dismiss-HtsDialogs $actionContext $observationContext $RuntimeContext $main $secret)
         $startupConnectionDialogs = @(Get-HtsConnectionDialogs $observationContext $RuntimeContext $main $secret)
         if ($startupConnectionDialogs.Count -gt 0) {
             throw "HTS_CONNECTION_LOST: 연결 장애 대화상자가 남아 있어 사용자 판단 없이 실행을 중단했습니다. $([string]$startupConnectionDialogs[0].text)"
@@ -974,7 +944,7 @@ for ($caseIndex = 0; $caseIndex -lt $cases.Count; $caseIndex++) {
                             $observation=New-HtsDialogObservation -Context $observationContext $dialog $mapOracle $resolvedVariableExpectation $caseErrorRegex
                             Add-HtsOracleObservation -Context $observationContext $oracleEvents $observation 'dataset-variable' "dataset-variable:$name" ([string]$resolvedVariableExpectation.expectationId)
                         }
-                        [void](Dismiss-HtsDialogs $RuntimeContext $main $secret)
+                        [void](Dismiss-HtsDialogs $actionContext $observationContext $RuntimeContext $main $secret)
                     }
                 } else {
                     $required = ($null -eq $dimension.required -or [bool]$dimension.required)
@@ -1191,7 +1161,7 @@ for ($caseIndex = 0; $caseIndex -lt $cases.Count; $caseIndex++) {
                             if ($restoreDialogs.Count -eq 0) {
                                 $invoke=[pscustomobject]@{success=$true;queryEligible=$false;errorCode='';automationEngine='Safe dialog restore';output='복구할 팝업이 없어 현재 0101 상태를 유지했습니다.'}
                             } else {
-                                $dismissedCount = Dismiss-HtsDialogs $RuntimeContext $main $secret
+                                $dismissedCount = Dismiss-HtsDialogs $actionContext $observationContext $RuntimeContext $main $secret
                                 $remainingRestoreDialogs = @(Get-HtsDialogs $observationContext $RuntimeContext $main $secret | Where-Object { -not (Test-HtsConnectionDialog $_) })
                                 $restoreSucceeded = $remainingRestoreDialogs.Count -eq 0
                                 $invoke=[pscustomobject]@{success=$restoreSucceeded;queryEligible=$false;errorCode=$(if($restoreSucceeded){''}else{'RESTORE_DIALOG_NOT_DISMISSED'});automationEngine='Safe dialog restore';output="dismissed=$dismissedCount, remaining=$($remainingRestoreDialogs.Count)"}
@@ -1303,7 +1273,7 @@ for ($caseIndex = 0; $caseIndex -lt $cases.Count; $caseIndex++) {
                         }
                         $nextScenarioAction = if ($scenarioMode -and $planIndex + 1 -lt $queue.Count) { [string]$queue[$planIndex + 1].scenarioAction } else { '' }
                         if ($nextScenarioAction -notin @('AssertPopup','Restore')) {
-                            [void](Dismiss-HtsDialogs $RuntimeContext $main $secret)
+                            [void](Dismiss-HtsDialogs $actionContext $observationContext $RuntimeContext $main $secret)
                         }
                     }
 
@@ -1374,7 +1344,7 @@ for ($caseIndex = 0; $caseIndex -lt $cases.Count; $caseIndex++) {
                                 $observation=New-HtsDialogObservation -Context $observationContext $dialog $mapOracle $expectedOutcome $caseErrorRegex
                                 Add-HtsOracleObservation -Context $observationContext $oracleEvents $observation 'query-after-control' ([string]$planItem.control.controlId) ([string]$option.id)
                             }
-                            [void](Dismiss-HtsDialogs $RuntimeContext $main $secret)
+                            [void](Dismiss-HtsDialogs $actionContext $observationContext $RuntimeContext $main $secret)
                         }
                         $queryLinkedScreens=@(Get-HtsLinkedScreens $navigationContext $main $requestedScreenNumber)
                         if($queryLinkedScreens.Count -gt 0){
@@ -1568,7 +1538,7 @@ for ($caseIndex = 0; $caseIndex -lt $cases.Count; $caseIndex++) {
                                 $observation=New-HtsDialogObservation -Context $observationContext $dialog $mapOracle $caseExpectedOutcome $caseErrorRegex
                                 Add-HtsOracleObservation -Context $observationContext $oracleEvents $observation 'required-query'
                             }
-                            [void](Dismiss-HtsDialogs $RuntimeContext $main $secret)
+                            [void](Dismiss-HtsDialogs $actionContext $observationContext $RuntimeContext $main $secret)
                         }
                         $queryLinkedScreens=@(Get-HtsLinkedScreens $navigationContext $main $requestedScreenNumber)
                         $queryNavigationHandled=$false
@@ -1762,7 +1732,7 @@ for ($caseIndex = 0; $caseIndex -lt $cases.Count; $caseIndex++) {
     }
     $dialogsBeforeDismiss = if ($main) { @(Get-HtsDialogs $observationContext $RuntimeContext $main $secret) } else { @() }
     if ($dialogsBeforeDismiss.Count -gt 0) {
-        $dismissed = Dismiss-HtsDialogs $RuntimeContext $main $secret
+        $dismissed = Dismiss-HtsDialogs $actionContext $observationContext $RuntimeContext $main $secret
         Add-HtsActionRecord $reportingContext $actions "dismissDialog" $(if ($dismissed -eq $dialogsBeforeDismiss.Count) { "PASS" } else { "PENDING" }) "HTS dialog" "후속 테스트를 위해 HTS 대화상자 $dismissed/$($dialogsBeforeDismiss.Count)개를 닫았습니다." $(if ($dismissed -eq $dialogsBeforeDismiss.Count) { "" } else { "DIALOG_DISMISS_PENDING" })
         if ($dismissed -ne $dialogsBeforeDismiss.Count) { $pendingReasons.Add("HTS 대화상자 닫기") }
     }

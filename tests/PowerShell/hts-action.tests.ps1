@@ -76,10 +76,11 @@ Assert-True ($script:adapterCalls.Contains('plan') -and $script:adapterCalls.Con
 $moduleText = Get-Content -LiteralPath (Join-Path $root 'scripts\modules\hts-action.ps1') -Raw
 Assert-True ($moduleText -notmatch '\$script:|\$global:') 'action module has no global or script-scoped runtime state'
 Assert-True ($moduleText -notmatch 'ResultEvaluator|TestResult|Set-Content|Add-Content') 'action module cannot evaluate or report results'
-foreach ($name in @('Invoke-FlaUiControlAction','Send-Key','Click-Center','Set-AutomationText','Submit-HtsTransactionalDialog')) {
+foreach ($name in @('Invoke-FlaUiControlAction','Send-Key','Click-Center','Set-AutomationText','Submit-HtsTransactionalDialog','Dismiss-HtsDialogs')) {
     Assert-True ($moduleText -match "function $name") "action owns $name"
 }
 $orchestrationText = Get-Content -LiteralPath (Join-Path $root 'scripts\modules\hts-rule-suite-orchestration.ps1') -Raw
-Assert-True ($orchestrationText -notmatch 'function Invoke-FlaUiControlAction|function Click-Center|function Set-AutomationText') 'orchestration no longer defines UI action implementations'
+Assert-True ($orchestrationText -notmatch 'function Invoke-FlaUiControlAction|function Click-Center|function Set-AutomationText|function Dismiss-HtsDialogs') 'orchestration no longer defines UI action implementations'
+Assert-True ($moduleText-notmatch'(?m)^\s*[^#]*\b(Get-WindowInfo|Get-ChildWindows)\s') 'action uses explicit dependencies instead of session helper lookup'
 
 Write-Output "HTS_ACTION_TESTS=PASS assertions=$script:assertions"

@@ -268,7 +268,7 @@ function Click-Center($ActionContext, $Window, [switch]$DoubleClick) {
     $clickWindow=$Window
     if($Window -and $Window.PSObject.Properties.Name -contains 'hwnd' -and [Int64]$Window.hwnd -ne 0){
         if(-not [TargetRuleNative]::IsWindow([IntPtr][Int64]$Window.hwnd)){throw 'INPUT_SCOPE_BLOCKED: 클릭 직전에 대상 HWND가 사라졌습니다.'}
-        $clickWindow=Get-WindowInfo ([IntPtr][Int64]$Window.hwnd)
+        $clickWindow=Invoke-HtsActionDependency -Context $ActionContext -Name 'GetWindowInfo' -Arguments @([Int64]$Window.hwnd)
     }
     $x = [int](($clickWindow.rect.left + $clickWindow.rect.right) / 2)
     $y = [int](($clickWindow.rect.top + $clickWindow.rect.bottom) / 2)
@@ -366,7 +366,7 @@ function Set-AutomationText($ActionContext, $Window, [string]$Value, [switch]$Se
     $scopeWindow=$Window
     if($Window -and $Window.PSObject.Properties.Name -contains 'hwnd' -and [Int64]$Window.hwnd -ne 0){
         if(-not [TargetRuleNative]::IsWindow([IntPtr][Int64]$Window.hwnd)){throw 'INPUT_SCOPE_BLOCKED: 입력 직전에 대상 HWND가 사라졌습니다.'}
-        $scopeWindow=Get-WindowInfo ([IntPtr][Int64]$Window.hwnd)
+        $scopeWindow=Invoke-HtsActionDependency -Context $ActionContext -Name 'GetWindowInfo' -Arguments @([Int64]$Window.hwnd)
     }
     $scopeX=[int](($scopeWindow.rect.left+$scopeWindow.rect.right)/2)
     $scopeY=[int](($scopeWindow.rect.top+$scopeWindow.rect.bottom)/2)
@@ -393,7 +393,7 @@ function Set-AutomationText($ActionContext, $Window, [string]$Value, [switch]$Se
     }
     [void][TargetRuleNative]::SendMessage([IntPtr][Int64]$Window.hwnd, 0x000C, [IntPtr]::Zero, $Value)
     Start-Sleep -Milliseconds 150
-    $current = Get-WindowInfo ([IntPtr][Int64]$Window.hwnd)
+    $current = Invoke-HtsActionDependency -Context $ActionContext -Name 'GetWindowInfo' -Arguments @([Int64]$Window.hwnd)
     $length = [TargetRuleNative]::SendMessage([IntPtr][Int64]$Window.hwnd, 0x000E, [IntPtr]::Zero, [IntPtr]::Zero).ToInt64()
     $sentByVirtualKeys = $false
     $needsFallback = if ($Sensitive) { $length -le 0 } else { [string]$current.rawTitle -ne $Value }
@@ -416,7 +416,7 @@ function Set-AutomationText($ActionContext, $Window, [string]$Value, [switch]$Se
             [Windows.Forms.SendKeys]::SendWait($Value)
         }
         Start-Sleep -Milliseconds 150
-        $current = Get-WindowInfo ([IntPtr][Int64]$Window.hwnd)
+        $current = Invoke-HtsActionDependency -Context $ActionContext -Name 'GetWindowInfo' -Arguments @([Int64]$Window.hwnd)
         if (-not $Sensitive -and [string]$current.rawTitle -notlike "*$Value*") {
             Click-Center $ActionContext $inputPoint
             Assert-HtsSafetyKeyboardScope -Context $ActionContext.SafetyContext
@@ -428,7 +428,7 @@ function Set-AutomationText($ActionContext, $Window, [string]$Value, [switch]$Se
             Send-Key $ActionContext ([byte]0x56)
             [TargetRuleNative]::keybd_event([byte]0x11,0,0x0002,[UIntPtr]::Zero)
             Start-Sleep -Milliseconds 150
-            $current = Get-WindowInfo ([IntPtr][Int64]$Window.hwnd)
+            $current = Invoke-HtsActionDependency -Context $ActionContext -Name 'GetWindowInfo' -Arguments @([Int64]$Window.hwnd)
             $sentByVirtualKeys = $true
         }
         $length = [TargetRuleNative]::SendMessage([IntPtr][Int64]$Window.hwnd, 0x000E, [IntPtr]::Zero, [IntPtr]::Zero).ToInt64()
@@ -458,7 +458,7 @@ function Test-HtsTransactionalConfirmationDialog($Dialog, $PlanItem) {
 
 function Submit-HtsTransactionalDialog($ActionContext, $Dialog, $PlanItem) {
     $positiveButtonPattern = '^(확인|예|Yes|주문|주문전송|전송|매수주문|매도주문|정정주문|취소주문)$'
-    $buttons = @(Get-ChildWindows ([Int64]$Dialog.window.hwnd) | Where-Object {
+    $buttons = @(Invoke-HtsActionDependency -Context $ActionContext -Name 'GetChildWindows' -Arguments @([Int64]$Dialog.window.hwnd) | Where-Object {
         $_.visible -and $_.enabled -and $_.className -like '*Button*' -and $_.rawTitle -match $positiveButtonPattern
     } | Sort-Object @{Expression={
         if ($_.rawTitle -match '^(매수주문|매도주문|정정주문|취소주문)$') { 0 }
@@ -488,9 +488,44 @@ function Submit-HtsTransactionalDialog($ActionContext, $Dialog, $PlanItem) {
         [pscustomobject]@{success=$false;errorCode='TRANSACTION_CONFIRM_CLICK_FAILED';output=$_.Exception.Message}
     } finally {
         if($savedHwnd -ne 0 -and [TargetRuleNative]::IsWindow([IntPtr]$savedHwnd)){
-            try{Set-HtsSafetyInputSurface -Context $ActionContext.SafetyContext -Window (Get-WindowInfo ([IntPtr]$savedHwnd)) -Kind $savedKind -Label $savedLabel}catch{Clear-HtsSafetyInputSurface -Context $ActionContext.SafetyContext}
+            try{Set-HtsSafetyInputSurface -Context $ActionContext.SafetyContext -Window (Invoke-HtsActionDependency -Context $ActionContext -Name 'GetWindowInfo' -Arguments @($savedHwnd)) -Kind $savedKind -Label $savedLabel}catch{Clear-HtsSafetyInputSurface -Context $ActionContext.SafetyContext}
         }else{
             Clear-HtsSafetyInputSurface -Context $ActionContext.SafetyContext
         }
     }
+}
+
+function Dismiss-HtsDialogs($ActionContext, $ObservationContext, $RuntimeContext, $Main, [string]$Secret = "") {
+    $dismissed = 0
+    foreach ($dialog in @(Invoke-HtsActionDependency -Context $ActionContext -Name 'GetDialogs' -Arguments @($ObservationContext,$RuntimeContext,$Main,$Secret))) {
+        if ([bool](Invoke-HtsActionDependency -Context $ActionContext -Name 'TestConnectionDialog' -Arguments @($dialog))) { continue }
+        $savedHwnd=[Int64]$ActionContext.SafetyContext.ActiveInputSurfaceHwnd
+        $savedKind=[string]$ActionContext.SafetyContext.ActiveInputSurfaceKind
+        $savedLabel=[string]$ActionContext.SafetyContext.ActiveInputSurfaceLabel
+        try {
+            Set-HtsSafetyInputSurface -Context $ActionContext.SafetyContext -Window $dialog.window -Kind 'Dialog' -Label "HTS 대화상자: $($dialog.title)"
+            [void][TargetRuleNative]::ShowWindow([IntPtr][Int64]$dialog.window.hwnd, 9)
+            [void][TargetRuleNative]::SetForegroundWindow([IntPtr][Int64]$dialog.window.hwnd)
+            $safeButtons = @(Invoke-HtsActionDependency -Context $ActionContext -Name 'GetChildWindows' -Arguments @([Int64]$dialog.window.hwnd) | Where-Object {
+                $_.visible -and $_.enabled -and $_.className -like "*Button*" -and $_.rawTitle -match '^(취소|아니오|No|닫기|Close)$'
+            } | Sort-Object @{Expression={if($_.rawTitle -match '^(취소|아니오|No)$'){0}else{1}}}, {$_.rect.left})
+            if ($safeButtons.Count -gt 0) {
+                $dismissResult=Invoke-FlaUiControlAction $ActionContext $safeButtons[0] 'invoke'
+                if(-not ([bool]$dismissResult.success -and [bool]$dismissResult.verified)){Click-Center $ActionContext $safeButtons[0]}
+            } else {
+                [void][TargetRuleNative]::SendMessage([IntPtr][Int64]$dialog.window.hwnd, 0x0010, [IntPtr]::Zero, [IntPtr]::Zero)
+            }
+        } catch {
+            continue
+        } finally {
+            if($savedHwnd -ne 0 -and [TargetRuleNative]::IsWindow([IntPtr]$savedHwnd)){
+                try{Set-HtsSafetyInputSurface -Context $ActionContext.SafetyContext -Window (Invoke-HtsActionDependency -Context $ActionContext -Name 'GetWindowInfo' -Arguments @($savedHwnd)) -Kind $savedKind -Label $savedLabel}catch{Clear-HtsSafetyInputSurface -Context $ActionContext.SafetyContext}
+            }else{
+                Clear-HtsSafetyInputSurface -Context $ActionContext.SafetyContext
+            }
+        }
+        Start-Sleep -Milliseconds 500
+        if (-not [TargetRuleNative]::IsWindow([IntPtr][Int64]$dialog.window.hwnd)) { $dismissed++ }
+    }
+    $dismissed
 }
