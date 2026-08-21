@@ -1,0 +1,17 @@
+{
+  "runId": "reporting-golden-run",
+  "datasetId": "reporting-golden-dataset",
+  "targetDisplayName": "Fake HTS",
+  "status": "ERROR",
+  "dryRun": true,
+  "executionMode": "DryRun",
+  "inputMode": "Fixture",
+  "planner": "Deterministic",
+  "finishedAt": "2026-08-22T12:00:00+09:00",
+  "automationEngine": "Fake.UIA3",
+  "automationEngineVersion": "1.0",
+  "flaUiDiscoveryCalls": 0,
+  "flaUiActionAttempts": 0,
+  "flaUiActionSuccesses": 0,
+  "flaUiFallbackRequests": 0
+}

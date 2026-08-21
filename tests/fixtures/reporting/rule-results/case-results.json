@@ -1,0 +1,61 @@
+[
+  {
+    "runId": "reporting-golden-run",
+    "caseId": "CASE-PASS",
+    "screenNumber": "0001",
+    "screenName": "Fake Screen",
+    "inputMode": "Dataset",
+    "inputVariables": { "sample": "pass" },
+    "status": "PASS",
+    "productDefectDetected": false,
+    "actualScenarioActionsExecuted": true,
+    "testResult": { "caseId": "CASE-PASS", "status": "PASS", "executed": true, "evidencePresent": true, "code": "EXPECTED_OBSERVED", "reason": "fixture pass" },
+    "outputSummary": "fixture pass",
+    "actions": []
+  },
+  {
+    "runId": "reporting-golden-run",
+    "caseId": "CASE-FAIL",
+    "screenNumber": "0001",
+    "screenName": "Fake Screen",
+    "inputMode": "Dataset",
+    "inputVariables": { "sample": "fail" },
+    "status": "FAIL",
+    "productDefectDetected": true,
+    "actualScenarioActionsExecuted": true,
+    "testResult": { "caseId": "CASE-FAIL", "status": "FAIL", "executed": true, "evidencePresent": true, "code": "EXPECTED_MISMATCH", "reason": "fixture fail" },
+    "errorCode": "EXPECTED_MISMATCH",
+    "outputSummary": "fixture fail",
+    "actions": []
+  },
+  {
+    "runId": "reporting-golden-run",
+    "caseId": "CASE-ERROR",
+    "screenNumber": "0001",
+    "screenName": "Fake Screen",
+    "inputMode": "Dataset",
+    "inputVariables": { "sample": "error" },
+    "status": "ERROR",
+    "productDefectDetected": false,
+    "actualScenarioActionsExecuted": true,
+    "testResult": { "caseId": "CASE-ERROR", "status": "ERROR", "executed": true, "evidencePresent": true, "code": "INFRASTRUCTURE_ERROR", "reason": "fixture error" },
+    "errorCode": "INFRASTRUCTURE_ERROR",
+    "outputSummary": "fixture error",
+    "actions": []
+  },
+  {
+    "runId": "reporting-golden-run",
+    "caseId": "CASE-PENDING",
+    "screenNumber": "0001",
+    "screenName": "Fake Screen",
+    "inputMode": "Dataset",
+    "inputVariables": { "sample": "pending" },
+    "status": "PENDING",
+    "productDefectDetected": false,
+    "actualScenarioActionsExecuted": false,
+    "testResult": { "caseId": "CASE-PENDING", "status": "PENDING", "executed": false, "evidencePresent": false, "code": "NOT_EXECUTED", "reason": "fixture pending" },
+    "errorCode": "NOT_EXECUTED",
+    "outputSummary": "fixture pending",
+    "actions": []
+  }
+]

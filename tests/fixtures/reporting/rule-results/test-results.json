@@ -1,0 +1,12 @@
+{
+  "schemaVersion": "1.0",
+  "generatedAt": "2026-08-22T12:00:00+09:00",
+  "results": [
+    { "caseId": "CASE-PASS", "status": "PASS", "executed": true, "evidencePresent": true, "code": "EXPECTED_OBSERVED", "reason": "fixture pass" },
+    { "caseId": "CASE-FAIL", "status": "FAIL", "executed": true, "evidencePresent": true, "code": "EXPECTED_MISMATCH", "reason": "fixture fail" },
+    { "caseId": "CASE-ERROR", "status": "ERROR", "executed": true, "evidencePresent": true, "code": "INFRASTRUCTURE_ERROR", "reason": "fixture error" },
+    { "caseId": "CASE-PENDING", "status": "PENDING", "executed": false, "evidencePresent": false, "code": "NOT_EXECUTED", "reason": "fixture pending" }
+  ],
+  "summary": { "total": 4, "pass": 1, "fail": 1, "error": 1, "pending": 1 },
+  "overallResult": { "caseId": "RUN", "status": "ERROR", "executed": true, "evidencePresent": true, "code": "AGGREGATED", "reason": "fixture aggregate" }
+}
