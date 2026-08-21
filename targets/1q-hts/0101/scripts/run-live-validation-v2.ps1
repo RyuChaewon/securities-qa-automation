@@ -14,7 +14,8 @@ param(
 )
 
 $ErrorActionPreference = 'Stop'
-$root = Split-Path -Parent $PSScriptRoot
+$targetRoot = Split-Path -Parent $PSScriptRoot
+$root = [IO.Path]::GetFullPath((Join-Path $targetRoot '..\..\..'))
 
 if (-not $SuiteDir) {
     $SuiteDir = Join-Path $root ("outputs\0101_automation\live-validation-v2-" + (Get-Date -Format 'yyyyMMdd-HHmmss'))
@@ -38,7 +39,7 @@ if (-not $CaseIdsCsv) {
     $MaxCases = [Math]::Max($MaxCases, $selectedCases.Count)
 }
 
-$runner = Join-Path $PSScriptRoot 'run-target-rule-suite-recorded.ps1'
+$runner = Join-Path $root 'scripts\run-target-rule-suite-recorded.ps1'
 $runArguments = @{
     TestPackPath = $TestPackPath
     ScenarioPlanPath = $compiledPlanPath

@@ -15,6 +15,7 @@ const asArray = (value) => Array.isArray(value) ? value : value ? [value] : [];
 const summary = await readJson("summary.json", {});
 const results = asArray(await readJson("case-results.json", []));
 const compiledPlan = await readJson("compiled-plan.json", { cases: [] });
+const targetLabel = summary.targetDisplayName ?? summary.targetProfileId ?? summary.datasetId ?? compiledPlan.datasetId ?? "Target";
 const tcResults = results.filter((result) => result.sourceTestCaseId);
 const resultCaseIds = new Set(tcResults.map((result) => result.caseId));
 const notRun = asArray(compiledPlan.cases).filter((item) => item.sourceTestCaseId && !resultCaseIds.has(item.caseId));
@@ -124,7 +125,7 @@ const topErrors = [...errorStats.entries()].sort((left, right) => right[1] - lef
 
 analysisSheet.showGridLines = false;
 analysisSheet.mergeCells("A1:L2");
-analysisSheet.getRange("A1").values = [["0101 실행 결과 분석"]];
+analysisSheet.getRange("A1").values = [[`${targetLabel} 실행 결과 분석`]];
 analysisSheet.getRange("A1:L2").format = { fill: colors.navy, font: { bold: true, color: colors.white, size: 18 }, verticalAlignment: "center" };
 analysisSheet.getRange("A4:B4").values = [["핵심 지표", "값"]];
 analysisSheet.getRange("A4:B4").format = { fill: colors.teal, font: { bold: true, color: colors.white } };
@@ -228,7 +229,7 @@ analysisSheet.freezePanes.freezeRows(2);
 
 visualSheet.showGridLines = false;
 visualSheet.mergeCells("A1:L2");
-visualSheet.getRange("A1").values = [["0101 실행 결과 시각화"]];
+visualSheet.getRange("A1").values = [[`${targetLabel} 실행 결과 시각화`]];
 visualSheet.getRange("A1:L2").format = { fill: colors.navy, font: { bold: true, color: colors.white, size: 18 }, verticalAlignment: "center" };
 visualSheet.getRange("A4:B4").values = [["TC 상태", "건수"]];
 visualSheet.getRange("A5:A8").formulas = statusOrder.map((_status, index) => [`='결과분석'!A${13 + index}`]);
@@ -272,7 +273,7 @@ visualSheet.freezePanes.freezeRows(2);
 
 overview.showGridLines = false;
 overview.mergeCells("A1:H2");
-overview.getRange("A1").values = [["0101 TC 중심 테스트 실행결과"]];
+overview.getRange("A1").values = [[`${targetLabel} TC 중심 테스트 실행결과`]];
 overview.getRange("A1:H2").format = { fill: colors.navy, font: { bold: true, color: colors.white, size: 18 }, verticalAlignment: "center" };
 overview.getRange("A4:B4").values = [["지표", "값"]];
 overview.getRange("A4:B4").format = { fill: colors.teal, font: { bold: true, color: colors.white } };

@@ -39,7 +39,7 @@
     "id": "1q-hts-0101",
     "screenIds": ["0101"],
     "navigation": [
-      { "screenId": "0101", "menuId": "0101" }
+      { "screenId": "0101", "menuId": "0101", "displayName": "국내주식 매수주문" }
     ],
     "automationIds": [
       { "semanticId": "primaryStateSelector", "value": "TAB_Ord" },

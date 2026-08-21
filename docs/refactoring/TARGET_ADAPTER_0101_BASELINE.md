@@ -8,12 +8,12 @@
 
 | 책임 | 현재 generic 위치 | target 전용 내용 | 이동 목표 |
 |---|---|---|---|
-| 화면/창/MAP 식별 | `tools/import-0101-testcases.mjs`, 생성 dataset `targetProfile` | 화면 ID, 창 class/title, MAP family, 초기 MAP | `targets/1q-hts/0101/adapter.json` |
+| 화면/창/MAP 식별 | 이동 전 `tools/import-0101-testcases.mjs`, 생성 dataset `targetProfile` | 화면 ID, 창 class/title, MAP family, 초기 MAP | `targets/1q-hts/0101/target-profile.json` |
 | 상태형 탭 | importer, `hts-target-rule-discovery.ps1`, orchestration | `TAB_Ord`, 상태 context, option/verification control, `HT010115` | adapter의 `statefulControls` |
 | 거래 확인 대화상자 | `hts-action.ps1` | 주문 버튼별 logical name, 확인 문구와 승인 버튼 matcher | adapter의 `transactionalDialogs` |
 | 상태 저장/선행 검증 | target-rule context/discovery/orchestration | 주문 탭별 현재 상태와 Select/AssertSelected 선행 조건 | generic stateful-control 계약 |
-| 0101 import | `tools/import-0101-testcases.mjs`, `scripts/import-0101-testcases.ps1` | workbook 시트/열, MAP remap, 주문 탭 step 생성 | `targets/1q-hts/0101/tools/` |
-| 0101 live wrapper | `scripts/run-0101-live-validation-v2.*` | 0101 고정 입력/출력 및 실행 편의 기능 | `targets/1q-hts/0101/scripts/` |
+| 0101 import | 이동 전 `tools/import-0101-testcases.mjs`, `scripts/import-0101-testcases.ps1` | workbook 시트/열, MAP remap, 주문 탭 step 생성 | `targets/1q-hts/0101/tools/import-testcases.mjs` |
+| 0101 live wrapper | 이동 전 `scripts/run-0101-live-validation-v2.*` | 0101 고정 입력/출력 및 실행 편의 기능 | `targets/1q-hts/0101/scripts/run-live-validation-v2.*` |
 
 ## 이동 전 판정 행렬
 
@@ -38,7 +38,7 @@
 
 - Dataset `targetProfile`에 optional `adapter` 계약을 추가한다. 기존 targetProfile은 계속 읽을 수 있지만 target 전용 상태/대화상자 기능은 adapter가 있을 때만 활성화한다.
 - generic runner의 새 이름은 `TargetStateOverride`다. 기존 `OrderTabStateOverride` 호출은 PowerShell alias로 유지한다.
-- 0101 import/live wrapper 경로는 `targets/1q-hts/0101/` 아래로 이동한다. 저장소 내부 문서와 호출 예시는 새 경로로 갱신한다.
+- 0101 import/live wrapper 경로는 `targets/1q-hts/0101/` 아래로 이동했다. 저장소 내부 문서와 호출 예시는 새 경로를 사용한다.
 - Approved TestPack의 `datasetSnapshot.targetProfile.adapter`가 실행 계약의 단일 입력이다. Runner가 원본 dataset 또는 target 파일을 실행 중 다시 읽지 않는다.
 
 ## PENDING

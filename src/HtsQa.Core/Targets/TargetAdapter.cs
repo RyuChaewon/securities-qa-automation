@@ -8,6 +8,7 @@ public sealed record RuleTargetNavigationEntry
 {
     public string ScreenId { get; init; } = "";
     public string MenuId { get; init; } = "";
+    public string DisplayName { get; init; } = "";
 }
 
 public sealed record RuleTargetAutomationId

@@ -74,7 +74,7 @@ run-auto-scenario-pipeline.ps1
 
 ## 0101 주문 화면 자동화
 
-`tools/import-0101-testcases.mjs`는 `0101_TC` 시트만 읽어 `TC_ID`를 유지한 실행 시나리오로 변환한다. 0101에 속한 19개 MAP family를 모두 카탈로그화하며, 바인딩은 `내부화면코드|컨트롤ID|상태컨텍스트`를 사용한다. 매수·매도·정정/취소 탭은 좌표 클릭 후 해당 상태의 주문 버튼이 실제로 바인딩되었는지 `AssertSelected`로 확인한다.
+`targets/1q-hts/0101/tools/import-testcases.mjs`는 target profile과 `0101_TC` 시트를 읽어 `TC_ID`를 유지한 실행 시나리오로 변환한다. 0101에 속한 19개 MAP family를 모두 카탈로그화하며, 바인딩은 `내부화면코드|컨트롤ID|상태컨텍스트`를 사용한다. 화면·MAP·탭·버튼·확인 문구는 `targets/1q-hts/0101/target-profile.json`이 단일 소스다.
 
 현재 공개 산출물에는 승인된 1,239개 케이스와 6,730개 단계, MAP 모델, 정적 검증 및 대표 계획이 포함된다. 실제 화면 검증 상태와 공개 범위는 [0101_VALIDATION_STATUS.md](docs/0101_VALIDATION_STATUS.md), 실행 절차와 거래 안전 조건은 [0101_AUTOMATION.md](docs/0101_AUTOMATION.md)에 정리되어 있다.
 

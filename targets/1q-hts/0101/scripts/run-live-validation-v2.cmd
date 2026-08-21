@@ -6,7 +6,7 @@ if not "%errorlevel%"=="0" (
   exit /b
 )
 
-powershell.exe -NoProfile -ExecutionPolicy Bypass -File "%~dp0run-0101-live-validation-v2.ps1"
+powershell.exe -NoProfile -ExecutionPolicy Bypass -File "%~dp0run-live-validation-v2.ps1"
 set "EXIT_CODE=%errorlevel%"
 echo.
 echo 0101 live validation exit code: %EXIT_CODE%

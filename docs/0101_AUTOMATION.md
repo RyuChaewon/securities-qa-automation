@@ -5,7 +5,7 @@
 `0101_TC`만 구조화된 입력으로 사용하고 참고 시트의 문장은 실행 지시로 해석하지 않는다.
 
 ```powershell
-pwsh -ExecutionPolicy Bypass -File scripts/import-0101-testcases.ps1 `
+pwsh -ExecutionPolicy Bypass -File targets/1q-hts/0101/scripts/import-testcases.ps1 `
   -WorkbookPath "<0101 테스트케이스.xlsx>" `
   -AccountId "0101-test-account"
 ```
@@ -74,7 +74,7 @@ pwsh -ExecutionPolicy Bypass -File scripts/run-target-rule-suite-recorded.ps1 `
 사용자가 미리 열어둔 0101을 그대로 검증할 때는 0101 전용 래퍼를 사용한다.
 
 ```powershell
-pwsh -ExecutionPolicy Bypass -File scripts/run-0101-live-validation-v2.ps1 `
+pwsh -ExecutionPolicy Bypass -File targets/1q-hts/0101/scripts/run-live-validation-v2.ps1 `
   -TestPackPath outputs/0101_automation/approved-test-pack.json `
   -SourceTestCaseIdsCsv "0101-CMD-0901,0101-CTL-0101" `
   -MaxCases 2
@@ -96,7 +96,7 @@ pwsh -ExecutionPolicy Bypass -File scripts/run-0101-live-validation-v2.ps1 `
 기본 실행은 주문 버튼을 눌러 새 확인 팝업을 검증하되 최종 전송은 하지 않는다. 승인된 테스트 계좌에서 확인 팝업의 주문 제출까지 수행하려면 `-SubmitTransactionalDialogs`를 명시한다. 이 옵션은 승인된 시나리오 계획을 사용하는 실제 실행에서만 허용되며 입력 오류·시스템 오류·의미가 불명확한 팝업은 제출하지 않는다.
 
 ```powershell
-pwsh -ExecutionPolicy Bypass -File scripts/run-0101-live-validation-v2.ps1 `
+pwsh -ExecutionPolicy Bypass -File targets/1q-hts/0101/scripts/run-live-validation-v2.ps1 `
   -SourceTestCaseIdsCsv "<승인된 거래 TC_ID>" `
   -SubmitTransactionalDialogs
 ```
