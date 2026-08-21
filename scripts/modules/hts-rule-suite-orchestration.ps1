@@ -375,10 +375,10 @@ $bindingDependencies = [pscustomobject]@{
 }
 $bindingContext = New-HtsBindingContext -DiscoveryContext $discoveryContext -Dependencies $bindingDependencies
 $actionDependencies = [pscustomobject]@{
-    AssertClickScope = { param($Window,[int]$X,[int]$Y) Assert-HtsClickScope $Window $X $Y }
-    GetActiveInputSurface = { Get-HtsActiveInputSurface }
+    AssertClickScope = { param($Window,[int]$X,[int]$Y) Assert-HtsSafetyClickScope -Context $safetyContext -Window $Window -X $X -Y $Y }
+    GetActiveInputSurface = { Get-HtsSafetyActiveInputSurface -Context $safetyContext }
     InvokeBridgeRequest = { param($Context,$Request) Invoke-FlaUiBridgeRequest -Context $Context -Request $Request }
-    WriteInputAudit = { param([string]$InputType,[string]$Status,[int]$X,[int]$Y,[string]$Detail) Write-HtsInputBoundaryAudit $InputType $Status $X $Y $Detail }
+    WriteInputAudit = { param([string]$InputType,[string]$Status,[int]$X,[int]$Y,[string]$Detail) Write-HtsSafetyInputBoundaryAudit -Context $safetyContext -InputType $InputType -Status $Status -X $X -Y $Y -Detail $Detail }
     InvokeRuleControlPlanItem = { param($Navigation,$Screen,$PlanItem) Invoke-RuleControlPlanItem $targetRuleContext $Navigation $Screen $PlanItem }
     InvokeRuleDatasetVariable = { param($Window,[string]$Kind,[string]$Value,[string]$ValueMatch,[int]$MaxOptions) Invoke-RuleDatasetVariable $targetRuleContext $Window $Kind $Value $ValueMatch $MaxOptions }
 }
@@ -427,15 +427,6 @@ $safetyDependencies = [pscustomobject]@{
 }
 $safetyContext = New-HtsSafetyContext -AuditPath $inputBoundaryAuditPath -Dependencies $safetyDependencies
 $actionContext.SafetyContext = $safetyContext
-function Test-HtsPointInRect([int]$X,[int]$Y,$Rect){Test-HtsSafetyPointInRect $X $Y $Rect}
-function Clear-HtsInputSurface { Clear-HtsSafetyInputSurface -Context $safetyContext }
-function Set-HtsInputSurface($Window,[string]$Kind,[string]$Label=''){Set-HtsSafetyInputSurface -Context $safetyContext -Window $Window -Kind $Kind -Label $Label}
-function Get-HtsActiveInputSurface { Get-HtsSafetyActiveInputSurface -Context $safetyContext }
-function Assert-HtsClickScope($Window,[int]$X,[int]$Y){Assert-HtsSafetyClickScope -Context $safetyContext -Window $Window -X $X -Y $Y}
-function Assert-HtsKeyboardScope { Assert-HtsSafetyKeyboardScope -Context $safetyContext }
-function Write-HtsInputBoundaryAudit([string]$InputType,[string]$Status,[int]$X=-1,[int]$Y=-1,[string]$Detail=''){Write-HtsSafetyInputBoundaryAudit -Context $safetyContext -InputType $InputType -Status $Status -X $X -Y $Y -Detail $Detail}
-function Assert-HtsPhysicalPointOwner([int]$LogicalX,[int]$LogicalY,[int]$PhysicalX,[int]$PhysicalY){Assert-HtsSafetyPointOwner -Context $safetyContext -LogicalX $LogicalX -LogicalY $LogicalY -PhysicalX $PhysicalX -PhysicalY $PhysicalY}
-function Assert-HtsPhysicalCursorTarget($ClickWindow,$PhysicalPoint){Assert-HtsSafetyCursorTarget -Context $safetyContext -ClickWindow $ClickWindow -PhysicalPoint $PhysicalPoint}
 
 # 기존 rule-control과 navigation 호출 계약을 보존하는 얇은 Action 어댑터다.
 
@@ -634,7 +625,7 @@ function Dismiss-HtsDialogs($RuntimeContext, $Main, [string]$Secret = "") {
         $savedKind=[string]$safetyContext.ActiveInputSurfaceKind
         $savedLabel=[string]$safetyContext.ActiveInputSurfaceLabel
         try {
-            Set-HtsInputSurface $dialog.window 'Dialog' "HTS 대화상자: $($dialog.title)"
+            Set-HtsSafetyInputSurface -Context $safetyContext -Window $dialog.window -Kind 'Dialog' -Label "HTS 대화상자: $($dialog.title)"
             [void][TargetRuleNative]::ShowWindow([IntPtr][Int64]$dialog.window.hwnd, 9)
             [void][TargetRuleNative]::SetForegroundWindow([IntPtr][Int64]$dialog.window.hwnd)
             $safeButtons = @(Get-ChildWindows ([Int64]$dialog.window.hwnd) | Where-Object {
@@ -650,9 +641,9 @@ function Dismiss-HtsDialogs($RuntimeContext, $Main, [string]$Secret = "") {
             continue
         } finally {
             if($savedHwnd -ne 0 -and [TargetRuleNative]::IsWindow([IntPtr]$savedHwnd)){
-                try{Set-HtsInputSurface (Get-WindowInfo ([IntPtr]$savedHwnd)) $savedKind $savedLabel}catch{Clear-HtsInputSurface}
+                try{Set-HtsSafetyInputSurface -Context $safetyContext -Window (Get-WindowInfo ([IntPtr]$savedHwnd)) -Kind $savedKind -Label $savedLabel}catch{Clear-HtsSafetyInputSurface -Context $safetyContext}
             }else{
-                Clear-HtsInputSurface
+                Clear-HtsSafetyInputSurface -Context $safetyContext
             }
         }
         Start-Sleep -Milliseconds 500
@@ -930,7 +921,7 @@ $navigationDependencies = [pscustomobject]@{
         }
         [void][TargetRuleNative]::BringWindowToTop($screenHwnd)
     }
-    SetInputSurface = { param($Window, [string]$Kind, [string]$Label) Set-HtsInputSurface $Window $Kind $Label }
+    SetInputSurface = { param($Window, [string]$Kind, [string]$Label) Set-HtsSafetyInputSurface -Context $safetyContext -Window $Window -Kind $Kind -Label $Label }
     SetScreenNumber = { param($ScreenEdit, [string]$ScreenNumber) Set-HtsScreenNumber $ScreenEdit $ScreenNumber }
     InvokeControlAction = {
         param($Window, [string]$Action, [string]$Key)
@@ -952,7 +943,7 @@ $navigationDependencies = [pscustomobject]@{
     CloseWindow = { param($Window) [void][TargetRuleNative]::SendMessage([IntPtr][Int64]$Window.hwnd, $WM_CLOSE, [IntPtr]::Zero, [IntPtr]::Zero) }
     ClearInputSurfaceForWindow = {
         param($Window)
-        if ([Int64]$safetyContext.ActiveInputSurfaceHwnd -eq [Int64]$Window.hwnd) { Clear-HtsInputSurface }
+        if ([Int64]$safetyContext.ActiveInputSurfaceHwnd -eq [Int64]$Window.hwnd) { Clear-HtsSafetyInputSurface -Context $safetyContext }
     }
 }
 $navigationContext = New-HtsNavigationContext `
@@ -976,7 +967,7 @@ try {
     Set-HtsSafetySession -Context $safetyContext -Main $main
     [void][TargetRuleNative]::ShowWindow([IntPtr][Int64]$main.hwnd, 9)
     [void][TargetRuleNative]::SetForegroundWindow([IntPtr][Int64]$main.hwnd)
-    Set-HtsInputSurface $main 'Main' 'HTS 메인 사전점검'
+    Set-HtsSafetyInputSurface -Context $safetyContext -Window $main -Kind 'Main' -Label 'HTS 메인 사전점검'
     $screenEdit = Find-ScreenNumberEdit $RuntimeContext $main
 } catch {
     $_.Exception.ToString() | Set-Content -LiteralPath (Join-Path $ReportDir "환경사전점검오류.txt") -Encoding UTF8

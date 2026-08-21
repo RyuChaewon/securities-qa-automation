@@ -69,4 +69,8 @@ Assert-Throws {Get-HtsSafetyActiveInputSurface -Context $context} '활성 입력
 $moduleText=Get-Content -LiteralPath (Join-Path $root 'scripts\modules\hts-safety.ps1') -Raw
 Assert-True ($moduleText-notmatch'\$script:|\$global:') 'safety module has no global or script-scoped runtime state'
 Assert-True ($moduleText-notmatch'ResultEvaluator|TestResult|Invoke-RuleResultEvaluation') 'safety module cannot evaluate test results'
+$orchestrationText=Get-Content -LiteralPath (Join-Path $root 'scripts\modules\hts-rule-suite-orchestration.ps1') -Raw
+Assert-True ($orchestrationText-notmatch'function (Test-HtsPointInRect|Clear-HtsInputSurface|Set-HtsInputSurface|Get-HtsActiveInputSurface|Assert-HtsClickScope|Assert-HtsKeyboardScope|Write-HtsInputBoundaryAudit|Assert-HtsPhysicalPointOwner|Assert-HtsPhysicalCursorTarget)') 'orchestration no longer owns safety adapters'
+$actionText=Get-Content -LiteralPath (Join-Path $root 'scripts\modules\hts-action.ps1') -Raw
+Assert-True ($actionText-match'Assert-HtsSafetyClickScope -Context \$ActionContext\.SafetyContext') 'physical action passes an explicit safety context'
 Write-Output "HTS_SAFETY_TESTS=PASS assertions=$script:assertions"

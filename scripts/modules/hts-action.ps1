@@ -217,9 +217,9 @@ function Send-Key($ActionContext, [byte]$Key) {
     for($attempt=0;$attempt -lt 3;$attempt++){
         try{Assert-HtsForeground $ActionContext;$foregroundReady=$true;break}catch{$foregroundError=$_.Exception.Message;Start-Sleep -Milliseconds 250}
     }
-    if(-not $foregroundReady){Write-HtsInputBoundaryAudit 'Keyboard' 'BLOCKED' -1 -1 $foregroundError;throw $foregroundError}
-    try{Assert-HtsKeyboardScope}catch{Write-HtsInputBoundaryAudit 'Keyboard' 'BLOCKED' -1 -1 $_.Exception.Message;throw}
-    Write-HtsInputBoundaryAudit 'Keyboard' 'ALLOWED' -1 -1 ("VK={0}" -f $Key)
+    if(-not $foregroundReady){Write-HtsSafetyInputBoundaryAudit -Context $ActionContext.SafetyContext -InputType 'Keyboard' -Status 'BLOCKED' -X -1 -Y -1 -Detail $foregroundError;throw $foregroundError}
+    try{Assert-HtsSafetyKeyboardScope -Context $ActionContext.SafetyContext}catch{Write-HtsSafetyInputBoundaryAudit -Context $ActionContext.SafetyContext -InputType 'Keyboard' -Status 'BLOCKED' -X -1 -Y -1 -Detail $_.Exception.Message;throw}
+    Write-HtsSafetyInputBoundaryAudit -Context $ActionContext.SafetyContext -InputType 'Keyboard' -Status 'ALLOWED' -X -1 -Y -1 -Detail ("VK={0}" -f $Key)
     [TargetRuleNative]::keybd_event($Key, 0, 0, [UIntPtr]::Zero)
     Start-Sleep -Milliseconds 30
     [TargetRuleNative]::keybd_event($Key, 0, 0x0002, [UIntPtr]::Zero)
@@ -252,10 +252,10 @@ function Focus-HtsInputWindow($ActionContext, $Window) {
     $focus = [Int64]$info.hwndFocus.ToInt64()
     if ($focus -ne [Int64]$targetHwnd) {
         $detail = "expected=$([Int64]$targetHwnd), actual=$focus, targetThread=$targetThread, currentThread=$currentThread, attached=$attached"
-        Write-HtsInputBoundaryAudit 'KeyboardFocus' 'BLOCKED' -1 -1 $detail
+        Write-HtsSafetyInputBoundaryAudit -Context $ActionContext.SafetyContext -InputType 'KeyboardFocus' -Status 'BLOCKED' -X -1 -Y -1 -Detail $detail
         throw "INPUT_SCOPE_BLOCKED: 화면번호 입력창 포커스를 검증하지 못했습니다. $detail"
     }
-    Write-HtsInputBoundaryAudit 'KeyboardFocus' 'ALLOWED' -1 -1 "targetHwnd=$([Int64]$targetHwnd)"
+    Write-HtsSafetyInputBoundaryAudit -Context $ActionContext.SafetyContext -InputType 'KeyboardFocus' -Status 'ALLOWED' -X -1 -Y -1 -Detail "targetHwnd=$([Int64]$targetHwnd)"
 }
 
 function Click-Center($ActionContext, $Window, [switch]$DoubleClick) {
@@ -264,7 +264,7 @@ function Click-Center($ActionContext, $Window, [switch]$DoubleClick) {
     for($attempt=0;$attempt -lt 3;$attempt++){
         try{Assert-HtsForeground $ActionContext;$foregroundReady=$true;break}catch{$foregroundError=$_.Exception.Message;Start-Sleep -Milliseconds 250}
     }
-    if(-not $foregroundReady){Write-HtsInputBoundaryAudit 'MouseClick' 'BLOCKED' -1 -1 $foregroundError;throw $foregroundError}
+    if(-not $foregroundReady){Write-HtsSafetyInputBoundaryAudit -Context $ActionContext.SafetyContext -InputType 'MouseClick' -Status 'BLOCKED' -X -1 -Y -1 -Detail $foregroundError;throw $foregroundError}
     $clickWindow=$Window
     if($Window -and $Window.PSObject.Properties.Name -contains 'hwnd' -and [Int64]$Window.hwnd -ne 0){
         if(-not [TargetRuleNative]::IsWindow([IntPtr][Int64]$Window.hwnd)){throw 'INPUT_SCOPE_BLOCKED: 클릭 직전에 대상 HWND가 사라졌습니다.'}
@@ -272,7 +272,7 @@ function Click-Center($ActionContext, $Window, [switch]$DoubleClick) {
     }
     $x = [int](($clickWindow.rect.left + $clickWindow.rect.right) / 2)
     $y = [int](($clickWindow.rect.top + $clickWindow.rect.bottom) / 2)
-    try{Assert-HtsClickScope $clickWindow $x $y}catch{Write-HtsInputBoundaryAudit 'MouseClick' 'BLOCKED' $x $y $_.Exception.Message;throw}
+    try{Assert-HtsSafetyClickScope -Context $ActionContext.SafetyContext -Window $clickWindow -X $x -Y $y}catch{Write-HtsSafetyInputBoundaryAudit -Context $ActionContext.SafetyContext -InputType 'MouseClick' -Status 'BLOCKED' -X $x -Y $y -Detail $_.Exception.Message;throw}
     $physicalPoint = New-Object TargetRuleNative+POINT
     $physicalPoint.X = $x
     $physicalPoint.Y = $y
@@ -282,7 +282,7 @@ function Click-Center($ActionContext, $Window, [switch]$DoubleClick) {
         $dpi = if ($mainHwnd -ne [IntPtr]::Zero) { [int][TargetRuleNative]::GetDpiForWindow($mainHwnd) } else { 96 }
         if ($dpi -ne 96) {
             $message = "DPI_POINT_CONVERSION_FAILED: logical=($x,$y), dpi=$dpi"
-            Write-HtsInputBoundaryAudit 'MouseClick' 'BLOCKED' $x $y $message
+            Write-HtsSafetyInputBoundaryAudit -Context $ActionContext.SafetyContext -InputType 'MouseClick' -Status 'BLOCKED' -X $x -Y $y -Detail $message
             throw $message
         }
     }
@@ -293,7 +293,7 @@ function Click-Center($ActionContext, $Window, [switch]$DoubleClick) {
     for($attempt=0;$attempt -lt 3;$attempt++){
         try{
             Assert-HtsForeground $ActionContext
-            Assert-HtsPhysicalPointOwner $x $y $physicalX $physicalY
+            Assert-HtsSafetyPointOwner -Context $ActionContext.SafetyContext -LogicalX $x -LogicalY $y -PhysicalX $physicalX -PhysicalY $physicalY
             $ownerReady=$true
             break
         }catch{
@@ -302,14 +302,14 @@ function Click-Center($ActionContext, $Window, [switch]$DoubleClick) {
         }
     }
     if(-not $ownerReady){
-        Write-HtsInputBoundaryAudit 'MouseClick' 'BLOCKED' $physicalX $physicalY $ownerError
+        Write-HtsSafetyInputBoundaryAudit -Context $ActionContext.SafetyContext -InputType 'MouseClick' -Status 'BLOCKED' -X $physicalX -Y $physicalY -Detail $ownerError
         throw $ownerError
     }
     $targetName = if($clickWindow.rawTitle){[string]$clickWindow.rawTitle}else{[string]$clickWindow.className}
     $previousDpiContext=[TargetRuleNative]::SetThreadDpiAwarenessContext([IntPtr](-4))
     if($previousDpiContext -eq [IntPtr]::Zero){
         $message="DPI_THREAD_CONTEXT_FAILED: logical=($x,$y), physical=($physicalX,$physicalY)"
-        Write-HtsInputBoundaryAudit 'MouseClick' 'BLOCKED' $physicalX $physicalY $message
+        Write-HtsSafetyInputBoundaryAudit -Context $ActionContext.SafetyContext -InputType 'MouseClick' -Status 'BLOCKED' -X $physicalX -Y $physicalY -Detail $message
         throw $message
     }
     $actualPoint=New-Object TargetRuleNative+POINT
@@ -337,7 +337,7 @@ function Click-Center($ActionContext, $Window, [switch]$DoubleClick) {
         if(-not [TargetRuleNative]::GetPhysicalCursorPos([ref]$actualPoint) -or [Math]::Abs([int]$actualPoint.X-$physicalX)-gt1 -or [Math]::Abs([int]$actualPoint.Y-$physicalY)-gt1){
             throw "PHYSICAL_CURSOR_VERIFY_FAILED: expected=($physicalX,$physicalY), actual=($([int]$actualPoint.X),$([int]$actualPoint.Y))"
         }
-        $targetHit=Assert-HtsPhysicalCursorTarget $clickWindow $actualPoint
+        $targetHit=Assert-HtsSafetyCursorTarget -Context $ActionContext.SafetyContext -ClickWindow $clickWindow -PhysicalPoint $actualPoint
         if ($ActionContext.RuntimeContext.PointerDwellMilliseconds -gt 0) { Start-Sleep -Milliseconds $ActionContext.RuntimeContext.PointerDwellMilliseconds }
         if(-not [TargetRuleNative]::SendLeftClick()){
             $nativeError=[Runtime.InteropServices.Marshal]::GetLastWin32Error()
@@ -352,12 +352,12 @@ function Click-Center($ActionContext, $Window, [switch]$DoubleClick) {
             }
         }
     } catch {
-        Write-HtsInputBoundaryAudit 'MouseClick' 'BLOCKED' $physicalX $physicalY $_.Exception.Message
+        Write-HtsSafetyInputBoundaryAudit -Context $ActionContext.SafetyContext -InputType 'MouseClick' -Status 'BLOCKED' -X $physicalX -Y $physicalY -Detail $_.Exception.Message
         throw
     } finally {
         [void][TargetRuleNative]::SetThreadDpiAwarenessContext($previousDpiContext)
     }
-    Write-HtsInputBoundaryAudit 'MouseClick' 'ALLOWED' $physicalX $physicalY "$targetName; logical=($x,$y); physicalTarget=($physicalX,$physicalY); physicalVerified=($([int]$actualPoint.X),$([int]$actualPoint.Y)); targetHwnd=$([Int64]$targetHit.targetHwnd); hitHwnd=$([Int64]$targetHit.hitHwnd); dpiThreadContext=PER_MONITOR_AWARE_V2; coordinateSpace=physical; inputEngine=SendInput; clickCount=$(if($DoubleClick){2}else{1}); visiblePointerMotion=$([bool]$ActionContext.RuntimeContext.VisiblePointerMotion); dwellMs=$([int]$ActionContext.RuntimeContext.PointerDwellMilliseconds)"
+    Write-HtsSafetyInputBoundaryAudit -Context $ActionContext.SafetyContext -InputType 'MouseClick' -Status 'ALLOWED' -X $physicalX -Y $physicalY -Detail "$targetName; logical=($x,$y); physicalTarget=($physicalX,$physicalY); physicalVerified=($([int]$actualPoint.X),$([int]$actualPoint.Y)); targetHwnd=$([Int64]$targetHit.targetHwnd); hitHwnd=$([Int64]$targetHit.hitHwnd); dpiThreadContext=PER_MONITOR_AWARE_V2; coordinateSpace=physical; inputEngine=SendInput; clickCount=$(if($DoubleClick){2}else{1}); visiblePointerMotion=$([bool]$ActionContext.RuntimeContext.VisiblePointerMotion); dwellMs=$([int]$ActionContext.RuntimeContext.PointerDwellMilliseconds)"
     Start-Sleep -Milliseconds 120
 }
 
@@ -370,7 +370,7 @@ function Set-AutomationText($ActionContext, $Window, [string]$Value, [switch]$Se
     }
     $scopeX=[int](($scopeWindow.rect.left+$scopeWindow.rect.right)/2)
     $scopeY=[int](($scopeWindow.rect.top+$scopeWindow.rect.bottom)/2)
-    Assert-HtsClickScope $scopeWindow $scopeX $scopeY
+    Assert-HtsSafetyClickScope -Context $ActionContext.SafetyContext -Window $scopeWindow -X $scopeX -Y $scopeY
     if (-not ([Int64]$Window.hwnd -eq 0 -and $Window.className -eq "ConfiguredVisualHotspot")) {
         $flaUiResult = Invoke-FlaUiControlAction $ActionContext $Window 'setText' -Value $Value
         if ([bool]$flaUiResult.success -and [bool]$flaUiResult.verified) {
@@ -381,12 +381,12 @@ function Set-AutomationText($ActionContext, $Window, [string]$Value, [switch]$Se
     if ([Int64]$Window.hwnd -eq 0 -and $Window.className -eq "ConfiguredVisualHotspot") {
         if ($Sensitive) { return $false }
         if (-not $AlreadyFocused) { Click-Center $ActionContext $Window }
-        Assert-HtsKeyboardScope
+        Assert-HtsSafetyKeyboardScope -Context $ActionContext.SafetyContext
         [TargetRuleNative]::keybd_event([byte]0x11, 0, 0, [UIntPtr]::Zero)
         Send-Key $ActionContext ([byte]0x41)
         [TargetRuleNative]::keybd_event([byte]0x11, 0, 0x0002, [UIntPtr]::Zero)
         Send-Key $ActionContext ([byte]0x08)
-        Assert-HtsKeyboardScope
+        Assert-HtsSafetyKeyboardScope -Context $ActionContext.SafetyContext
         [Windows.Forms.SendKeys]::SendWait($Value)
         Start-Sleep -Milliseconds 200
         return $true
@@ -400,7 +400,7 @@ function Set-AutomationText($ActionContext, $Window, [string]$Value, [switch]$Se
     if ($needsFallback) {
         $inputPoint = [pscustomobject]@{rect=[pscustomobject]@{left=$Window.rect.left;right=[Math]::Min($Window.rect.right,$Window.rect.left+48);top=$Window.rect.top;bottom=$Window.rect.bottom}}
         if (-not $AlreadyFocused) { Click-Center $ActionContext $inputPoint }
-        Assert-HtsKeyboardScope
+        Assert-HtsSafetyKeyboardScope -Context $ActionContext.SafetyContext
         [TargetRuleNative]::keybd_event([byte]0x11, 0, 0, [UIntPtr]::Zero)
         Send-Key $ActionContext ([byte]0x41)
         [TargetRuleNative]::keybd_event([byte]0x11, 0, 0x0002, [UIntPtr]::Zero)
@@ -412,14 +412,14 @@ function Set-AutomationText($ActionContext, $Window, [string]$Value, [switch]$Se
             }
             $sentByVirtualKeys = $true
         } else {
-            Assert-HtsKeyboardScope
+            Assert-HtsSafetyKeyboardScope -Context $ActionContext.SafetyContext
             [Windows.Forms.SendKeys]::SendWait($Value)
         }
         Start-Sleep -Milliseconds 150
         $current = Get-WindowInfo ([IntPtr][Int64]$Window.hwnd)
         if (-not $Sensitive -and [string]$current.rawTitle -notlike "*$Value*") {
             Click-Center $ActionContext $inputPoint
-            Assert-HtsKeyboardScope
+            Assert-HtsSafetyKeyboardScope -Context $ActionContext.SafetyContext
             [TargetRuleNative]::keybd_event([byte]0x11,0,0,[UIntPtr]::Zero)
             Send-Key $ActionContext ([byte]0x41)
             [TargetRuleNative]::keybd_event([byte]0x11,0,0x0002,[UIntPtr]::Zero)
