@@ -377,3 +377,10 @@ target rule adapter
 - 원시 Observation 한 건을 C# CLI 평가 입력으로 전달하던 helper를 `result-evaluator.ps1`로 이동했다.
 - CLI 프로젝트, Approved TestPack, 임시 결과 경로와 case-local Observation 상태는 `HtsEvaluationAdapterContext`로 명시적으로 전달한다.
 - Observation 모듈은 평가 호출을 포함하지 않으며, 기존 golden 8케이스에서 C# CLI와 PowerShell adapter 결과가 동일했다.
+
+### Approved case Binding 이동
+
+- Approved scenario plan 또는 Approved TestPack의 고정 케이스를 실행 객체에 결합하는 함수를 `hts-binding.ps1`로 이동했다.
+- Dataset, TestPack, 화면·case 선택, PlanOnly와 실행 가능 case 목록은 `HtsExecutionCaseContext`로 명시적으로 전달한다.
+- Binding은 원본 Dataset 조합을 생성하지 않고 TestPack case 순서와 CaseId를 그대로 보존한다.
+- 이 이동 후 `hts-rule-suite-orchestration.ps1`의 AST 함수 정의 수는 0이며, 파일은 context 조립과 단계 호출 순서만 담당한다.

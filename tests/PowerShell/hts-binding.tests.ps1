@@ -66,8 +66,24 @@ Assert-Equal 'PHYSICAL_BINDING_DRIFT' $drift.errorCode 'identity drift retains t
 $queries = @(Get-HtsRequiredQueryControls -Context $bindingContext -Screen $screen -Strategies @([pscustomobject]@{nameRegex='^조회$';controlType='Button'}))
 Assert-Equal 2 $queries.Count 'native and UIA query identities are collected without judging results'
 
+$compiledScreen=[pscustomobject]@{screenNumber='0714';screenName='테스트 화면';enabled=$true}
+$compiledDataset=[pscustomobject]@{screens=@($compiledScreen);accounts=@()}
+$compiledCases=@(
+    [pscustomobject]@{caseId='CASE-B';screenNumber='0714';accountId='a1';accountNumber='111';accountOwner='owner';inputMode='Explicit';passwordSecret=$null;variables=[pscustomobject]@{kind='B'};variableExpectedOutcomes=[pscustomobject]@{}},
+    [pscustomobject]@{caseId='CASE-A';screenNumber='0714';accountId='a1';accountNumber='111';accountOwner='owner';inputMode='Explicit';passwordSecret=$null;variables=[pscustomobject]@{kind='A'};variableExpectedOutcomes=[pscustomobject]@{}}
+)
+$caseBindingContext=New-HtsExecutionCaseContext -Dataset $compiledDataset -TestPack ([pscustomobject]@{cases=$compiledCases})
+$executionCases=@(Get-ExecutionCasesFromApprovedPlans -Context $caseBindingContext)
+Assert-Equal 2 $executionCases.Count 'approved TestPack cases are all consumed without local expansion'
+Assert-Equal 'CASE-B' $executionCases[0].caseId 'approved TestPack case order is preserved'
+Assert-Equal 'B' $executionCases[0].variables.kind 'compiled variable values are preserved'
+$filteredContext=New-HtsExecutionCaseContext -ScreensCsv '9999' -Dataset $compiledDataset -TestPack ([pscustomobject]@{cases=$compiledCases})
+Assert-Equal 0 @(Get-ExecutionCasesFromApprovedPlans -Context $filteredContext).Count 'screen filter does not generate replacement cases'
+
 $moduleText = Get-Content -LiteralPath (Join-Path $root 'scripts\modules\hts-binding.ps1') -Raw
 Assert-True ($moduleText -notmatch '\$script:|\$global:') 'binding module has no global or script-scoped runtime state'
 Assert-True ($moduleText -notmatch 'ResultEvaluator|TestResult|Set-Content|Add-Content') 'binding module cannot evaluate or report results'
+$orchestrationText=Get-Content -LiteralPath (Join-Path $root 'scripts\modules\hts-rule-suite-orchestration.ps1') -Raw
+Assert-True ($orchestrationText-notmatch'function Get-ExecutionCasesFromApprovedPlans') 'orchestration no longer owns approved case binding'
 
 Write-Output "HTS_BINDING_TESTS=PASS assertions=$script:assertions"

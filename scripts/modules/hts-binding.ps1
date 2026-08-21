@@ -15,6 +15,88 @@ function New-HtsBindingContext {
     }
 }
 
+function New-HtsExecutionCaseContext {
+    param(
+        [string]$ScreensCsv = '',
+        [bool]$ScenarioMode = $false,
+        $ScenarioPlan = $null,
+        [string[]]$RequestedScenarioCaseIds = @(),
+        [bool]$PlanOnly = $false,
+        [string[]]$ExecutableScenarioCaseIds = @(),
+        [Parameter(Mandatory = $true)]$Dataset,
+        [Parameter(Mandatory = $true)]$TestPack
+    )
+
+    [pscustomobject]@{
+        ScreensCsv = $ScreensCsv
+        ScenarioMode = $ScenarioMode
+        ScenarioPlan = $ScenarioPlan
+        RequestedScenarioCaseIds = @($RequestedScenarioCaseIds)
+        PlanOnly = $PlanOnly
+        ExecutableScenarioCaseIds = @($ExecutableScenarioCaseIds)
+        Dataset = $Dataset
+        TestPack = $TestPack
+    }
+}
+
+function Get-ExecutionCasesFromApprovedPlans {
+    param([Parameter(Mandatory = $true)]$Context)
+
+    $selected = @($Context.ScreensCsv -split ',' | ForEach-Object { $_.Trim() } | Where-Object { $_ })
+    if ($Context.ScenarioMode) {
+        $plannedScreens = @{}
+        foreach ($scenarioCase in @($Context.ScenarioPlan.cases)) {
+            if ($selected.Count -gt 0 -and $selected -notcontains [string]$scenarioCase.screenNumber) { continue }
+            if ($Context.RequestedScenarioCaseIds.Count -gt 0 -and $Context.RequestedScenarioCaseIds -notcontains [string]$scenarioCase.caseId) { continue }
+            if (-not $Context.PlanOnly -and $Context.ExecutableScenarioCaseIds -notcontains [string]$scenarioCase.caseId) { continue }
+            if ($Context.PlanOnly -and $Context.RequestedScenarioCaseIds.Count -eq 0) {
+                $screenKey = [string]$scenarioCase.screenNumber
+                if ($plannedScreens.ContainsKey($screenKey)) { continue }
+                $plannedScreens[$screenKey] = $true
+            }
+            $screenRows = @($Context.Dataset.screens | Where-Object { [string]$_.screenNumber -eq [string]$scenarioCase.screenNumber -and $_.enabled -ne $false } | Select-Object -First 1)
+            $accountRows = @($Context.Dataset.accounts | Where-Object { [string]$_.id -eq [string]$scenarioCase.accountId -and $_.enabled -ne $false } | Select-Object -First 1)
+            if ($screenRows.Count -eq 0 -or $accountRows.Count -eq 0) { continue }
+            $variables = @{}
+            $expectedOutcomes = @{}
+            foreach ($property in @($scenarioCase.values.PSObject.Properties)) {
+                $variables[[string]$property.Name] = [string]$property.Value.value
+                $expectedOutcomes[[string]$property.Name] = $property.Value.expectedOutcome
+            }
+            [pscustomobject]@{
+                caseId=[string]$scenarioCase.caseId;screen=$screenRows[0];account=$accountRows[0]
+                variables=$variables;variableExpectedOutcomes=$expectedOutcomes;scenarioCase=$scenarioCase
+            }
+        }
+        return
+    }
+    foreach ($compiledCase in @($Context.TestPack.cases)) {
+        if ($selected.Count -gt 0 -and $selected -notcontains [string]$compiledCase.screenNumber) { continue }
+        $screen = @($Context.Dataset.screens | Where-Object { [string]$_.screenNumber -eq [string]$compiledCase.screenNumber } | Select-Object -First 1)
+        if ($screen.Count -ne 1) { throw "TestPack 케이스의 화면이 datasetSnapshot에 없습니다: $([string]$compiledCase.caseId)" }
+        $variables = @{}
+        foreach ($property in @($compiledCase.variables.PSObject.Properties)) { $variables[[string]$property.Name] = [string]$property.Value }
+        $expectedOutcomes = @{}
+        foreach ($property in @($compiledCase.variableExpectedOutcomes.PSObject.Properties)) { $expectedOutcomes[[string]$property.Name] = $property.Value }
+        $account = [pscustomobject]@{
+            id = [string]$compiledCase.accountId
+            accountNumber = [string]$compiledCase.accountNumber
+            owner = [string]$compiledCase.accountOwner
+            inputMode = [string]$compiledCase.inputMode
+            passwordSecret = $compiledCase.passwordSecret
+            enabled = $true
+        }
+        [pscustomobject]@{
+            caseId = [string]$compiledCase.caseId
+            screen = $screen[0]
+            account = $account
+            variables = $variables
+            variableExpectedOutcomes = $expectedOutcomes
+            testPackCase = $compiledCase
+        }
+    }
+}
+
 function Invoke-HtsBindingDependency {
     param(
         [Parameter(Mandatory = $true)]$Context,

@@ -524,61 +524,6 @@ $actionContext.SafetyContext = $safetyContext
 # 기준선에 없던 새 창 문구만 평가해 과거 팝업의 재검출을 막는다.
 
 # 논리 시나리오 사례 또는 승인 TestPack의 고정 케이스를 실행기 내부 객체로 변환한다.
-function Get-ExecutionCasesFromApprovedPlans {
-    $selected = @($ScreensCsv -split ',' | ForEach-Object { $_.Trim() } | Where-Object { $_ })
-    if ($scenarioMode) {
-        $plannedScreens = @{}
-        foreach ($scenarioCase in @($scenarioPlan.cases)) {
-            if ($selected.Count -gt 0 -and $selected -notcontains [string]$scenarioCase.screenNumber) { continue }
-            if ($requestedScenarioCaseIds.Count -gt 0 -and $requestedScenarioCaseIds -notcontains [string]$scenarioCase.caseId) { continue }
-            if (-not $PlanOnly -and $executableScenarioCaseIds -notcontains [string]$scenarioCase.caseId) { continue }
-            if ($PlanOnly -and $requestedScenarioCaseIds.Count -eq 0) {
-                $screenKey = [string]$scenarioCase.screenNumber
-                if ($plannedScreens.ContainsKey($screenKey)) { continue }
-                $plannedScreens[$screenKey] = $true
-            }
-            $screenRows = @($dataset.screens | Where-Object { [string]$_.screenNumber -eq [string]$scenarioCase.screenNumber -and $_.enabled -ne $false } | Select-Object -First 1)
-            $accountRows = @($dataset.accounts | Where-Object { [string]$_.id -eq [string]$scenarioCase.accountId -and $_.enabled -ne $false } | Select-Object -First 1)
-            if ($screenRows.Count -eq 0 -or $accountRows.Count -eq 0) { continue }
-            $variables = @{}
-            $expectedOutcomes = @{}
-            foreach ($property in @($scenarioCase.values.PSObject.Properties)) {
-                $variables[[string]$property.Name] = [string]$property.Value.value
-                $expectedOutcomes[[string]$property.Name] = $property.Value.expectedOutcome
-            }
-            [pscustomobject]@{
-                caseId=[string]$scenarioCase.caseId;screen=$screenRows[0];account=$accountRows[0]
-                variables=$variables;variableExpectedOutcomes=$expectedOutcomes;scenarioCase=$scenarioCase
-            }
-        }
-        return
-    }
-    foreach ($compiledCase in @($testPack.cases)) {
-        if ($selected.Count -gt 0 -and $selected -notcontains [string]$compiledCase.screenNumber) { continue }
-        $screen = @($dataset.screens | Where-Object { [string]$_.screenNumber -eq [string]$compiledCase.screenNumber } | Select-Object -First 1)
-        if ($screen.Count -ne 1) { throw "TestPack 케이스의 화면이 datasetSnapshot에 없습니다: $([string]$compiledCase.caseId)" }
-        $variables = @{}
-        foreach ($property in @($compiledCase.variables.PSObject.Properties)) { $variables[[string]$property.Name] = [string]$property.Value }
-        $expectedOutcomes = @{}
-        foreach ($property in @($compiledCase.variableExpectedOutcomes.PSObject.Properties)) { $expectedOutcomes[[string]$property.Name] = $property.Value }
-        $account = [pscustomobject]@{
-            id = [string]$compiledCase.accountId
-            accountNumber = [string]$compiledCase.accountNumber
-            owner = [string]$compiledCase.accountOwner
-            inputMode = [string]$compiledCase.inputMode
-            passwordSecret = $compiledCase.passwordSecret
-            enabled = $true
-        }
-        [pscustomobject]@{
-            caseId = [string]$compiledCase.caseId
-            screen = $screen[0]
-            account = $account
-            variables = $variables
-            variableExpectedOutcomes = $expectedOutcomes
-            testPackCase = $compiledCase
-        }
-    }
-}
 
 # 계좌가 있을 때만 보고서 상관관계용 비가역 SHA-256 짧은 지문을 만든다.
 
@@ -634,7 +579,16 @@ $navigationContext = New-HtsNavigationContext `
     -Dependencies $navigationDependencies
 
 # 실행 루프: 각 화면을 열고 같은 화면의 사례를 연속 처리한 뒤 완전히 닫고 다음 화면으로 이동한다.
-$cases = @(Get-ExecutionCasesFromApprovedPlans)
+$executionCaseContext = New-HtsExecutionCaseContext `
+    -ScreensCsv $ScreensCsv `
+    -ScenarioMode ([bool]$scenarioMode) `
+    -ScenarioPlan $scenarioPlan `
+    -RequestedScenarioCaseIds @($requestedScenarioCaseIds) `
+    -PlanOnly ([bool]$PlanOnly) `
+    -ExecutableScenarioCaseIds @($executableScenarioCaseIds) `
+    -Dataset $dataset `
+    -TestPack $testPack
+$cases = @(Get-ExecutionCasesFromApprovedPlans -Context $executionCaseContext)
 if ($cases.Count -gt $MaxCases -or $cases.Count -gt [int]$testPack.maxCases) { throw "승인 TestPack 케이스 수 $($cases.Count)가 실행 제한을 초과했습니다." }
 if ($scenarioMode -and -not $PlanOnly -and $cases.Count -eq 0) { throw "승인과 고신뢰 바인딩을 모두 통과한 실행 가능 시나리오 케이스가 없습니다." }
 $configuredErrorPatterns = @($dataset.executionPolicy.errorPatterns | ForEach-Object { ([string]$_).Trim() } | Where-Object { $_ })

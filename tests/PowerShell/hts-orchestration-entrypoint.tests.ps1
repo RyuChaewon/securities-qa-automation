@@ -24,6 +24,8 @@ Assert-True ($entryText-match'hts-rule-suite-orchestration\.ps1') 'entrypoint de
 Assert-True ($entryText-match'@PSBoundParameters') 'entrypoint forwards only the public bound parameter contract'
 
 $orchestrationText=Get-Content -LiteralPath $orchestrationPath -Raw
+$orchestrationFunctions=@($orchestrationAst.FindAll({param($node)$node-is[System.Management.Automation.Language.FunctionDefinitionAst]},$true))
+Assert-Equal 0 $orchestrationFunctions.Count 'orchestration defines no responsibility implementation functions'
 $validationIndex=$orchestrationText.IndexOf('validate-test-pack',[StringComparison]::Ordinal)
 $sessionIndex=$orchestrationText.IndexOf('Start-FlaUiBridge',[StringComparison]::Ordinal)
 Assert-True ($validationIndex-ge0) 'orchestration retains approved TestPack validation'
