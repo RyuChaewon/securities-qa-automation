@@ -1,5 +1,7 @@
 # 정리 후보
 
+현재 `outputs`의 보존·삭제 분류와 승인 순서는 [ARTIFACT_RETENTION_POLICY.md](ARTIFACT_RETENTION_POLICY.md)를 따른다. 아래 목록은 과거 점검 당시의 후보 기록이며, 현재 파일을 삭제하는 직접 승인이 아니다.
+
 다음 경로는 현재 `config/pipeline.manifest.json`, 솔루션 또는 활성 스크립트가 참조하지 않는 과거 생성물이다. 대용량 재귀 삭제는 복구가 어려우므로 별도 승인 후 수행한다.
 
 | 경로 | 점검 시 크기 | 분류 | 처리 제안 |

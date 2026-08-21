@@ -147,5 +147,6 @@ recorded-run/results/테스트결과-*.xlsx
 - [SCENARIO_PIPELINE.md](docs/SCENARIO_PIPELINE.md): 자동·외부 시나리오 경로
 - [0101_AUTOMATION.md](docs/0101_AUTOMATION.md): 0101 Importer, 바인딩, 실제 실행 계약
 - [0101_VALIDATION_STATUS.md](docs/0101_VALIDATION_STATUS.md): 현재 계획·실화면 검증 상태와 공개 범위
+- [ARTIFACT_RETENTION_POLICY.md](docs/ARTIFACT_RETENTION_POLICY.md): 로컬 JSON·XLSX·영상·로그의 보존 및 삭제 승인 경계
 - [CLEANUP_CANDIDATES.md](docs/CLEANUP_CANDIDATES.md): 미사용 대용량 생성물과 보존 항목
 - [TROUBLESHOOTING.md](TROUBLESHOOTING.md): 실행 오류 대응
