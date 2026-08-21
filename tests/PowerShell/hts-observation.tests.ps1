@@ -11,6 +11,12 @@ $mapCatalog=[pscustomobject]@{errorCodes=@(
     [pscustomobject]@{code='E100';message='설치 카탈로그 시스템 오류';classification='SystemFailure';isFailure=$true},
     [pscustomobject]@{code='N001';message='정상 처리되었습니다';classification='Normal';isFailure=$false}
 )}
+$fakeMain=[pscustomobject]@{hwnd=1;pid=7;visible=$true;owner=0;rawTitle='HTS';className='Main'}
+$fakeDialog=[pscustomobject]@{hwnd=2;pid=7;visible=$true;owner=1;rawTitle='하나증권';className='#32770'}
+$fakeChildren=@(
+    [pscustomobject]@{hwnd=3;pid=7;visible=$true;rawTitle='E100 계좌 1234 오류';className='Static'},
+    [pscustomobject]@{hwnd=4;pid=7;visible=$true;rawTitle='확인';className='Button'}
+)
 $dependencies=[pscustomobject]@{
     CreateSignalEvaluationCase={
         param([string]$CaseId,[string]$EventType,[string]$Text,[string]$SourceCode,[string]$Source,$ExpectedOutcome)
@@ -21,8 +27,21 @@ $dependencies=[pscustomobject]@{
         }
     }
     GetNow={ [datetime]'2026-08-20T12:00:00Z' }
+    GetTopWindows={ @($fakeMain,$fakeDialog) }
+    GetChildWindows={ param([Int64]$Hwnd) if($Hwnd-eq2){@($fakeChildren)}else{@()} }
+    GetWindowInfo={ param([Int64]$Hwnd) if($Hwnd-eq1){$fakeMain}else{$fakeDialog} }
+    GetScreenNumber={ param($Window) '0714' }
+    ProtectText={ param($Text,[string]$Secret) ([string]$Text).Replace($Secret,'***') }
+    GetRelativeFilePath={ param([string]$BasePath,[string]$Path) [IO.Path]::GetFileName($Path) }
 }
-$context=New-HtsObservationContext -MapCatalog $mapCatalog -Dependencies $dependencies
+$context=New-HtsObservationContext -MapCatalog $mapCatalog -InstallationRoot 'C:\fake-hts' -Dependencies $dependencies
+Assert-Equal 'C:\fake-hts' $context.InstallationRoot 'observation context owns the log installation boundary'
+$dialogs=@(Get-HtsDialogs $context ([pscustomobject]@{TargetScreenTitleRegex=[regex]'^[[]\d+[]]'}) $fakeMain '1234')
+Assert-Equal 1 $dialogs.Count 'dialog collection reads only owned non-screen windows through dependencies'
+Assert-Equal '오류' $dialogs[0].classification 'dialog collection preserves existing error classification'
+Assert-True ($dialogs[0].text-notmatch'1234') 'dialog collection protects configured secret text'
+$connection=Test-HtsConnectionDialog ([pscustomobject]@{title='연결이 끊어졌습니다';text='재접속';messageLines=@();buttons=@('프로그램 종료')})
+Assert-True $connection 'connection interruption stays distinct from dismissible dialogs'
 $expected=Get-HtsExpectedOutcome -Option ([pscustomobject]@{id='option-1';expectedOutcome=[pscustomobject]@{type='ValidationAllowed';source='Dataset';confidence='High';messagePatterns=@('허용 문구');errorCodes=@();evidence=@('dataset evidence');queryShouldComplete=$false}}) -FallbackPatterns @('화면 패턴')
 Assert-Equal 'ValidationAllowed' $expected.type 'explicit expected type is preserved'
 Assert-Equal 2 @($expected.messagePatterns).Count 'fallback and option matcher patterns are combined once'
@@ -72,5 +91,6 @@ Assert-True ($moduleText -notmatch 'Invoke-RuleResultEvaluation|Invoke-RuleSigna
 $orchestrationText=Get-Content -LiteralPath (Join-Path $root 'scripts\modules\hts-rule-suite-orchestration.ps1') -Raw
 Assert-True ($orchestrationText-notmatch'function (Get-MapOracleMessageMatch|Get-InstallationErrorCodeMatch|Get-RuleExpectedOutcome|Test-SystemFailureSignal|Test-InputValidationSignal|Get-HtsSignalObservation|Get-HtsDialogObservation|Add-OracleObservation|Get-MapOracleErrorRegex)') 'orchestration no longer owns observation normalization adapters'
 Assert-True ($orchestrationText-match'New-HtsSignalObservation -Context \$observationContext') 'orchestration passes explicit observation context to normalization'
+Assert-True ($orchestrationText-notmatch'function (Get-HtsDialogs|Add-LinkedScreenObservations|Add-UnnumberedTransitionObservation|Test-HtsConnectionDialog|Get-HtsConnectionDialogs|Add-PopupObservations|Capture-HtsScreenshot|Get-LogState|Get-TransmissionDelta|Get-LogErrors|Get-ErrorWindowTexts|Get-ExplicitWindowErrors)') 'orchestration no longer owns observation collection implementations'
 
 Write-Output "HTS_OBSERVATION_TESTS=PASS assertions=$script:assertions"

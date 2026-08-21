@@ -389,8 +389,14 @@ $observationDependencies = [pscustomobject]@{
         New-RuleSignalEvaluationCase -CaseId $CaseId -EventType $EventType -Text $Text -SourceCode $SourceCode -Source $Source -ExpectedOutcome $ExpectedOutcome
     }
     GetNow = { Get-Date }
+    GetTopWindows = { @(Get-TopWindows) }
+    GetChildWindows = { param([Int64]$Hwnd) @(Get-ChildWindows $Hwnd) }
+    GetWindowInfo = { param([Int64]$Hwnd) Get-WindowInfo ([IntPtr]$Hwnd) }
+    GetScreenNumber = { param($Window) Get-HtsScreenNumber $navigationContext $Window }
+    ProtectText = { param($Text,[string]$Secret) Protect-Text $Text $Secret }
+    GetRelativeFilePath = { param([string]$BasePath,[string]$Path) Get-RelativeFilePath $BasePath $Path }
 }
-$observationContext = New-HtsObservationContext -MapCatalog $mapCatalog -Dependencies $observationDependencies
+$observationContext = New-HtsObservationContext -MapCatalog $mapCatalog -InstallationRoot ([string]$targetContext.InstallationRoot) -Dependencies $observationDependencies
 
 $safetyDependencies = [pscustomobject]@{
     IsWindow = { param([Int64]$Hwnd) [TargetRuleNative]::IsWindow([IntPtr]$Hwnd) }
@@ -471,38 +477,6 @@ $actionContext.SafetyContext = $safetyContext
 # 화면번호 입력을 가릴 수 있는 화면검색 오버레이만 선택적으로 닫는다.
 
 # 팝업 관찰: 현재 HTS 프로세스의 새 대화상자를 읽고 민감 문구를 제거한 관찰 객체를 만든다.
-function Get-HtsDialogs($RuntimeContext, $Main, [string]$Secret = "") {
-    foreach ($window in @(Get-TopWindows | Where-Object {
-        $_.visible -and $_.pid -eq $Main.pid -and $_.hwnd -ne $Main.hwnd -and
-        -not $RuntimeContext.TargetScreenTitleRegex.IsMatch([string]$_.rawTitle) -and
-        ($_.className -eq "#32770" -or $_.rawTitle -eq "하나증권" -or $_.rawTitle -match '유의사항|참고사항|안내|경고|확인|설정|편집|도움말' -or
-            ($_.owner -eq $Main.hwnd -and ($_.rawTitle -or $_.className -notlike 'AfxWnd*')))
-    })) {
-        $children = @(Get-ChildWindows ([Int64]$window.hwnd) | Where-Object { $_.visible })
-        $buttons = @($children | Where-Object { $_.className -like "*Button*" -and $_.rawTitle } | ForEach-Object { Protect-Text $_.rawTitle $Secret } | Sort-Object -Unique)
-        $messages = @($children | Where-Object { $_.className -notlike "*Button*" -and $_.rawTitle } | ForEach-Object { Protect-Text $_.rawTitle $Secret } | Sort-Object -Unique)
-        $title = Protect-Text $window.rawTitle $Secret
-        $text = Protect-Text ((@($title) + $messages + $buttons | Where-Object { $_ } | Sort-Object -Unique) -join " | ") $Secret
-        $classification = if ($text -match '오류|에러|실패|예외|장애|Error|Exception|Fail|SOCKET') {
-            "오류"
-        } elseif ($text -match '경고|주의|Warning') {
-            "경고"
-        } elseif ($buttons -match '예|아니오|Yes|No|확인|취소') {
-            "확인 요청"
-        } else {
-            "정보"
-        }
-        [pscustomobject]@{
-            window = $window
-            title = $title
-            messageLines = $messages
-            buttons = $buttons
-            classification = $classification
-            text = $text
-            summary = "$classification 팝업: " + $(if ($messages.Count -gt 0) { $messages -join " / " } elseif ($title) { $title } else { "본문 없음" })
-        }
-    }
-}
 
 # 컨트롤 실행 사실을 원시 Observation으로 넘기고 현재 케이스의 Core 평가 입력에 함께 보존한다.
 function Invoke-HtsRawObservationEvaluation(
@@ -540,70 +514,17 @@ function Invoke-HtsRawObservationEvaluation(
 # 원시 Observation을 감사 이벤트와 기대 계약별 평가 그룹에 함께 누적한다.
 # 공통 오류 패턴과 현재 화면 MAP 메시지를 결합한 관찰용 정규식을 만든다.
 # 연계 화면의 제목·본문·버튼·스크린샷과 MAP 예상 여부를 결과에 기록한다.
-function Add-LinkedScreenObservations($RuntimeContext, $List, $LinkedScreens, $Main, [string]$CaseId, [string]$RequestedScreenNumber, [string]$ReportBase, [string]$Secret = "", $ExpectedTargets = @()) {
-    $index=$List.Count
-    $expectedNumbers=@($ExpectedTargets | Where-Object targetScreenCode | ForEach-Object {
-        $code=[string]$_.targetScreenCode
-        $codeMatch=$RuntimeContext.TargetMapScreenCodeRegex.Match($code)
-        if($codeMatch.Success){[string]$codeMatch.Groups['screen'].Value}
-    } | Where-Object {$_} | Sort-Object -Unique)
-    foreach($linked in @($LinkedScreens)){
-        $index++
-        $linkedNumber=Get-HtsScreenNumber $navigationContext $linked
-        $children=@(Get-ChildWindows ([Int64]$linked.hwnd) | Where-Object { $_.visible -and $_.rawTitle })
-        $buttons=@($children | Where-Object { $_.className -like '*Button*' } | ForEach-Object { Protect-Text $_.rawTitle $Secret } | Sort-Object -Unique)
-        $messages=@($children | Where-Object { $_.className -notlike '*Button*' } | ForEach-Object { Protect-Text $_.rawTitle $Secret } | Sort-Object -Unique | Select-Object -First 30)
-        $linkedShot=Join-Path (Join-Path $ReportBase 'screenshots') ("linked-{0}-{1}-{2:000}.png" -f $RequestedScreenNumber,$CaseId,$index)
-        $relativeShot=""
-        if(Capture-HtsScreenshot $Main $linkedShot){$relativeShot=Get-RelativeFilePath $ReportBase $linkedShot}
-        $title=Protect-Text ([string]$linked.rawTitle) $Secret
-        $isExpected=$expectedNumbers -contains $linkedNumber
-        $List.Add([pscustomobject]@{
-            popupId="NAV-$CaseId-$('{0:000}' -f $index)";title=$title;messageLines=$messages;buttons=$buttons
-            classification=$(if($isExpected){'예상 연계 화면'}else{'예상 밖 연계 화면'});summary="내부 컨트롤 조작으로 연계 화면 [$linkedNumber]이 열렸습니다: $title"
-            expected=$isExpected;oracleSource=$(if($isExpected){'MAP 연결 그래프'}else{'런타임 관찰'});screenshotPath=$relativeShot;detectedAt=(Get-Date).ToString('o')
-        })
-    }
-}
 
 # 화면 ID가 없는 전환 창도 새 최상위 창으로 감지해 누락되지 않게 기록한다.
-function Add-UnnumberedTransitionObservation($RuntimeContext, $List, $Main, [string]$CaseId, [string]$RequestedScreenNumber, [string]$ReportBase, [string]$Secret = "") {
-    $index=$List.Count+1
-    $visibleTitles=@(Get-TopWindows | Where-Object {
-        $_.visible -and $_.pid -eq $Main.pid -and $_.hwnd -ne $Main.hwnd -and -not $RuntimeContext.TargetScreenTitleRegex.IsMatch([string]$_.rawTitle)
-    } | ForEach-Object { Protect-Text $_.rawTitle $Secret } | Where-Object { $_ } | Sort-Object -Unique | Select-Object -First 30)
-    $transitionShot=Join-Path (Join-Path $ReportBase 'screenshots') ("transition-{0}-{1}-{2:000}.png" -f $RequestedScreenNumber,$CaseId,$index)
-    $relativeShot=""
-    if(Capture-HtsScreenshot $Main $transitionShot){$relativeShot=Get-RelativeFilePath $ReportBase $transitionShot}
-    $List.Add([pscustomobject]@{
-        popupId="NAV-$CaseId-$('{0:000}' -f $index)";title='번호 없는 콘텐츠 전환';messageLines=$visibleTitles;buttons=@()
-        classification='연계 화면';summary="버튼 조작 후 [$RequestedScreenNumber] 창이 번호 없는 콘텐츠로 전환되거나 자체 닫혀 원래 화면을 다시 열었습니다."
-        expected=$true;screenshotPath=$relativeShot;detectedAt=(Get-Date).ToString('o')
-    })
-}
 
 # 계좌·비밀번호처럼 명시 로케이터가 점유한 HWND를 자동 탐색 대상에서 제외한다.
 # 재접속·프로그램 종료 선택을 포함한 연결 장애 팝업은 자동 닫기 대상에서 제외한다.
-function Test-HtsConnectionDialog($Dialog) {
-    $buttonText = @($Dialog.buttons | ForEach-Object {
-        if ($_ -is [string]) { [string]$_ }
-        elseif ($_.PSObject.Properties.Name -contains 'title') { [string]$_.title }
-        elseif ($_.PSObject.Properties.Name -contains 'name') { [string]$_.name }
-        else { [string]$_ }
-    }) -join ' '
-    $dialogText = (([string]$Dialog.title) + ' ' + ([string]$Dialog.text) + ' ' + (@($Dialog.messageLines) -join ' ') + ' ' + $buttonText)
-    $dialogText -match '접속\s*해제|연결이\s*끊어|재접속|프로그램\s*종료|connection\s*(lost|disconnected)|reconnect'
-}
 
-function Get-HtsConnectionDialogs($RuntimeContext, $Main, [string]$Secret = '') {
-    if (-not $Main) { return @() }
-    @(Get-HtsDialogs $RuntimeContext $Main $Secret | Where-Object { Test-HtsConnectionDialog $_ })
-}
 
 # 현재 대상 프로세스 팝업의 취소 계열 버튼 또는 WM_CLOSE를 사용해 다음 동작을 복구한다.
 function Dismiss-HtsDialogs($RuntimeContext, $Main, [string]$Secret = "") {
     $dismissed = 0
-    foreach ($dialog in @(Get-HtsDialogs $RuntimeContext $Main $Secret)) {
+    foreach ($dialog in @(Get-HtsDialogs $observationContext $RuntimeContext $Main $Secret)) {
         if (Test-HtsConnectionDialog $dialog) { continue }
         $savedHwnd=[Int64]$safetyContext.ActiveInputSurfaceHwnd
         $savedKind=[string]$safetyContext.ActiveInputSurfaceKind
@@ -637,194 +558,19 @@ function Dismiss-HtsDialogs($RuntimeContext, $Main, [string]$Secret = "") {
 }
 
 # 발견 팝업을 예상 패턴과 MAP 근거에 대조하고 스크린샷 경로를 함께 저장한다.
-function Add-PopupObservations($List, $Dialogs, $Main, [string]$CaseId, [string]$ScreenNumber, [string]$ReportBase, $ExpectedPatterns, $MapOracle = $null) {
-    $index = $List.Count
-    foreach ($dialog in @($Dialogs)) {
-        $index++
-        $expected = $false
-        foreach ($pattern in @($ExpectedPatterns)) {
-            if ($pattern -and $dialog.text -match [string]$pattern) { $expected=$true; break }
-        }
-        $mapMatch = Get-HtsMapOracleMessageMatch ([string]$dialog.text) $MapOracle
-        $installedMatch = Get-HtsInstallationErrorCodeMatch -Context $observationContext ([string]$dialog.text)
-        $classification = if ($installedMatch) {
-            switch ([string]$installedMatch.classification) {
-                'Authentication' { '인증 오류' }
-                'TransientFailure' { '일시 장애' }
-                'SystemFailure' { '시스템 오류' }
-                'NoData' { '자료 없음' }
-                'Normal' { '정상 응답' }
-                default { '입력·업무 검증' }
-            }
-        } elseif ($mapMatch) {
-            switch ([string]$mapMatch.classification) {
-                'Error' { '오류' }
-                'InputValidation' { '입력 검증' }
-                'Warning' { '경고' }
-                default { '정보' }
-            }
-        } else { [string]$dialog.classification }
-        $oracleSource = if ($installedMatch) { 'HTS 오류코드' } elseif ($mapMatch) { 'MAP' } else { '공통 규칙' }
-        $popupShot = Join-Path (Join-Path $ReportBase "screenshots") ("popup-{0}-{1}-{2:000}.png" -f $ScreenNumber,$CaseId,$index)
-        $relativeShot = ""
-        if (Capture-HtsScreenshot $Main $popupShot $true) { $relativeShot = Get-RelativeFilePath $ReportBase $popupShot }
-        $List.Add([pscustomobject]@{
-            popupId="POP-$CaseId-$('{0:000}' -f $index)"; title=[string]$dialog.title
-            windowHwnd=[Int64]$dialog.window.hwnd; windowClass=[string]$dialog.window.className; windowRect=$dialog.window.rect
-            messageLines=@($dialog.messageLines); buttons=@($dialog.buttons); classification=$classification
-            summary="$classification 팝업: " + $(if (@($dialog.messageLines).Count -gt 0) { @($dialog.messageLines) -join ' / ' } elseif ($dialog.title) { [string]$dialog.title } else { '본문 없음' })
-            expected=$expected; oracleSource=$oracleSource; oracleRuleId=$(if($mapMatch){[string]$mapMatch.ruleId}else{''})
-            mapHandler=$(if($mapMatch){[string]$mapMatch.handler}else{''}); mapMessage=$(if($mapMatch){[string]$mapMatch.message}else{''})
-            installedErrorCode=$(if($installedMatch){[string]$installedMatch.code}else{''}); installedErrorClass=$(if($installedMatch){[string]$installedMatch.classification}else{''})
-            screenshotPath=$relativeShot; detectedAt=(Get-Date).ToString("o")
-        })
-    }
-}
 
 # 로케이터 후보가 화면의 top/middle/bottom 상대 영역에 들어오는지 판단한다.
 # 결함 증거는 HTS 메인 창의 물리 경계로 제한한다. 팝업 증거는 화면 복사를 사용해 별도 소유 창까지 포함한다.
-function Capture-HtsScreenshot($Main, [string]$Path, [bool]$IncludeVisibleOwnedWindows = $false) {
-    $mainHwnd=[IntPtr][Int64]$Main.hwnd
-    if(-not [TargetRuleNative]::IsWindow($mainHwnd)){return $false}
-    $previousDpiContext=[TargetRuleNative]::SetThreadDpiAwarenessContext([IntPtr](-4))
-    $bitmap=$null
-    $graphics=$null
-    try {
-        $physicalMain=Get-WindowInfo $mainHwnd
-        $rect=$physicalMain.rect
-        $width=[int]$rect.width
-        $height=[int]$rect.height
-        if($width-le0 -or $height-le0){return $false}
-        $bitmap=New-Object Drawing.Bitmap $width,$height
-        $graphics=[Drawing.Graphics]::FromImage($bitmap)
-        $printed=$false
-        if(-not $IncludeVisibleOwnedWindows){
-            $hdc=$graphics.GetHdc()
-            try{$printed=[TargetRuleNative]::PrintWindow($mainHwnd,$hdc,2)}finally{$graphics.ReleaseHdc($hdc)}
-        }
-        if($IncludeVisibleOwnedWindows -or -not $printed){
-            $graphics.CopyFromScreen([int]$rect.left,[int]$rect.top,0,0,(New-Object Drawing.Size $width,$height))
-        }
-        $bitmap.Save($Path,[Drawing.Imaging.ImageFormat]::Png)
-        return $true
-    } finally {
-        if($graphics){$graphics.Dispose()}
-        if($bitmap){$bitmap.Dispose()}
-        [void][TargetRuleNative]::SetThreadDpiAwarenessContext($previousDpiContext)
-    }
-}
 
 # 로그 증분 관찰: 실행 전 오프셋 이후에 추가된 행만 읽어 과거 오류를 신규 결함으로 오인하지 않는다.
-function Get-LogState {
-    $state = @{}
-    $sources = if ($mapCatalog -and $mapCatalog.logSources) { @($mapCatalog.logSources) } else {
-        # 설치 카탈로그가 로그 정의를 제공하지 않을 때도 대상 프로필의 설치 루트 밖으로 벗어나지 않는다.
-        $logDirectory = Join-Path $targetContext.InstallationRoot 'log'
-        @(
-            [pscustomobject]@{id='DEBUG_MAIN';pathPattern=(Join-Path $logDirectory 'debugmain.log');mode='AppendText';sensitive=$false;failureOnChange=$false},
-            [pscustomobject]@{id='SOCKET_ERROR';pathPattern=(Join-Path $logDirectory 'SocketErr.log');mode='AppendText';sensitive=$false;failureOnChange=$false},
-            [pscustomobject]@{id='STARTER';pathPattern=(Join-Path $logDirectory 'Starter.log');mode='AppendText';sensitive=$false;failureOnChange=$false}
-        )
-    }
-    foreach ($source in $sources) {
-        $paths = if ([string]$source.pathPattern -match '[*?]') { @(Get-ChildItem -Path ([string]$source.pathPattern) -File -ErrorAction SilentlyContinue | ForEach-Object FullName) } else { @([string]$source.pathPattern) }
-        foreach ($path in $paths) {
-            if (-not (Test-Path -LiteralPath $path)) { continue }
-            $item=Get-Item -LiteralPath $path
-            $state[$path] = [pscustomobject]@{
-                id=[string]$source.id;mode=[string]$source.mode;sensitive=[bool]$source.sensitive;failureOnChange=[bool]$source.failureOnChange
-                length=[Int64]$item.Length;lastWriteUtc=$item.LastWriteTimeUtc.Ticks
-            }
-        }
-    }
-    $state
-}
 
 # 주문·체결 민감 로그의 길이/수정시각 증분으로 전송 발생 여부를 원문 노출 없이 판정한다.
-function Get-TransmissionDelta($Before) {
-    $after = Get-LogState
-    $changes = New-Object Collections.Generic.List[string]
-    foreach ($path in $after.Keys) {
-        $current = $after[$path]
-        if ([string]$current.mode -ne 'SensitiveDelta') { continue }
-        if (-not $Before.ContainsKey($path)) {
-            $changes.Add([string]$current.id)
-            continue
-        }
-        $previous = $Before[$path]
-        if ([Int64]$current.length -ne [Int64]$previous.length -or [Int64]$current.lastWriteUtc -ne [Int64]$previous.lastWriteUtc) {
-            $changes.Add([string]$current.id)
-        }
-    }
-    [pscustomobject]@{hasTransmission=($changes.Count-gt0);sources=@($changes.ToArray() | Select-Object -Unique)}
-}
 
 # 케이스 시작 이후 추가된 로그 구간에서 새 오류 신호만 추출하고 민감값을 제거한다.
-function Get-LogErrors($Before, [regex]$ErrorRegex, [string]$Secret, $MapOracle = $null) {
-    $errors = New-Object Collections.Generic.List[string]
-    foreach ($path in $Before.Keys) {
-        if (-not (Test-Path -LiteralPath $path)) { continue }
-        $item = Get-Item -LiteralPath $path
-        $beforeState=$Before[$path]
-        $offset=if($beforeState -is [ValueType]){[Int64]$beforeState}else{[Int64]$beforeState.length}
-        $mode=if($beforeState -is [ValueType]){'AppendText'}else{[string]$beforeState.mode}
-        $changed=($item.Length -ne $offset) -or ($beforeState -isnot [ValueType] -and $item.LastWriteTimeUtc.Ticks -ne [Int64]$beforeState.lastWriteUtc)
-        if(-not $changed){continue}
-        if($mode -eq 'SensitiveDelta'){
-            if([bool]$beforeState.failureOnChange){$errors.Add("[민감 로그 변화 감지] 조회 테스트 중 체결·주문 관련 로그의 크기 또는 시간이 변경되었습니다. 원문은 개인정보 보호를 위해 수집하지 않았습니다.")}
-            continue
-        }
-        if($mode -eq 'DiagnosticSnapshot'){
-            continue
-        }
-        if ($item.Length -le $offset) { continue }
-        $stream = [IO.File]::Open($path, [IO.FileMode]::Open, [IO.FileAccess]::Read, [IO.FileShare]::ReadWrite)
-        try {
-            [void]$stream.Seek($offset, [IO.SeekOrigin]::Begin)
-            $reader = New-Object IO.StreamReader($stream, [Text.Encoding]::Default)
-            $tokens = if ($MapOracle) { @($MapOracle.requestNames) + @($MapOracle.transactionCodes) } else { @() }
-            foreach ($line in @($reader.ReadToEnd() -split "`r?`n" | Where-Object { -not [string]::IsNullOrWhiteSpace($_) })) {
-                $installedMatch = Get-HtsInstallationErrorCodeMatch -Context $observationContext ([string]$line)
-                $mapMessage = Get-HtsMapOracleMessageMatch ([string]$line) $MapOracle
-                $isCandidate=($line -match $ErrorRegex) -or ($line -match '자동\s*로그아웃\s*후|세션\s*만료') -or $installedMatch -or $mapMessage
-                if(-not $isCandidate){continue}
-                if ($installedMatch -and -not [bool]$installedMatch.isFailure) { continue }
-                if ($mapMessage -and -not [bool]$mapMessage.isExplicitError) { continue }
-                $matchedToken = @($tokens | Where-Object { $_ -and $line.IndexOf([string]$_, [StringComparison]::OrdinalIgnoreCase) -ge 0 } | Select-Object -First 1)
-                $prefix = if ($installedMatch) { "[HTS 오류코드 $($installedMatch.code)/$($installedMatch.classification)] " } elseif ($matchedToken.Count -gt 0) { "[MAP 통신 $($matchedToken[0])] " } else { "" }
-                $errors.Add($prefix + (Protect-Text $line $Secret))
-            }
-        } finally { $stream.Dispose() }
-    }
-    @($errors | Select-Object -Last 20)
-}
 
 # 케이스 시작 시 이미 존재하던 오류 문구를 기준선으로 수집한다.
-function Get-ErrorWindowTexts($Main, [regex]$ErrorRegex, [string]$Secret) {
-    $rows = New-Object Collections.Generic.List[string]
-    foreach ($window in @(Get-TopWindows | Where-Object { $_.visible -and $_.pid -eq $Main.pid })) {
-        $texts = @($window.rawTitle) + @(Get-ChildWindows ([Int64]$window.hwnd) | ForEach-Object { $_.rawTitle })
-        foreach ($match in @($texts | Where-Object { $_ -and $_ -match $ErrorRegex })) { $rows.Add((Protect-Text $match $Secret)) }
-    }
-    @($rows | Sort-Object -Unique)
-}
 
 # 기준선에 없던 새 창 문구만 평가해 과거 팝업의 재검출을 막는다.
-function Get-ExplicitWindowErrors($Main, $BeforeErrorTexts, [regex]$ErrorRegex, [string]$Secret, $MapOracle = $null) {
-    $rows = New-Object Collections.Generic.List[string]
-    $top = @(Get-TopWindows | Where-Object { $_.visible -and $_.pid -eq $Main.pid })
-    foreach ($window in $top) {
-        $texts = @($window.rawTitle) + @(Get-ChildWindows ([Int64]$window.hwnd) | ForEach-Object { $_.rawTitle })
-        $matches = @($texts | Where-Object { $_ -and $_ -match $ErrorRegex })
-        foreach ($match in $matches) {
-            $mapMessage = Get-HtsMapOracleMessageMatch ([string]$match) $MapOracle
-            if ($mapMessage -and -not [bool]$mapMessage.isExplicitError) { continue }
-            $safe = Protect-Text $match $Secret
-            if ($BeforeErrorTexts -notcontains $safe) { $rows.Add($safe) }
-        }
-    }
-    @($rows | Sort-Object -Unique)
-}
 
 # 논리 시나리오 사례 또는 승인 TestPack의 고정 케이스를 실행기 내부 객체로 변환한다.
 function Get-ExecutionCasesFromApprovedPlans {
@@ -1075,13 +821,13 @@ for ($caseIndex = 0; $caseIndex -lt $cases.Count; $caseIndex++) {
             Add-HtsActionRecord $reportingContext $actions "recoverMainWindow" "PASS" "hfrun" "재접속 후 새 HTS 메인 창을 찾아 실행을 계속했습니다."
         }
         [void](Dismiss-HtsDialogs $RuntimeContext $main $secret)
-        $startupConnectionDialogs = @(Get-HtsConnectionDialogs $RuntimeContext $main $secret)
+        $startupConnectionDialogs = @(Get-HtsConnectionDialogs $observationContext $RuntimeContext $main $secret)
         if ($startupConnectionDialogs.Count -gt 0) {
             throw "HTS_CONNECTION_LOST: 연결 장애 대화상자가 남아 있어 사용자 판단 없이 실행을 중단했습니다. $([string]$startupConnectionDialogs[0].text)"
         }
         [void](Close-ScreenSearchOverlays $navigationContext $main)
-        $logBefore = Get-LogState
-        $beforeErrorTexts = @(Get-ErrorWindowTexts $main $caseErrorRegex $secret)
+        $logBefore = Get-LogState $observationContext
+        $beforeErrorTexts = @(Get-ErrorWindowTexts $observationContext $main $caseErrorRegex $secret)
         if ($reuseScenarioScreen -or $reuseExistingTargetScreenRequested) {
             $requestedScreenWindow = Find-ScreenWindow $navigationContext $main ([string]$case.screen.screenNumber)
             $screen = if ($requestedScreenWindow) { Find-BestHtsContentSurface $navigationContext $main $requestedScreenWindow ([string]$case.screen.screenNumber) @() } else { $null }
@@ -1121,7 +867,7 @@ for ($caseIndex = 0; $caseIndex -lt $cases.Count; $caseIndex++) {
             $screen = Find-BestHtsContentSurface $navigationContext $main $requestedScreenWindow ([string]$case.screen.screenNumber) $baselineScreenHwnds
         }
         if (-not $screen) {
-            $openConnectionDialogs = @(Get-HtsConnectionDialogs $RuntimeContext $main $secret)
+            $openConnectionDialogs = @(Get-HtsConnectionDialogs $observationContext $RuntimeContext $main $secret)
             if ($openConnectionDialogs.Count -gt 0) {
                 throw "HTS_CONNECTION_LOST: 화면 열기 중 연결 장애가 확인되어 사용자 판단 없이 실행을 중단했습니다. $([string]$openConnectionDialogs[0].text)"
             }
@@ -1132,7 +878,7 @@ for ($caseIndex = 0; $caseIndex -lt $cases.Count; $caseIndex++) {
                 Add-HtsActionRecord $reportingContext $actions "openScreen" "FAIL" ([string]$case.screen.screenNumber) "화면 창이 표시되지 않았습니다." "SCREEN_NOT_VISIBLE"
                 $errors.Add("화면을 연 뒤 대상 창이 표시되지 않았습니다.")
             }
-            foreach ($dialog in @(Get-HtsDialogs $RuntimeContext $main $secret)) {
+            foreach ($dialog in @(Get-HtsDialogs $observationContext $RuntimeContext $main $secret)) {
                 if ($dialog.text) { $errors.Add($dialog.text) }
             }
         } else {
@@ -1217,9 +963,9 @@ for ($caseIndex = 0; $caseIndex -lt $cases.Count; $caseIndex++) {
                     if($resolvedVariableExpectation.queryShouldComplete -eq $true){
                         $queryRequiredExpectations.Add([pscustomobject]@{name=$name;outcome=$resolvedVariableExpectation})
                     }
-                    $variableDialogs=@(Get-HtsDialogs $RuntimeContext $main $secret)
+                    $variableDialogs=@(Get-HtsDialogs $observationContext $RuntimeContext $main $secret)
                     if($variableDialogs.Count -gt 0){
-                        Add-PopupObservations $popupObservations $variableDialogs $main $case.caseId ([string]$case.screen.screenNumber) $ReportDir @($resolvedVariableExpectation.messagePatterns) $mapOracle
+                        Add-PopupObservations $observationContext $popupObservations $variableDialogs $main $case.caseId ([string]$case.screen.screenNumber) $ReportDir @($resolvedVariableExpectation.messagePatterns) $mapOracle
                         $variableConnectionDialogs = @($variableDialogs | Where-Object { Test-HtsConnectionDialog $_ })
                         if ($variableConnectionDialogs.Count -gt 0) {
                             throw "HTS_CONNECTION_LOST: 조건 입력 직후 연결 장애가 확인되어 사용자 판단 없이 실행을 중단했습니다. $([string]$variableConnectionDialogs[0].text)"
@@ -1384,7 +1130,7 @@ for ($caseIndex = 0; $caseIndex -lt $cases.Count; $caseIndex++) {
                     $requestedScreenNumber=[string]$case.screen.screenNumber
                     $errorCountBefore = $errors.Count
                     $popupCountBefore = $popupObservations.Count
-                    $dialogHwndsBefore = if($scenarioMode){@(Get-HtsDialogs $RuntimeContext $main $secret | ForEach-Object {[Int64]$_.window.hwnd} | Sort-Object -Unique)}else{@()}
+                    $dialogHwndsBefore = if($scenarioMode){@(Get-HtsDialogs $observationContext $RuntimeContext $main $secret | ForEach-Object {[Int64]$_.window.hwnd} | Sort-Object -Unique)}else{@()}
                     $freshStepDialogs = @()
                     $transactionPreRecordedHwnds = @()
                     $assertedPopupScreenshot = ''
@@ -1437,7 +1183,7 @@ for ($caseIndex = 0; $caseIndex -lt $cases.Count; $caseIndex++) {
                         } elseif ([string]$planItem.scenarioAction -in @('AssertVisible','AssertEnabled','AssertSelected','AssertGrid')) {
                             $invoke = Invoke-RuleControlAssertion $targetRuleContext $navigationContext $screen $planItem
                         } elseif ([string]$planItem.scenarioAction -eq 'Restore') {
-                            $restoreDialogs = @(Get-HtsDialogs $RuntimeContext $main $secret)
+                            $restoreDialogs = @(Get-HtsDialogs $observationContext $RuntimeContext $main $secret)
                             $restoreConnectionDialogs = @($restoreDialogs | Where-Object { Test-HtsConnectionDialog $_ })
                             if ($restoreConnectionDialogs.Count -gt 0) {
                                 throw "HTS_CONNECTION_LOST: 복구 단계에서 연결 장애 팝업을 발견해 자동 닫기를 중단했습니다."
@@ -1446,13 +1192,13 @@ for ($caseIndex = 0; $caseIndex -lt $cases.Count; $caseIndex++) {
                                 $invoke=[pscustomobject]@{success=$true;queryEligible=$false;errorCode='';automationEngine='Safe dialog restore';output='복구할 팝업이 없어 현재 0101 상태를 유지했습니다.'}
                             } else {
                                 $dismissedCount = Dismiss-HtsDialogs $RuntimeContext $main $secret
-                                $remainingRestoreDialogs = @(Get-HtsDialogs $RuntimeContext $main $secret | Where-Object { -not (Test-HtsConnectionDialog $_) })
+                                $remainingRestoreDialogs = @(Get-HtsDialogs $observationContext $RuntimeContext $main $secret | Where-Object { -not (Test-HtsConnectionDialog $_) })
                                 $restoreSucceeded = $remainingRestoreDialogs.Count -eq 0
                                 $invoke=[pscustomobject]@{success=$restoreSucceeded;queryEligible=$false;errorCode=$(if($restoreSucceeded){''}else{'RESTORE_DIALOG_NOT_DISMISSED'});automationEngine='Safe dialog restore';output="dismissed=$dismissedCount, remaining=$($remainingRestoreDialogs.Count)"}
                             }
                         } elseif ([string]$planItem.scenarioAction -eq 'AssertPopup') {
                             Start-Sleep -Milliseconds 250
-                            $activePopups = @(Get-HtsDialogs $RuntimeContext $main $secret)
+                            $activePopups = @(Get-HtsDialogs $observationContext $RuntimeContext $main $secret)
                             $activePopupHwnds = @($activePopups | ForEach-Object {[Int64]$_.window.hwnd} | Sort-Object -Unique)
                             $matchedFreshHwnds = @($lastScenarioActionPopupHwnds | Where-Object {$activePopupHwnds -contains [Int64]$_} | Sort-Object -Unique)
                             $matchedObservation = @($popupObservations | Where-Object {$matchedFreshHwnds -contains [Int64]$_.windowHwnd} | Select-Object -Last 1)
@@ -1460,7 +1206,7 @@ for ($caseIndex = 0; $caseIndex -lt $cases.Count; $caseIndex++) {
                             $popupAssertionSucceeded = $matchedFreshHwnds.Count -gt 0
                             $invoke=[pscustomobject]@{success=$popupAssertionSucceeded;queryEligible=$false;errorCode=$(if($popupAssertionSucceeded){''}else{'ASSERT_POPUP_NOT_OBSERVED'});automationEngine='Fresh popup observer';output="priorActionNewPopupCount=$($lastScenarioActionPopupHwnds.Count), activePopupCount=$($activePopupHwnds.Count), matchedFreshPopupCount=$($matchedFreshHwnds.Count), matchedHwnds=$($matchedFreshHwnds -join ',')"}
                         } elseif ([string]$planItem.scenarioAction -eq 'AssertNoTransmission') {
-                            $transmissionDelta = Get-TransmissionDelta $logBefore
+                            $transmissionDelta = Get-TransmissionDelta $observationContext $logBefore
                             $invoke=[pscustomobject]@{success=(-not [bool]$transmissionDelta.hasTransmission);queryEligible=$false;errorCode=$(if($transmissionDelta.hasTransmission){'ASSERT_TRANSMISSION_DETECTED'}else{''});automationEngine='Sensitive log delta';output=$(if($transmissionDelta.hasTransmission){"transmissionSources=$(@($transmissionDelta.sources)-join ',')"}else{'sensitiveTransmissionDelta=none'})}
                         } else {
                             $invoke = Invoke-HtsRuleControlPlanAction -Context $actionContext -NavigationContext $navigationContext -Screen $screen -PlanItem $planItem
@@ -1475,13 +1221,13 @@ for ($caseIndex = 0; $caseIndex -lt $cases.Count; $caseIndex++) {
                         $transactionDialogs = @()
                         for ($transactionDialogAttempt=0; $transactionDialogAttempt -lt 12; $transactionDialogAttempt++) {
                             Start-Sleep -Milliseconds 250
-                            $transactionDialogs = @(Get-HtsDialogs $RuntimeContext $main $secret | Where-Object { $dialogHwndsBefore -notcontains [Int64]$_.window.hwnd })
+                            $transactionDialogs = @(Get-HtsDialogs $observationContext $RuntimeContext $main $secret | Where-Object { $dialogHwndsBefore -notcontains [Int64]$_.window.hwnd })
                             if ($transactionDialogs.Count -gt 0) { break }
                         }
                         if ($transactionDialogs.Count -eq 0) {
                             $invoke.output = "$([string]$invoke.output); transactionSubmission=direct-or-no-confirmation-dialog"
                         } else {
-                            Add-PopupObservations -List $popupObservations -Dialogs $transactionDialogs -Main $main -CaseId $case.caseId -ScreenNumber $requestedScreenNumber -ReportBase $ReportDir -ExpectedPatterns @($expectedOutcome.messagePatterns) -MapOracle $mapOracle
+                            Add-PopupObservations $observationContext -List $popupObservations -Dialogs $transactionDialogs -Main $main -CaseId $case.caseId -ScreenNumber $requestedScreenNumber -ReportBase $ReportDir -ExpectedPatterns @($expectedOutcome.messagePatterns) -MapOracle $mapOracle
                             $transactionPreRecordedHwnds = @($transactionDialogs | ForEach-Object { [Int64]$_.window.hwnd })
                             $eligibleTransactionDialogs = @($transactionDialogs | Where-Object { Test-HtsTransactionalConfirmationDialog $_ $planItem })
                             if ($eligibleTransactionDialogs.Count -eq 1) {
@@ -1528,7 +1274,7 @@ for ($caseIndex = 0; $caseIndex -lt $cases.Count; $caseIndex++) {
                         if (-not $automationContractErrorCode) { $automationContractErrorCode = [string]$invoke.errorCode }
                     }
 
-                    $stepDialogs = @(Get-HtsDialogs $RuntimeContext $main $secret)
+                    $stepDialogs = @(Get-HtsDialogs $observationContext $RuntimeContext $main $secret)
                     if ($stepDialogs.Count -gt 0) {
                         $freshStepDialogs = @($stepDialogs | Where-Object {$dialogHwndsBefore -notcontains [Int64]$_.window.hwnd})
                         $dialogsToRecord = @(
@@ -1538,7 +1284,7 @@ for ($caseIndex = 0; $caseIndex -lt $cases.Count; $caseIndex++) {
                         )
                         if(@($dialogsToRecord).Count -gt 0){
                             $popupRecordCountBefore=$popupObservations.Count
-                            Add-PopupObservations -List $popupObservations -Dialogs $dialogsToRecord -Main $main -CaseId $case.caseId -ScreenNumber $requestedScreenNumber -ReportBase $ReportDir -ExpectedPatterns @($expectedOutcome.messagePatterns) -MapOracle $mapOracle
+                            Add-PopupObservations $observationContext -List $popupObservations -Dialogs $dialogsToRecord -Main $main -CaseId $case.caseId -ScreenNumber $requestedScreenNumber -ReportBase $ReportDir -ExpectedPatterns @($expectedOutcome.messagePatterns) -MapOracle $mapOracle
                             $recordedPopupRows=@($popupObservations | Select-Object -Skip $popupRecordCountBefore)
                             if($recordedPopupRows.Count -ne $dialogsToRecord.Count){
                                 throw "POPUP_EVIDENCE_RECORD_FAILED: 신규 팝업 $($dialogsToRecord.Count)건 중 $($recordedPopupRows.Count)건만 관찰 목록에 기록됐습니다."
@@ -1563,7 +1309,7 @@ for ($caseIndex = 0; $caseIndex -lt $cases.Count; $caseIndex++) {
 
                     $linkedScreens=@(Get-HtsLinkedScreens $navigationContext $main $requestedScreenNumber)
                     if($linkedScreens.Count -gt 0){
-                        Add-LinkedScreenObservations $RuntimeContext $popupObservations $linkedScreens $main $case.caseId $requestedScreenNumber $ReportDir $secret @($planItem.control.mapNavigationTargets)
+                        Add-LinkedScreenObservations $observationContext $RuntimeContext $popupObservations $linkedScreens $main $case.caseId $requestedScreenNumber $ReportDir $secret @($planItem.control.mapNavigationTargets)
                         $linkedTitles=@($linkedScreens | ForEach-Object { [string]$_.rawTitle }) -join ', '
                         $linkedClosed=Close-HtsLinkedScreens $navigationContext $main $requestedScreenNumber
                         $navigationHandled=$true
@@ -1585,7 +1331,7 @@ for ($caseIndex = 0; $caseIndex -lt $cases.Count; $caseIndex++) {
                             [string]$planItem.control.mapSemanticRole -eq 'Navigation' -or @($planItem.control.mapNavigationTargets).Count -gt 0
                         )
                         if($isButtonTransition){
-                            Add-UnnumberedTransitionObservation $RuntimeContext $popupObservations $main $case.caseId $requestedScreenNumber $ReportDir $secret
+                            Add-UnnumberedTransitionObservation $observationContext $RuntimeContext $popupObservations $main $case.caseId $requestedScreenNumber $ReportDir $secret
                             $navigationHandled=$true
                         }else{
                             $unexpectedScreenClose=$true
@@ -1617,9 +1363,9 @@ for ($caseIndex = 0; $caseIndex -lt $cases.Count; $caseIndex++) {
                         $queryTriggered = $true
                         $mapQueryExecuted = $true
 
-                        $queryDialogs=@(Get-HtsDialogs $RuntimeContext $main $secret)
+                        $queryDialogs=@(Get-HtsDialogs $observationContext $RuntimeContext $main $secret)
                         if($queryDialogs.Count -gt 0){
-                            Add-PopupObservations $popupObservations $queryDialogs $main $case.caseId $requestedScreenNumber $ReportDir @($expectedOutcome.messagePatterns) $mapOracle
+                            Add-PopupObservations $observationContext $popupObservations $queryDialogs $main $case.caseId $requestedScreenNumber $ReportDir @($expectedOutcome.messagePatterns) $mapOracle
                             $queryConnectionDialogs = @($queryDialogs | Where-Object { Test-HtsConnectionDialog $_ })
                             if ($queryConnectionDialogs.Count -gt 0) {
                                 throw "HTS_CONNECTION_LOST: 조회 직후 연결 장애가 확인되어 사용자 판단 없이 실행을 중단했습니다. $([string]$queryConnectionDialogs[0].text)"
@@ -1632,7 +1378,7 @@ for ($caseIndex = 0; $caseIndex -lt $cases.Count; $caseIndex++) {
                         }
                         $queryLinkedScreens=@(Get-HtsLinkedScreens $navigationContext $main $requestedScreenNumber)
                         if($queryLinkedScreens.Count -gt 0){
-                            Add-LinkedScreenObservations $RuntimeContext $popupObservations $queryLinkedScreens $main $case.caseId $requestedScreenNumber $ReportDir $secret @($planItem.control.mapNavigationTargets)
+                            Add-LinkedScreenObservations $observationContext $RuntimeContext $popupObservations $queryLinkedScreens $main $case.caseId $requestedScreenNumber $ReportDir $secret @($planItem.control.mapNavigationTargets)
                             $queryLinkedClosed=Close-HtsLinkedScreens $navigationContext $main $requestedScreenNumber
                             $navigationHandled=$true
                             $screen=Find-ScreenWindow $navigationContext $main $requestedScreenNumber
@@ -1648,7 +1394,7 @@ for ($caseIndex = 0; $caseIndex -lt $cases.Count; $caseIndex++) {
                         }
                         $screenAlive=Test-HtsRequestedScreen $navigationContext $screen $requestedScreenNumber
                         if(-not $screenAlive -and $queryLinkedScreens.Count -eq 0){
-                            Add-UnnumberedTransitionObservation $RuntimeContext $popupObservations $main $case.caseId $requestedScreenNumber $ReportDir $secret
+                            Add-UnnumberedTransitionObservation $observationContext $RuntimeContext $popupObservations $main $case.caseId $requestedScreenNumber $ReportDir $secret
                             $navigationHandled=$true
                             $screenEdit=Find-ScreenNumberEdit $RuntimeContext $main
                             Open-HtsScreen $navigationContext $main $screenEdit $requestedScreenNumber
@@ -1810,10 +1556,10 @@ for ($caseIndex = 0; $caseIndex -lt $cases.Count; $caseIndex++) {
                         }
                         Start-Sleep -Milliseconds ([Math]::Max(500,[int]$dataset.executionPolicy.actionTimeoutMs))
 
-                        $queryDialogs=@(Get-HtsDialogs $RuntimeContext $main $secret)
+                        $queryDialogs=@(Get-HtsDialogs $observationContext $RuntimeContext $main $secret)
                         if($queryDialogs.Count -gt 0){
                             $caseExpectedOutcome=Get-HtsExpectedOutcome $null @(@($case.screen.expectedPopupPatterns)+@($executedExpectationPatterns))
-                            Add-PopupObservations $popupObservations $queryDialogs $main $case.caseId $requestedScreenNumber $ReportDir @($caseExpectedOutcome.messagePatterns) $mapOracle
+                            Add-PopupObservations $observationContext $popupObservations $queryDialogs $main $case.caseId $requestedScreenNumber $ReportDir @($caseExpectedOutcome.messagePatterns) $mapOracle
                             $requiredQueryConnectionDialogs = @($queryDialogs | Where-Object { Test-HtsConnectionDialog $_ })
                             if ($requiredQueryConnectionDialogs.Count -gt 0) {
                                 throw "HTS_CONNECTION_LOST: 필수 조회 직후 연결 장애가 확인되어 사용자 판단 없이 실행을 중단했습니다. $([string]$requiredQueryConnectionDialogs[0].text)"
@@ -1827,7 +1573,7 @@ for ($caseIndex = 0; $caseIndex -lt $cases.Count; $caseIndex++) {
                         $queryLinkedScreens=@(Get-HtsLinkedScreens $navigationContext $main $requestedScreenNumber)
                         $queryNavigationHandled=$false
                         if($queryLinkedScreens.Count -gt 0){
-                            Add-LinkedScreenObservations $RuntimeContext $popupObservations $queryLinkedScreens $main $case.caseId $requestedScreenNumber $ReportDir $secret @($tabOrderQueryControl.mapNavigationTargets)
+                            Add-LinkedScreenObservations $observationContext $RuntimeContext $popupObservations $queryLinkedScreens $main $case.caseId $requestedScreenNumber $ReportDir $secret @($tabOrderQueryControl.mapNavigationTargets)
                             $queryLinkedClosed=Close-HtsLinkedScreens $navigationContext $main $requestedScreenNumber
                             $queryNavigationHandled=$true
                             $screen=Find-ScreenWindow $navigationContext $main $requestedScreenNumber
@@ -1841,7 +1587,7 @@ for ($caseIndex = 0; $caseIndex -lt $cases.Count; $caseIndex++) {
                         }
                         $queryAlive=Test-HtsRequestedScreen $navigationContext $screen $requestedScreenNumber
                         if(-not $queryAlive -and -not $queryNavigationHandled){
-                            Add-UnnumberedTransitionObservation $RuntimeContext $popupObservations $main $case.caseId $requestedScreenNumber $ReportDir $secret
+                            Add-UnnumberedTransitionObservation $observationContext $RuntimeContext $popupObservations $main $case.caseId $requestedScreenNumber $ReportDir $secret
                             $queryNavigationHandled=$true
                             $screenEdit=Find-ScreenNumberEdit $RuntimeContext $main
                             Open-HtsScreen $navigationContext $main $screenEdit $requestedScreenNumber
@@ -1908,9 +1654,9 @@ for ($caseIndex = 0; $caseIndex -lt $cases.Count; $caseIndex++) {
         }
 
         $caseExpectedOutcome=Get-HtsExpectedOutcome $null @(@($case.screen.expectedPopupPatterns)+@($executedExpectationPatterns))
-        $finalDialogs = @(Get-HtsDialogs $RuntimeContext $main $secret)
+        $finalDialogs = @(Get-HtsDialogs $observationContext $RuntimeContext $main $secret)
         if ($finalDialogs.Count -gt 0) {
-            Add-PopupObservations $popupObservations $finalDialogs $main $case.caseId ([string]$case.screen.screenNumber) $ReportDir @($caseExpectedOutcome.messagePatterns) $mapOracle
+            Add-PopupObservations $observationContext $popupObservations $finalDialogs $main $case.caseId ([string]$case.screen.screenNumber) $ReportDir @($caseExpectedOutcome.messagePatterns) $mapOracle
             $finalConnectionDialogs = @($finalDialogs | Where-Object { Test-HtsConnectionDialog $_ })
             if ($finalConnectionDialogs.Count -gt 0) {
                 throw "HTS_CONNECTION_LOST: 케이스 종료 전 연결 장애가 확인되어 사용자 판단 없이 실행을 중단했습니다. $([string]$finalConnectionDialogs[0].text)"
@@ -1920,8 +1666,8 @@ for ($caseIndex = 0; $caseIndex -lt $cases.Count; $caseIndex++) {
                 Add-HtsOracleObservation -Context $observationContext $oracleEvents $observation 'final-dialog'
             }
         }
-        $windowErrors = @(Get-ExplicitWindowErrors $main $beforeErrorTexts $caseErrorRegex $secret $mapOracle)
-        $logErrors = @(Get-LogErrors $logBefore $caseErrorRegex $secret $mapOracle)
+        $windowErrors = @(Get-ExplicitWindowErrors $observationContext $main $beforeErrorTexts $caseErrorRegex $secret $mapOracle)
+        $logErrors = @(Get-LogErrors $observationContext $logBefore $caseErrorRegex $secret $mapOracle)
         foreach ($message in $windowErrors) {
             $observation=New-HtsSignalObservation -Context $observationContext ([string]$message) $mapOracle $caseExpectedOutcome $caseErrorRegex
             Add-HtsOracleObservation -Context $observationContext $oracleEvents $observation 'window-text'
@@ -2010,17 +1756,17 @@ for ($caseIndex = 0; $caseIndex -lt $cases.Count; $caseIndex++) {
     $screenshot = ""
     if ($errors.Count -gt 0) {
         $candidateScreenshot = Join-Path $screenshotsDir ("error-{0}-{1}.png" -f $case.screen.screenNumber, $case.caseId)
-        if ($main -and [TargetRuleNative]::IsWindow([IntPtr][Int64]$main.hwnd) -and (Capture-HtsScreenshot $main $candidateScreenshot)) {
+        if ($main -and [TargetRuleNative]::IsWindow([IntPtr][Int64]$main.hwnd) -and (Capture-HtsScreenshot $observationContext $main $candidateScreenshot)) {
             $screenshot = $candidateScreenshot
         }
     }
-    $dialogsBeforeDismiss = if ($main) { @(Get-HtsDialogs $RuntimeContext $main $secret) } else { @() }
+    $dialogsBeforeDismiss = if ($main) { @(Get-HtsDialogs $observationContext $RuntimeContext $main $secret) } else { @() }
     if ($dialogsBeforeDismiss.Count -gt 0) {
         $dismissed = Dismiss-HtsDialogs $RuntimeContext $main $secret
         Add-HtsActionRecord $reportingContext $actions "dismissDialog" $(if ($dismissed -eq $dialogsBeforeDismiss.Count) { "PASS" } else { "PENDING" }) "HTS dialog" "후속 테스트를 위해 HTS 대화상자 $dismissed/$($dialogsBeforeDismiss.Count)개를 닫았습니다." $(if ($dismissed -eq $dialogsBeforeDismiss.Count) { "" } else { "DIALOG_DISMISS_PENDING" })
         if ($dismissed -ne $dialogsBeforeDismiss.Count) { $pendingReasons.Add("HTS 대화상자 닫기") }
     }
-    $remainingDialogs = if ($main -and [TargetRuleNative]::IsWindow([IntPtr][Int64]$main.hwnd)) { @(Get-HtsDialogs $RuntimeContext $main $secret) } else { @() }
+    $remainingDialogs = if ($main -and [TargetRuleNative]::IsWindow([IntPtr][Int64]$main.hwnd)) { @(Get-HtsDialogs $observationContext $RuntimeContext $main $secret) } else { @() }
     if ($existingScreenRequiredMissing) {
         Add-HtsActionRecord $reportingContext $actions 'closeScreen' 'PENDING' ([string]$case.screen.screenNumber) '연결된 대상 화면이 없어 화면 종료 동작을 수행하지 않았습니다.' 'EXISTING_SCREEN_REQUIRED'
     } elseif ($remainingDialogs.Count -gt 0) {

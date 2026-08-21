@@ -358,3 +358,10 @@ target rule adapter
 - orchestration에 남아 있던 메시지·기대값·오류 정규화 adapter 9개를 제거하고 `hts-observation.ps1`의 단일 구현을 직접 호출한다.
 - 상태가 필요한 정규화 호출은 실행별 `ObservationContext`를 명시적으로 전달한다.
 - Observation 모듈에는 ResultEvaluator 호출이나 파일 리포트 생성 분기를 추가하지 않았으며 기존 분류·기대값 규칙을 그대로 유지했다.
+
+### Observation 수집 helper 이동
+
+- 대화상자·연계 화면·번호 없는 전환·팝업, 스크린샷, 로그 증분, 창 오류 수집 함수 12개를 `hts-observation.ps1`로 이동했다.
+- 창 열거, 자식 창, 화면번호, 민감정보 보호, 상대 증거 경로와 시각 의존성은 `ObservationContext.Dependencies`로 전달한다.
+- 로그 fallback 경로는 context의 HTS 설치 루트로 제한하며 기존 로그 모드·오류 필터·민감 로그 비수집 규칙을 유지한다.
+- Fake 소유 대화상자에서 오류 분류와 secret 마스킹을 검증했고, 실제 HTS 또는 화면 캡처는 실행하지 않았다.
