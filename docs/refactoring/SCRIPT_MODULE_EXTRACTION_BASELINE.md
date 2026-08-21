@@ -311,3 +311,9 @@ target rule adapter
 - 세 책임 파일에는 orchestration의 `Get-WindowInfo`, `Click-Center`, `Get-FlaUiActionableControls` 같은 함수에 대한 직접 호출이 남아 있지 않다.
 - context를 먼저 로드한 뒤 Action → Binding → Discovery 역순으로 선언해도 기존 MAP/상태 동작이 같은 characterization을 추가했다.
 - UI 동작 모듈은 여전히 원시 성공·검증·오류만 반환하며 ResultEvaluator 또는 리포트 생성을 포함하지 않는다.
+
+### Reporting 단계
+
+- `hts-reporting.ps1`로 파일 SHA-256, 민감정보 마스킹, 계좌 fingerprint, 상대 증거 경로, action trace와 workbook export를 이동했다.
+- workbook exporter와 execution trace 경로는 `HtsReportingContext`로 명시적으로 전달되며 orchestration의 `$script:executionTracePath`를 제거했다.
+- Reporting은 완성된 결과와 action 증거만 기록하고 UI 입력 또는 ResultEvaluator 호출을 수행하지 않는다.

@@ -39,6 +39,7 @@ $root = Split-Path -Parent $scriptsRoot
 . (Join-Path $PSScriptRoot "hts-action.ps1")
 . (Join-Path $PSScriptRoot "hts-observation.ps1")
 . (Join-Path $PSScriptRoot "hts-safety.ps1")
+. (Join-Path $PSScriptRoot "hts-reporting.ps1")
 
 # 공통 manifest와 대상 컨텍스트를 한 번만 읽고 이하 모든 단계가 같은 파일·창·화면 범위를 사용하게 한다.
 $pipelineManifest = Get-RulePipelineManifest $root
@@ -73,28 +74,6 @@ $requestedScenarioCaseIds = @($CaseIdsCsv -split ',' | ForEach-Object { $_.Trim(
 if ($SubmitTransactionalDialogs -and -not $scenarioMode) { throw '-SubmitTransactionalDialogs에는 승인된 -ScenarioPlanPath가 필요합니다.' }
 if ($SubmitTransactionalDialogs -and ($PlanOnly -or $DryRun)) { throw '-SubmitTransactionalDialogs는 PlanOnly/DryRun과 함께 사용할 수 없습니다.' }
 
-function Get-RuleFileSha256([string]$Path) {
-    $stream=[IO.File]::OpenRead($Path)
-    $hasher=[Security.Cryptography.SHA256]::Create()
-    try {
-        (($hasher.ComputeHash($stream) | ForEach-Object { $_.ToString('X2') }) -join '')
-    } finally {
-        $hasher.Dispose()
-        $stream.Dispose()
-    }
-}
-
-function Export-RuleResultWorkbooks([string]$Path) {
-    & $reportExporter -ReportDir $Path | Out-Null
-    $compiledPath = Join-Path $Path 'compiled-plan.json'
-    $casePath = Join-Path $Path 'case-results.json'
-    $hasTcCases = Test-Path -LiteralPath $compiledPath
-    if (-not $hasTcCases -and (Test-Path -LiteralPath $casePath)) {
-        $tcRows = @(Get-Content -LiteralPath $casePath -Raw -Encoding UTF8 | ConvertFrom-Json | Where-Object { [string]$_.sourceTestCaseId })
-        $hasTcCases = $tcRows.Count -gt 0
-    }
-    if ($hasTcCases) { & $tcReportExporter -ReportDir $Path | Out-Null }
-}
 if ($scenarioMode) {
     $scenarioPlanFullPath = if ([IO.Path]::IsPathRooted($ScenarioPlanPath)) { $ScenarioPlanPath } else { Join-Path $root $ScenarioPlanPath }
     if (-not (Test-Path -LiteralPath $scenarioPlanFullPath)) { throw "컴파일된 시나리오 계획을 찾을 수 없습니다: $scenarioPlanFullPath" }
@@ -158,8 +137,9 @@ if ($scenarioMode) {
         Copy-Item -LiteralPath $bindingCatalogSource -Destination (Join-Path $ReportDir 'binding-catalog.json') -Force
     }
 }
-$script:executionTracePath = Join-Path $ReportDir "execution-trace.ndjson"
-if (Test-Path -LiteralPath $script:executionTracePath) { Remove-Item -LiteralPath $script:executionTracePath -Force }
+$executionTracePath = Join-Path $ReportDir "execution-trace.ndjson"
+if (Test-Path -LiteralPath $executionTracePath) { Remove-Item -LiteralPath $executionTracePath -Force }
+$reportingContext = New-HtsReportingContext -ReportExporter $reportExporter -TcReportExporter $tcReportExporter -ExecutionTracePath $executionTracePath
 $inputBoundaryAuditPath = Join-Path $ReportDir "input-boundary-audit.ndjson"
 if (Test-Path -LiteralPath $inputBoundaryAuditPath) { Remove-Item -LiteralPath $inputBoundaryAuditPath -Force }
 
@@ -230,7 +210,7 @@ if ($DryRun) {
         $drySummary|ConvertTo-Json -Depth 8|Set-Content -LiteralPath $drySummaryPath -Encoding UTF8
     }
     if (-not $SkipExcel) {
-        Export-RuleResultWorkbooks $ReportDir
+        Export-HtsRuleResultWorkbooks $reportingContext $ReportDir
     }
     Write-Output $ReportDir
     return
@@ -467,14 +447,6 @@ function Get-FlaUiActionableControls($Screen) {
 }
 
 # 공통 창·입력 유틸리티: 민감정보 보호와 모든 물리 입력의 HTS 경계 검사를 담당한다.
-function Protect-Text([string]$Text, [string]$Secret = "") {
-    if ($null -eq $Text) { return "" }
-    $masked = $Text -replace '\b(\d{3})\d{5}-(\d{3})\b', '$1****$2'
-    $masked = $masked -replace '\b(\d{3})\d{4,8}(\d{3})\b', '$1****$2'
-    $masked = $masked -replace '\b\d{6}-\d{7}\b', '******-*******'
-    if ($Secret) { $masked = $masked.Replace($Secret, "******") }
-    $masked
-}
 
 # 단일 HWND의 소유 관계, 상태, 제목, 클래스와 화면 좌표를 같은 형태의 객체로 읽는다.
 function Get-WindowInfo([IntPtr]$Hwnd) {
@@ -1425,38 +1397,6 @@ function Get-ExecutionCasesFromApprovedPlans {
 }
 
 # 계좌가 있을 때만 보고서 상관관계용 비가역 SHA-256 짧은 지문을 만든다.
-function Get-AccountFingerprint([string]$AccountNumber) {
-    if ([string]::IsNullOrWhiteSpace($AccountNumber)) { return "" }
-    $hasher = [Security.Cryptography.SHA256]::Create()
-    try { $sha = $hasher.ComputeHash([Text.Encoding]::UTF8.GetBytes($AccountNumber)) }
-    finally { $hasher.Dispose() }
-    $hex = -join ($sha | ForEach-Object { $_.ToString("x2") })
-    $hex.Substring(0,12)
-}
-
-# 계좌가 있을 때 앞뒤 일부만 남기고 중간 숫자를 가린다.
-function Get-MaskedAccount([string]$AccountNumber) {
-    if ([string]::IsNullOrWhiteSpace($AccountNumber)) { return "" }
-    $digits = $AccountNumber -replace '\D', ''
-    if ($digits.Length -lt 7) { return "******" }
-    $digits.Substring(0,3) + "****" + $digits.Substring($digits.Length - 3)
-}
-
-# 실행 폴더 기준 상대 경로를 만들어 결과 폴더 이동 후에도 증거 링크가 유지되게 한다.
-function Get-RelativeFilePath([string]$BasePath, [string]$TargetPath) {
-    $baseFull = [IO.Path]::GetFullPath($BasePath).TrimEnd('\') + '\'
-    $targetFull = [IO.Path]::GetFullPath($TargetPath)
-    $relative = (New-Object Uri($baseFull)).MakeRelativeUri((New-Object Uri($targetFull))).ToString()
-    [Uri]::UnescapeDataString($relative).Replace('/', '\')
-}
-
-# 케이스 액션 배열과 시간순 실행 trace에 같은 상태를 동시에 기록한다.
-function Add-Action($List, [string]$Action, [string]$Status, [string]$Target = "", [string]$Output = "", [string]$ErrorCode = "") {
-    $row=[pscustomobject]@{ action=$Action; status=$Status; target=$Target; output=$Output; errorCode=$ErrorCode; elapsedMs=0 }
-    $List.Add($row)
-    [pscustomobject]@{timestamp=(Get-Date).ToString('o');action=$Action;status=$Status;target=$Target;output=$Output;errorCode=$ErrorCode} |
-        ConvertTo-Json -Compress | Add-Content -LiteralPath $script:executionTracePath -Encoding UTF8
-}
 
 $navigationDependencies = [pscustomobject]@{
     GetChildWindows = { param([Int64]$Hwnd) @(Get-ChildWindows $Hwnd) }
@@ -1565,7 +1505,7 @@ try {
         environmentStatus="HTS_NOT_ACCESSIBLE"; finishedAt=(Get-Date).ToString("o"); executionMode=$(if($SubmitTransactionalDialogs){"승인된 테스트계좌 거래 제출"}else{"조회 전용"}); inputMode="화면 기본값 또는 데이터셋 명시 입력"; planner="결정론적 규칙"
     } | ConvertTo-Json -Depth 5 | Set-Content -LiteralPath (Join-Path $ReportDir "summary.json") -Encoding UTF8
     Stop-FlaUiBridge -Context $sessionContext
-    if (-not $SkipExcel) { Export-RuleResultWorkbooks $ReportDir }
+    if (-not $SkipExcel) { Export-HtsRuleResultWorkbooks $reportingContext $ReportDir }
     Write-Output $ReportDir
     return
 }
@@ -1645,7 +1585,7 @@ for ($caseIndex = 0; $caseIndex -lt $cases.Count; $caseIndex++) {
         $main = Wait-HtsMainWindow -Context $sessionContext
         Set-HtsSafetySession -Context $safetyContext -Main $main
         if ($previousPid -ne 0 -and $main.pid -ne $previousPid) {
-            Add-Action $actions "recoverMainWindow" "PASS" "hfrun" "재접속 후 새 HTS 메인 창을 찾아 실행을 계속했습니다."
+            Add-HtsActionRecord $reportingContext $actions "recoverMainWindow" "PASS" "hfrun" "재접속 후 새 HTS 메인 창을 찾아 실행을 계속했습니다."
         }
         [void](Dismiss-HtsDialogs $main $secret)
         $startupConnectionDialogs = @(Get-HtsConnectionDialogs $main $secret)
@@ -1661,14 +1601,14 @@ for ($caseIndex = 0; $caseIndex -lt $cases.Count; $caseIndex++) {
             if ($screen) {
                 $usedExistingTargetScreen = Test-PreservedTargetScreen $requestedScreenWindow
                 if ($usedExistingTargetScreen) {
-                    Add-Action $actions 'attachExistingScreen' 'PASS' ([string]$case.screen.screenNumber) '사용자가 미리 열어둔 대상 화면에 연결했으며 화면번호 재입력을 수행하지 않았습니다.'
+                    Add-HtsActionRecord $reportingContext $actions 'attachExistingScreen' 'PASS' ([string]$case.screen.screenNumber) '사용자가 미리 열어둔 대상 화면에 연결했으며 화면번호 재입력을 수행하지 않았습니다.'
                 } else {
-                    Add-Action $actions 'reuseScreenForScenario' 'PASS' ([string]$case.screen.screenNumber) '같은 화면의 다음 시나리오 케이스이므로 화면을 닫고 다시 열지 않고 현재 콘텐츠 표면을 재사용했습니다.'
+                    Add-HtsActionRecord $reportingContext $actions 'reuseScreenForScenario' 'PASS' ([string]$case.screen.screenNumber) '같은 화면의 다음 시나리오 케이스이므로 화면을 닫고 다시 열지 않고 현재 콘텐츠 표면을 재사용했습니다.'
                 }
             } elseif ($RequireExistingTargetScreen) {
                 $existingScreenRequiredMissing = $true
                 $pendingReasons.Add("사용자가 미리 열어둔 [$($case.screen.screenNumber)] 화면이 필요합니다.")
-                Add-Action $actions 'attachExistingScreen' 'PENDING' ([string]$case.screen.screenNumber) '기존 대상 화면이 없어 화면번호 재입력 없이 실행을 보류했습니다.' 'EXISTING_SCREEN_REQUIRED'
+                Add-HtsActionRecord $reportingContext $actions 'attachExistingScreen' 'PENDING' ([string]$case.screen.screenNumber) '기존 대상 화면이 없어 화면번호 재입력 없이 실행을 보류했습니다.' 'EXISTING_SCREEN_REQUIRED'
             } else {
                 $screenEdit = Find-ScreenNumberEdit $main
                 Open-HtsScreen $main $screenEdit ([string]$case.screen.screenNumber)
@@ -1677,11 +1617,11 @@ for ($caseIndex = 0; $caseIndex -lt $cases.Count; $caseIndex++) {
                 $screen = Find-BestHtsContentSurface $main $requestedScreenWindow ([string]$case.screen.screenNumber) @()
                 $openAction = if($reuseScenarioScreen){'reopenMissingScenarioScreen'}else{'openTargetScreen'}
                 $openMessage = if($reuseScenarioScreen){'같은 화면의 다음 케이스 전에 대상 화면이 사라져 다시 열었습니다.'}else{'실행 중인 HTS 메인 창의 화면번호 입력란으로 대상 화면을 열었습니다.'}
-                Add-Action $actions $openAction $(if($screen){'PASS'}else{'FAIL'}) ([string]$case.screen.screenNumber) $openMessage $(if($screen){''}else{'SCREEN_NOT_VISIBLE'})
+                Add-HtsActionRecord $reportingContext $actions $openAction $(if($screen){'PASS'}else{'FAIL'}) ([string]$case.screen.screenNumber) $openMessage $(if($screen){''}else{'SCREEN_NOT_VISIBLE'})
             }
         } else {
             $leftoverScreensClosed=Close-ExistingTargetScreens $main
-            if($leftoverScreensClosed -gt 0){Add-Action $actions 'cleanupPreviousScreens' 'PASS' 'HTS sibling windows' "이전 화면에서 남은 HTS 내부 창 $leftoverScreensClosed개를 정리했습니다."}
+            if($leftoverScreensClosed -gt 0){Add-HtsActionRecord $reportingContext $actions 'cleanupPreviousScreens' 'PASS' 'HTS sibling windows' "이전 화면에서 남은 HTS 내부 창 $leftoverScreensClosed개를 정리했습니다."}
             $remainingBeforeOpen=@(Get-HtsScreenWindows $main)
             if($remainingBeforeOpen.Count -gt 0){
                 throw "SCREEN_SEQUENCE_GUARD: 이전 화면 $($remainingBeforeOpen.Count)개가 남아 있어 다음 화면 열기를 차단했습니다."
@@ -1702,7 +1642,7 @@ for ($caseIndex = 0; $caseIndex -lt $cases.Count; $caseIndex++) {
                 $screenOpenFailure = $true
                 $automationContractFailure = $true
                 $automationContractErrorCode = 'SCREEN_NOT_VISIBLE'
-                Add-Action $actions "openScreen" "FAIL" ([string]$case.screen.screenNumber) "화면 창이 표시되지 않았습니다." "SCREEN_NOT_VISIBLE"
+                Add-HtsActionRecord $reportingContext $actions "openScreen" "FAIL" ([string]$case.screen.screenNumber) "화면 창이 표시되지 않았습니다." "SCREEN_NOT_VISIBLE"
                 $errors.Add("화면을 연 뒤 대상 창이 표시되지 않았습니다.")
             }
             foreach ($dialog in @(Get-HtsDialogs $main $secret)) {
@@ -1712,40 +1652,40 @@ for ($caseIndex = 0; $caseIndex -lt $cases.Count; $caseIndex++) {
             if(-not (Focus-HtsRequestedScreen $main $screen ([string]$case.screen.screenNumber))){
                 throw "INPUT_SCOPE_BLOCKED: [$($case.screen.screenNumber)] 대상 화면을 활성 입력 표면으로 고정하지 못했습니다."
             }
-            Add-Action $actions "openScreen" "PASS" ([string]$case.screen.screenNumber) $(if($usedExistingTargetScreen){'기존 화면을 재호출하지 않고 활성화했습니다.'}else{'화면 창이 열렸습니다.'})
+            Add-HtsActionRecord $reportingContext $actions "openScreen" "PASS" ([string]$case.screen.screenNumber) $(if($usedExistingTargetScreen){'기존 화면을 재호출하지 않고 활성화했습니다.'}else{'화면 창이 열렸습니다.'})
             if ($mapOracle) {
                 $oracleMessageCount = @($mapOracle.messageBoxes).Count
                 $oracleErrorCount = @($mapOracle.messageBoxes | Where-Object isExplicitError).Count
                 $oracleValidationCount = @($mapOracle.messageBoxes | Where-Object classification -eq 'InputValidation').Count
-                Add-Action $actions 'loadMapErrorOracle' 'PASS' ([string]$case.screen.screenNumber) "MAP 오류 오라클을 적용했습니다: 메시지 $oracleMessageCount개(명시 오류 $oracleErrorCount, 입력 검증 $oracleValidationCount), 오류 핸들러 $(@($mapOracle.errorHandlers).Count)개, 통신 식별자 $(@($mapOracle.requestNames).Count + @($mapOracle.transactionCodes).Count)개."
+                Add-HtsActionRecord $reportingContext $actions 'loadMapErrorOracle' 'PASS' ([string]$case.screen.screenNumber) "MAP 오류 오라클을 적용했습니다: 메시지 $oracleMessageCount개(명시 오류 $oracleErrorCount, 입력 검증 $oracleValidationCount), 오류 핸들러 $(@($mapOracle.errorHandlers).Count)개, 통신 식별자 $(@($mapOracle.requestNames).Count + @($mapOracle.transactionCodes).Count)개."
             } else {
-                Add-Action $actions 'loadMapErrorOracle' 'PENDING' ([string]$case.screen.screenNumber) '화면별 MAP 오류 오라클이 없어 공통 오류 규칙만 적용합니다.' 'MAP_ERROR_ORACLE_NOT_FOUND'
+                Add-HtsActionRecord $reportingContext $actions 'loadMapErrorOracle' 'PENDING' ([string]$case.screen.screenNumber) '화면별 MAP 오류 오라클이 없어 공통 오류 규칙만 적용합니다.' 'MAP_ERROR_ORACLE_NOT_FOUND'
             }
             if ($mapBehavior) {
-                Add-Action $actions 'loadMapBehavior' 'PASS' ([string]$case.screen.screenNumber) "MAP 동작 모델을 적용했습니다: 이벤트 $(@($mapBehavior.eventHandlers).Count)개, 조회 $(@($mapBehavior.queryControls).Count)개, 자동조회 $(@($mapBehavior.autoQueryControls).Count)개, 상태제어 $(@($mapBehavior.stateControllerControls).Count)개, 입력 $(@($mapBehavior.inputControls).Count)개, 결과 $(@($mapBehavior.resultControls).Count)개."
+                Add-HtsActionRecord $reportingContext $actions 'loadMapBehavior' 'PASS' ([string]$case.screen.screenNumber) "MAP 동작 모델을 적용했습니다: 이벤트 $(@($mapBehavior.eventHandlers).Count)개, 조회 $(@($mapBehavior.queryControls).Count)개, 자동조회 $(@($mapBehavior.autoQueryControls).Count)개, 상태제어 $(@($mapBehavior.stateControllerControls).Count)개, 입력 $(@($mapBehavior.inputControls).Count)개, 결과 $(@($mapBehavior.resultControls).Count)개."
             } else {
-                Add-Action $actions 'loadMapBehavior' 'PENDING' ([string]$case.screen.screenNumber) '화면별 MAP 동작 모델이 없어 런타임 발견 정보만 사용합니다.' 'MAP_BEHAVIOR_NOT_FOUND'
+                Add-HtsActionRecord $reportingContext $actions 'loadMapBehavior' 'PENDING' ([string]$case.screen.screenNumber) '화면별 MAP 동작 모델이 없어 런타임 발견 정보만 사용합니다.' 'MAP_BEHAVIOR_NOT_FOUND'
             }
             if($mapModel -and $mapCatalog.installationFingerprint){
                 $canonicalTitle=if($mapModel.registry){[string]$mapModel.registry.title}else{[string]$mapModel.screenName}
                 $integrityStatus=if($mapModel.integrity){[string]$mapModel.integrity.status}else{'MANIFEST_MISSING'}
                 $installStatus=if($integrityStatus -eq 'MATCH'){'PASS'}else{'PENDING'}
-                Add-Action $actions 'loadInstallationCatalog' $installStatus ([string]$case.screen.screenNumber) "설치 기준 '$canonicalTitle'을 적용했습니다: 탭 형제 $(@($mapModel.tabSiblings).Count)개, 연결 정의 $(@($mapModel.dependencies).Count)개, 데이터 사전 $(@($mapModel.dataReferences).Count)개, 무결성 $integrityStatus." $(if($installStatus-eq'PASS'){''}else{'INSTALLATION_MODEL_DRIFT'})
+                Add-HtsActionRecord $reportingContext $actions 'loadInstallationCatalog' $installStatus ([string]$case.screen.screenNumber) "설치 기준 '$canonicalTitle'을 적용했습니다: 탭 형제 $(@($mapModel.tabSiblings).Count)개, 연결 정의 $(@($mapModel.dependencies).Count)개, 데이터 사전 $(@($mapModel.dataReferences).Count)개, 무결성 $integrityStatus." $(if($installStatus-eq'PASS'){''}else{'INSTALLATION_MODEL_DRIFT'})
                 if($installStatus-ne'PASS'){$pendingReasons.Add("설치 무결성: $integrityStatus")}
             }
             if($requestedScreenWindow -and $screen.hwnd -ne $requestedScreenWindow.hwnd){
-                Add-Action $actions 'resolveContentSurface' 'PASS' ([string]$screen.rawTitle) "요청 화면과 같은 번호이거나 화면 열기 뒤 새로 생성된 콘텐츠 표면만 선택했습니다."
+                Add-HtsActionRecord $reportingContext $actions 'resolveContentSurface' 'PASS' ([string]$screen.rawTitle) "요청 화면과 같은 번호이거나 화면 열기 뒤 새로 생성된 콘텐츠 표면만 선택했습니다."
             }
             if ($inputMode -eq "Prefilled") {
-                Add-Action $actions "usePrefilledInputs" "PASS" "prefilled inputs" "현재 화면에 기본 입력된 값을 변경하지 않고 사용했습니다."
+                Add-HtsActionRecord $reportingContext $actions "usePrefilledInputs" "PASS" "prefilled inputs" "현재 화면에 기본 입력된 값을 변경하지 않고 사용했습니다."
             } else {
                 $accountStrategies = if ($case.screen.locators -and $case.screen.locators.account) { $case.screen.locators.account } else { $dataset.defaultLocators.account }
                 $accountControl = Resolve-HtsRoleControl -Context $bindingContext -Screen $screen -Role 'account' -Strategies $accountStrategies
                 if ($accountControl -and [Int64]$accountControl.hwnd -ne 0) { $claimedHwnds[[Int64]$accountControl.hwnd] = $true }
                 if ($accountControl -and (Set-AutomationText $accountControl ([string]$case.account.accountNumber))) {
-                    Add-Action $actions "setAccount" "PASS" "account" "계좌번호를 입력했으며 결과에는 마스킹했습니다."
+                    Add-HtsActionRecord $reportingContext $actions "setAccount" "PASS" "account" "계좌번호를 입력했으며 결과에는 마스킹했습니다."
                 } else {
-                    Add-Action $actions "setAccount" "PENDING" "account" "신뢰도 높은 계좌 입력칸을 찾지 못했습니다." "LOCATOR_NOT_RESOLVED"
+                    Add-HtsActionRecord $reportingContext $actions "setAccount" "PENDING" "account" "신뢰도 높은 계좌 입력칸을 찾지 못했습니다." "LOCATOR_NOT_RESOLVED"
                     $pendingReasons.Add("계좌 입력칸")
                 }
 
@@ -1753,12 +1693,12 @@ for ($caseIndex = 0; $caseIndex -lt $cases.Count; $caseIndex++) {
                 $passwordControl = Resolve-HtsRoleControl -Context $bindingContext -Screen $screen -Role 'password' -Strategies $passwordStrategies
                 if ($passwordControl -and [Int64]$passwordControl.hwnd -ne 0) { $claimedHwnds[[Int64]$passwordControl.hwnd] = $true }
                 if (-not $secret) {
-                    Add-Action $actions "setPassword" "PENDING" "password" "비밀번호 환경 변수가 설정되지 않았습니다." "SECRET_NOT_SET"
+                    Add-HtsActionRecord $reportingContext $actions "setPassword" "PENDING" "password" "비밀번호 환경 변수가 설정되지 않았습니다." "SECRET_NOT_SET"
                     $pendingReasons.Add("비밀번호 환경 변수")
                 } elseif ($passwordControl -and (Set-AutomationText $passwordControl $secret -Sensitive)) {
-                    Add-Action $actions "setPassword" "PASS" "password" "비밀번호를 입력했으며 값은 기록하지 않았습니다."
+                    Add-HtsActionRecord $reportingContext $actions "setPassword" "PASS" "password" "비밀번호를 입력했으며 값은 기록하지 않았습니다."
                 } else {
-                    Add-Action $actions "setPassword" "PENDING" "password" "신뢰도 높은 비밀번호 입력칸을 찾지 못했습니다." "LOCATOR_NOT_RESOLVED"
+                    Add-HtsActionRecord $reportingContext $actions "setPassword" "PENDING" "password" "신뢰도 높은 비밀번호 입력칸을 찾지 못했습니다." "LOCATOR_NOT_RESOLVED"
                     $pendingReasons.Add("비밀번호 입력칸")
                 }
             }
@@ -1780,7 +1720,7 @@ for ($caseIndex = 0; $caseIndex -lt $cases.Count; $caseIndex++) {
                 $kind = if ($dimension.controlKind) { [string]$dimension.controlKind } else { "Auto" }
                 $valueMatch = if ($dimension.valueMatch) { [string]$dimension.valueMatch } else { "Value" }
                 if ($control -and (Invoke-HtsDatasetVariableAction -Context $actionContext -Window $control -ControlKind $kind -Value ([string]$case.variables[$name]) -ValueMatch $valueMatch -MaxOptions ([int]$dataset.autoExploration.maxOptionsPerControl))) {
-                    Add-Action $actions "setCondition" "PASS" $name "$kind 방식으로 데이터셋 조건값을 적용했습니다. 기대 계약: $([string]$resolvedVariableExpectation.type) / $([string]$resolvedVariableExpectation.source) / $([string]$resolvedVariableExpectation.confidence)."
+                    Add-HtsActionRecord $reportingContext $actions "setCondition" "PASS" $name "$kind 방식으로 데이터셋 조건값을 적용했습니다. 기대 계약: $([string]$resolvedVariableExpectation.type) / $([string]$resolvedVariableExpectation.source) / $([string]$resolvedVariableExpectation.confidence)."
                     $variableRequirementRecord=$null
                     if([string]$resolvedVariableExpectation.type -in @('ValidationRequired','FailureRequired')){
                         $variableRequirementRecord=[pscustomobject]@{controlId="dataset-variable:$name";optionId=[string]$resolvedVariableExpectation.expectationId;outcome=$resolvedVariableExpectation;observations=(New-Object Collections.Generic.List[object])}
@@ -1805,7 +1745,7 @@ for ($caseIndex = 0; $caseIndex -lt $cases.Count; $caseIndex++) {
                     }
                 } else {
                     $required = ($null -eq $dimension.required -or [bool]$dimension.required)
-                    Add-Action $actions "setCondition" $(if ($required) { "PENDING" } else { "PASS" }) $name "조건 컨트롤을 찾지 못했거나 지정값을 적용하지 못했습니다." "LOCATOR_OR_VALUE_NOT_RESOLVED"
+                    Add-HtsActionRecord $reportingContext $actions "setCondition" $(if ($required) { "PENDING" } else { "PASS" }) $name "조건 컨트롤을 찾지 못했거나 지정값을 적용하지 못했습니다." "LOCATOR_OR_VALUE_NOT_RESOLVED"
                     if ($required) { $pendingReasons.Add("조건 컨트롤 $name") }
                 }
             } }
@@ -1833,7 +1773,7 @@ for ($caseIndex = 0; $caseIndex -lt $cases.Count; $caseIndex++) {
                             break
                         }
                     }
-                    Add-Action $actions 'verifyTransactionalAccount' $(if($transactionAccountVerified){'PASS'}else{'PENDING'}) ([string]$case.account.id) $(if($transactionAccountVerified){$transactionAccountEvidence}elseif(-not $expectedAccount -and -not $allowObservedPrefilledAccount){'데이터셋 계좌번호가 비어 있고 사전입력 계좌 실행 정책도 허용되지 않았습니다.'}else{'MAP Account 컨트롤에서 실행 가능한 계좌값을 확인하지 못했습니다.'}) $(if($transactionAccountVerified){''}else{'TRANSACTION_ACCOUNT_NOT_VERIFIED'})
+                    Add-HtsActionRecord $reportingContext $actions 'verifyTransactionalAccount' $(if($transactionAccountVerified){'PASS'}else{'PENDING'}) ([string]$case.account.id) $(if($transactionAccountVerified){$transactionAccountEvidence}elseif(-not $expectedAccount -and -not $allowObservedPrefilledAccount){'데이터셋 계좌번호가 비어 있고 사전입력 계좌 실행 정책도 허용되지 않았습니다.'}else{'MAP Account 컨트롤에서 실행 가능한 계좌값을 확인하지 못했습니다.'}) $(if($transactionAccountVerified){''}else{'TRANSACTION_ACCOUNT_NOT_VERIFIED'})
                     if (-not $transactionAccountVerified) { $autoPendingReasons.Add('주문 실행 계좌 미확인') }
                 }
                 if ($mapModel) {
@@ -1842,13 +1782,13 @@ for ($caseIndex = 0; $caseIndex -lt $cases.Count; $caseIndex++) {
                     $mapUnboundCount=@($initialControls | Where-Object { $_.definitionSource -eq 'MAP' -and -not $_.mapMatched -and [string]$_.mapScreenCode -eq [string]$mapModel.screenCode }).Count
                     if ($scenarioMode -and $physicalPlan) {
                         $fixedBindingCount = @($physicalPlan.resolvedBindings | Where-Object { [string]$_.scenarioId -eq [string]$case.scenarioCase.scenarioId }).Count
-                        Add-Action $actions "bindMapModel" "PASS" ([string]$case.screen.screenNumber) "물리계획 1.1이 시나리오에 고정한 바인딩 $fixedBindingCount개를 실행 단계별로 재검증합니다. 전체 MAP 미결합 $mapUnboundCount개는 현재 시나리오 판정에 포함하지 않습니다."
+                        Add-HtsActionRecord $reportingContext $actions "bindMapModel" "PASS" ([string]$case.screen.screenNumber) "물리계획 1.1이 시나리오에 고정한 바인딩 $fixedBindingCount개를 실행 단계별로 재검증합니다. 전체 MAP 미결합 $mapUnboundCount개는 현재 시나리오 판정에 포함하지 않습니다."
                     } else {
-                        Add-Action $actions "bindMapModel" $(if($mapUnboundCount-eq0){"PASS"}else{"PENDING"}) ([string]$case.screen.screenNumber) "MAP '$($mapModel.screenName)'의 조작 가능 컨트롤 $mapDefinedCount개 중 $mapBoundCount개를 HWND/UIA/탭 순회 결과에 결합했고 $mapUnboundCount개는 미결합으로 기록했습니다." $(if($mapUnboundCount-eq0){""}else{"MAP_CONTROL_NOT_BOUND"})
+                        Add-HtsActionRecord $reportingContext $actions "bindMapModel" $(if($mapUnboundCount-eq0){"PASS"}else{"PENDING"}) ([string]$case.screen.screenNumber) "MAP '$($mapModel.screenName)'의 조작 가능 컨트롤 $mapDefinedCount개 중 $mapBoundCount개를 HWND/UIA/탭 순회 결과에 결합했고 $mapUnboundCount개는 미결합으로 기록했습니다." $(if($mapUnboundCount-eq0){""}else{"MAP_CONTROL_NOT_BOUND"})
                         if($mapUnboundCount-gt0){$autoPendingReasons.Add("MAP 컨트롤 미결합 $mapUnboundCount개")}
                     }
                 } elseif ($mapConfig -and [bool]$mapConfig.enabled) {
-                    Add-Action $actions "bindMapModel" "PENDING" ([string]$case.screen.screenNumber) $(if($mapInitializationIssue){$mapInitializationIssue}else{"해당 화면 MAP 기준 모델을 찾지 못했습니다."}) "MAP_MODEL_NOT_FOUND"
+                    Add-HtsActionRecord $reportingContext $actions "bindMapModel" "PENDING" ([string]$case.screen.screenNumber) $(if($mapInitializationIssue){$mapInitializationIssue}else{"해당 화면 MAP 기준 모델을 찾지 못했습니다."}) "MAP_MODEL_NOT_FOUND"
                     $autoPendingReasons.Add("MAP 기준 모델 없음: $($case.screen.screenNumber)")
                 }
                 $tabQueryRows=@($initialControls | Where-Object { $_.controlKind -eq 'Button' -and ([string]$_.mapSemanticRole -eq 'Query' -or [string]$_.name -eq '조회(탭오더)' -or [string]$_.name -match '^BTN_(Comm|Search|Query)') } | Select-Object -First 1)
@@ -1865,7 +1805,7 @@ for ($caseIndex = 0; $caseIndex -lt $cases.Count; $caseIndex++) {
                         [void]$queue.Add($planRow)
                         $scheduledPlanIds[[string]$planRow.planItemId] = $true
                     }
-                    Add-Action $actions "discoverControls" "PASS" ([string]$case.screen.screenNumber) "콘텐츠 영역 컨트롤 $($initialControls.Count)개를 발견하고 시나리오 '$([string]$case.scenarioCase.scenarioId)'의 조작 단계 $($queue.Count)개만 계획했습니다."
+                    Add-HtsActionRecord $reportingContext $actions "discoverControls" "PASS" ([string]$case.screen.screenNumber) "콘텐츠 영역 컨트롤 $($initialControls.Count)개를 발견하고 시나리오 '$([string]$case.scenarioCase.scenarioId)'의 조작 단계 $($queue.Count)개만 계획했습니다."
                 } else {
                     $initialPlans = @(Get-RuleControlPlanItems $targetRuleContext $initialControls)
                     $currentTabPlans = @($initialPlans | Where-Object {
@@ -1879,7 +1819,7 @@ for ($caseIndex = 0; $caseIndex -lt $cases.Count; $caseIndex++) {
                         [void]$queue.Add($planRow)
                         $scheduledPlanIds[[string]$planRow.planItemId] = $true
                     }
-                    Add-Action $actions "discoverControls" "PASS" ([string]$case.screen.screenNumber) "콘텐츠 영역에서 컨트롤 $($initialControls.Count)개, 실행 계획 $($queue.Count)개를 생성했습니다."
+                    Add-HtsActionRecord $reportingContext $actions "discoverControls" "PASS" ([string]$case.screen.screenNumber) "콘텐츠 영역에서 컨트롤 $($initialControls.Count)개, 실행 계획 $($queue.Count)개를 생성했습니다."
                 }
 
                 $lastScenarioActionPopupHwnds = @()
@@ -2149,7 +2089,7 @@ for ($caseIndex = 0; $caseIndex -lt $cases.Count; $caseIndex++) {
                         }
                         if($screen){[void](Focus-HtsRequestedScreen $main $screen $requestedScreenNumber)}
                         $restorationFailed=-not (Test-HtsRequestedScreen $screen $requestedScreenNumber)
-                        Add-Action $actions 'restoreAfterNavigation' $(if($restorationFailed){'PENDING'}else{'PASS'}) $requestedScreenNumber "연계 화면을 관찰하고 $linkedClosed/$($linkedScreens.Count)개를 닫은 뒤 대상 화면을 복원했습니다: $linkedTitles" $(if($restorationFailed){'TARGET_RESTORE_FAILED'}else{''})
+                        Add-HtsActionRecord $reportingContext $actions 'restoreAfterNavigation' $(if($restorationFailed){'PENDING'}else{'PASS'}) $requestedScreenNumber "연계 화면을 관찰하고 $linkedClosed/$($linkedScreens.Count)개를 닫은 뒤 대상 화면을 복원했습니다: $linkedTitles" $(if($restorationFailed){'TARGET_RESTORE_FAILED'}else{''})
                     }
 
                     $screenAlive=Test-HtsRequestedScreen $screen $requestedScreenNumber
@@ -2171,9 +2111,9 @@ for ($caseIndex = 0; $caseIndex -lt $cases.Count; $caseIndex++) {
                         $screenAlive=Test-HtsRequestedScreen $screen $requestedScreenNumber
                         if($isButtonTransition){
                             $restorationFailed=-not $screenAlive
-                            Add-Action $actions 'restoreAfterUnnumberedTransition' $(if($restorationFailed){'PENDING'}else{'PASS'}) $requestedScreenNumber '버튼 조작으로 발생한 번호 없는 콘텐츠 전환을 기록하고 대상 화면을 다시 열었습니다.' $(if($restorationFailed){'TARGET_RESTORE_FAILED'}else{''})
+                            Add-HtsActionRecord $reportingContext $actions 'restoreAfterUnnumberedTransition' $(if($restorationFailed){'PENDING'}else{'PASS'}) $requestedScreenNumber '버튼 조작으로 발생한 번호 없는 콘텐츠 전환을 기록하고 대상 화면을 다시 열었습니다.' $(if($restorationFailed){'TARGET_RESTORE_FAILED'}else{''})
                         }else{
-                            Add-Action $actions 'reopenScreen' 'FAIL' $requestedScreenNumber '연계 화면 없이 대상 화면이 사라져 다시 열었습니다.' 'SCREEN_CLOSED_UNEXPECTEDLY'
+                            Add-HtsActionRecord $reportingContext $actions 'reopenScreen' 'FAIL' $requestedScreenNumber '연계 화면 없이 대상 화면이 사라져 다시 열었습니다.' 'SCREEN_CLOSED_UNEXPECTEDLY'
                         }
                     }
                     if($screenReopened -and $screenAlive){$claimedHwnds=Get-HtsClaimedControlHwndMap -Context $bindingContext -Screen $screen -Case $case -Dataset $dataset}
@@ -2217,7 +2157,7 @@ for ($caseIndex = 0; $caseIndex -lt $cases.Count; $caseIndex++) {
                             }
                             if($screen){[void](Focus-HtsRequestedScreen $main $screen $requestedScreenNumber)}
                             $restorationFailed=-not (Test-HtsRequestedScreen $screen $requestedScreenNumber)
-                            Add-Action $actions 'restoreAfterQueryNavigation' $(if($restorationFailed){'PENDING'}else{'PASS'}) $requestedScreenNumber "조회 후 열린 연계 화면 $queryLinkedClosed/$($queryLinkedScreens.Count)개를 닫고 대상 화면을 복원했습니다." $(if($restorationFailed){'TARGET_RESTORE_FAILED'}else{''})
+                            Add-HtsActionRecord $reportingContext $actions 'restoreAfterQueryNavigation' $(if($restorationFailed){'PENDING'}else{'PASS'}) $requestedScreenNumber "조회 후 열린 연계 화면 $queryLinkedClosed/$($queryLinkedScreens.Count)개를 닫고 대상 화면을 복원했습니다." $(if($restorationFailed){'TARGET_RESTORE_FAILED'}else{''})
                         }
                         $screenAlive=Test-HtsRequestedScreen $screen $requestedScreenNumber
                         if(-not $screenAlive -and $queryLinkedScreens.Count -eq 0){
@@ -2229,7 +2169,7 @@ for ($caseIndex = 0; $caseIndex -lt $cases.Count; $caseIndex++) {
                             $screenReopened=($null -ne $screen)
                             $screenAlive=Test-HtsRequestedScreen $screen $requestedScreenNumber
                             $restorationFailed=-not $screenAlive
-                            Add-Action $actions 'restoreAfterQueryTransition' $(if($restorationFailed){'PENDING'}else{'PASS'}) $requestedScreenNumber '조회 후 번호 없는 콘텐츠 전환을 기록하고 대상 화면을 다시 열었습니다.' $(if($restorationFailed){'TARGET_RESTORE_FAILED'}else{''})
+                            Add-HtsActionRecord $reportingContext $actions 'restoreAfterQueryTransition' $(if($restorationFailed){'PENDING'}else{'PASS'}) $requestedScreenNumber '조회 후 번호 없는 콘텐츠 전환을 기록하고 대상 화면을 다시 열었습니다.' $(if($restorationFailed){'TARGET_RESTORE_FAILED'}else{''})
                         }
                     }
 
@@ -2333,13 +2273,13 @@ for ($caseIndex = 0; $caseIndex -lt $cases.Count; $caseIndex++) {
                     }
                 }
                 if ($mapReboundControls -gt 0) {
-                    Add-Action $actions 'rediscoverMapControls' 'PASS' ([string]$case.screen.screenNumber) "상태 변경 뒤 새로 활성화되거나 선택지가 늘어난 MAP 컨트롤 $mapReboundControls건을 다시 결합해 실행 계획에 추가했습니다."
+                    Add-HtsActionRecord $reportingContext $actions 'rediscoverMapControls' 'PASS' ([string]$case.screen.screenNumber) "상태 변경 뒤 새로 활성화되거나 선택지가 늘어난 MAP 컨트롤 $mapReboundControls건을 다시 결합해 실행 계획에 추가했습니다."
                 } elseif ($mapBehavior -and @($mapBehavior.stateControllerControls).Count -gt 0) {
-                    Add-Action $actions 'rediscoverMapControls' 'PASS' ([string]$case.screen.screenNumber) '상태 변경마다 MAP 컨트롤을 다시 탐색했으며 추가 활성화된 컨트롤은 없었습니다.'
+                    Add-HtsActionRecord $reportingContext $actions 'rediscoverMapControls' 'PASS' ([string]$case.screen.screenNumber) '상태 변경마다 MAP 컨트롤을 다시 탐색했으며 추가 활성화된 컨트롤은 없었습니다.'
                 }
                 $controlEvaluationDocument=[pscustomobject]@{schemaVersion='1.0';testPackId=[string]$testPack.testPackId;aggregateId="$($case.caseId)-controls";cases=@($observationContext.CurrentResultEvaluationCases.ToArray())}
                 $controlEvaluationOutput=Invoke-RuleResultEvaluation -CliProject $cliProject -TestPackPath $resultEvaluationTestPackPath -EvaluationDocument $controlEvaluationDocument -WorkingDirectory $resultEvaluationWorkingDirectory -InvocationId 'case-controls'
-                Add-Action $actions "executeControlOptions" ([string]$controlEvaluationOutput.overallResult.status) "content controls" "컨트롤 선택지 $($controlTests.Count)개를 계획 또는 실행했습니다. $([string]$controlEvaluationOutput.overallResult.reason)"
+                Add-HtsActionRecord $reportingContext $actions "executeControlOptions" ([string]$controlEvaluationOutput.overallResult.status) "content controls" "컨트롤 선택지 $($controlTests.Count)개를 계획 또는 실행했습니다. $([string]$controlEvaluationOutput.overallResult.reason)"
             }
 
             if (-not $PlanOnly -and -not $scenarioMode) {
@@ -2377,7 +2317,7 @@ for ($caseIndex = 0; $caseIndex -lt $cases.Count; $caseIndex++) {
                                 optionId='click';inputValue='';displayValue='조회';status=[string]$guardTestResult.status;queryTriggered=$false;errorDetected=[bool]$guardTestResult.productDefectDetected;testResult=$guardTestResult
                                 output="전경 안전 검증으로 필수 조회 입력을 차단했습니다: $guardMessage";errorCode=[string]$guardTestResult.code;screenshotPath='';elapsedMs=[int64]((Get-Date)-$queryStarted).TotalMilliseconds
                             })
-                            Add-Action $actions 'invokeQuery' 'PENDING' '조회' '전경 안전 검증으로 필수 조회 입력을 차단했습니다.' 'INPUT_GUARD_BLOCKED'
+                            Add-HtsActionRecord $reportingContext $actions 'invokeQuery' 'PENDING' '조회' '전경 안전 검증으로 필수 조회 입력을 차단했습니다.' 'INPUT_GUARD_BLOCKED'
                             $automationIssues.Add("필수 조회 입력 차단: $guardMessage")
                             break
                         }
@@ -2410,7 +2350,7 @@ for ($caseIndex = 0; $caseIndex -lt $cases.Count; $caseIndex++) {
                                 $screen=Find-ScreenWindow $main $requestedScreenNumber
                             }
                             if($screen){[void](Focus-HtsRequestedScreen $main $screen $requestedScreenNumber)}
-                            Add-Action $actions 'restoreAfterRequiredQuery' $(if(Test-HtsRequestedScreen $screen $requestedScreenNumber){'PASS'}else{'PENDING'}) $requestedScreenNumber "필수 조회 후 열린 연계 화면 $queryLinkedClosed/$($queryLinkedScreens.Count)개를 닫고 대상 화면을 복원했습니다." $(if(Test-HtsRequestedScreen $screen $requestedScreenNumber){''}else{'TARGET_RESTORE_FAILED'})
+                            Add-HtsActionRecord $reportingContext $actions 'restoreAfterRequiredQuery' $(if(Test-HtsRequestedScreen $screen $requestedScreenNumber){'PASS'}else{'PENDING'}) $requestedScreenNumber "필수 조회 후 열린 연계 화면 $queryLinkedClosed/$($queryLinkedScreens.Count)개를 닫고 대상 화면을 복원했습니다." $(if(Test-HtsRequestedScreen $screen $requestedScreenNumber){''}else{'TARGET_RESTORE_FAILED'})
                         }
                         $queryAlive=Test-HtsRequestedScreen $screen $requestedScreenNumber
                         if(-not $queryAlive -and -not $queryNavigationHandled){
@@ -2421,7 +2361,7 @@ for ($caseIndex = 0; $caseIndex -lt $cases.Count; $caseIndex++) {
                             $screen=Find-ScreenWindow $main $requestedScreenNumber
                             if($screen){[void](Focus-HtsRequestedScreen $main $screen $requestedScreenNumber)}
                             $queryAlive=Test-HtsRequestedScreen $screen $requestedScreenNumber
-                            Add-Action $actions 'restoreAfterRequiredQueryTransition' $(if($queryAlive){'PASS'}else{'PENDING'}) $requestedScreenNumber '필수 조회 후 번호 없는 콘텐츠 전환을 기록하고 대상 화면을 다시 열었습니다.' $(if($queryAlive){''}else{'TARGET_RESTORE_FAILED'})
+                            Add-HtsActionRecord $reportingContext $actions 'restoreAfterRequiredQueryTransition' $(if($queryAlive){'PASS'}else{'PENDING'}) $requestedScreenNumber '필수 조회 후 번호 없는 콘텐츠 전환을 기록하고 대상 화면을 다시 열었습니다.' $(if($queryAlive){''}else{'TARGET_RESTORE_FAILED'})
                         }
                         $queryObservationKind=if($queryAlive){'Success'}elseif($queryNavigationHandled){'EvidenceMissing'}else{'ProductFailure'}
                         $queryObservationCode=if($queryAlive){''}elseif($queryNavigationHandled){'TARGET_RESTORE_FAILED'}else{'SCREEN_CLOSED_UNEXPECTEDLY'}
@@ -2436,7 +2376,7 @@ for ($caseIndex = 0; $caseIndex -lt $cases.Count; $caseIndex++) {
                             automationEngine=$queryActionEngine
                             output="활성화된 조회 버튼을 필수 단계에서 실제 클릭했습니다.";errorCode=[string]$queryTestResult.code;screenshotPath="";elapsedMs=[int64]((Get-Date)-$queryStarted).TotalMilliseconds
                         })
-                        Add-Action $actions "invokeQuery" $queryStatus $queryName "활성화된 조회 버튼을 필수 단계에서 실제 클릭했습니다." $(if($queryAlive){""}elseif($queryNavigationHandled){'TARGET_RESTORE_FAILED'}else{"SCREEN_CLOSED_UNEXPECTEDLY"})
+                        Add-HtsActionRecord $reportingContext $actions "invokeQuery" $queryStatus $queryName "활성화된 조회 버튼을 필수 단계에서 실제 클릭했습니다." $(if($queryAlive){""}elseif($queryNavigationHandled){'TARGET_RESTORE_FAILED'}else{"SCREEN_CLOSED_UNEXPECTEDLY"})
                         if (-not $queryAlive -and -not $queryNavigationHandled) { $errors.Add("조회 버튼 클릭 후 [$requestedScreenNumber] 화면이 예기치 않게 닫혔습니다."); break }
                     }
                 } elseif (@($controlTests | Where-Object { $_.controlKind -eq 'Button' -and $_.controlName -eq '조회(탭오더)' -and $_.queryTriggered -and -not $_.errorDetected }).Count -gt 0) {
@@ -2449,32 +2389,32 @@ for ($caseIndex = 0; $caseIndex -lt $cases.Count; $caseIndex++) {
                         optionId='verified';inputValue='';displayValue="탭오더 조회 버튼 $completedTabQueries개";status=[string]$queryHistoryTestResult.status;queryTriggered=$true;errorDetected=[bool]$queryHistoryTestResult.productDefectDetected;testResult=$queryHistoryTestResult
                         output="탭오더 순회 중 식별된 활성 조회 버튼 $completedTabQueries개를 실제 클릭했습니다.";errorCode=[string]$queryHistoryTestResult.code;screenshotPath='';elapsedMs=0
                     })
-                    Add-Action $actions 'invokeQuery' 'PASS' '탭오더 조회 이력' "탭오더 순회 중 식별된 활성 조회 버튼 $completedTabQueries개를 실제 클릭했습니다."
+                    Add-HtsActionRecord $reportingContext $actions 'invokeQuery' 'PASS' '탭오더 조회 이력' "탭오더 순회 중 식별된 활성 조회 버튼 $completedTabQueries개를 실제 클릭했습니다."
                     $mapQueryExecuted = $true
                 } else {
                     if(Focus-HtsRequestedScreen $main $screen $requestedScreenNumber){
                         Send-Key ([byte]$VK_F12)
                         Start-Sleep -Milliseconds ([Math]::Max(500,[int]$dataset.executionPolicy.actionTimeoutMs))
-                        Add-Action $actions "invokeQuery" "PASS" "F12" "활성 조회 버튼을 찾지 못해 화면의 F12 조회 단축키를 실행했습니다."
+                        Add-HtsActionRecord $reportingContext $actions "invokeQuery" "PASS" "F12" "활성 조회 버튼을 찾지 못해 화면의 F12 조회 단축키를 실행했습니다."
                         $mapQueryExecuted = $true
                         $automationIssues.Add("활성화된 조회 버튼을 찾지 못해 F12로 대체했습니다: QUERY_BUTTON_NOT_FOUND")
                     }else{
-                        Add-Action $actions 'invokeQuery' 'PENDING' 'F12' '대상 화면을 활성화하지 못해 F12 입력을 차단했습니다.' 'TARGET_SCREEN_NOT_ACTIVE'
+                        Add-HtsActionRecord $reportingContext $actions 'invokeQuery' 'PENDING' 'F12' '대상 화면을 활성화하지 못해 F12 입력을 차단했습니다.' 'TARGET_SCREEN_NOT_ACTIVE'
                         $automationIssues.Add('대상 화면을 활성화하지 못해 필수 조회를 실행하지 못했습니다: TARGET_SCREEN_NOT_ACTIVE')
                     }
                 }
             } else {
-                Add-Action $actions "invokeQuery" "PENDING" $queryTrigger "계획 전용 실행이므로 조회를 실행하지 않았습니다." "PLAN_ONLY"
+                Add-HtsActionRecord $reportingContext $actions "invokeQuery" "PENDING" $queryTrigger "계획 전용 실행이므로 조회를 실행하지 않았습니다." "PLAN_ONLY"
             }
             if ($mapBehavior -and @($mapBehavior.queryControls).Count -gt 0) {
                 if ($mapQueryExecuted) {
-                    Add-Action $actions 'evaluateMapBehavior' 'PASS' (@($mapBehavior.queryControls) -join ', ') 'MAP이 정의한 조회 경로를 실제 컨트롤 조작 또는 조회 단축키로 실행했습니다.'
+                    Add-HtsActionRecord $reportingContext $actions 'evaluateMapBehavior' 'PASS' (@($mapBehavior.queryControls) -join ', ') 'MAP이 정의한 조회 경로를 실제 컨트롤 조작 또는 조회 단축키로 실행했습니다.'
                 } else {
-                    Add-Action $actions 'evaluateMapBehavior' 'PENDING' (@($mapBehavior.queryControls) -join ', ') 'MAP이 정의한 조회 경로의 실행 증거를 확보하지 못했습니다.' 'MAP_QUERY_NOT_EXECUTED'
+                    Add-HtsActionRecord $reportingContext $actions 'evaluateMapBehavior' 'PENDING' (@($mapBehavior.queryControls) -join ', ') 'MAP이 정의한 조회 경로의 실행 증거를 확보하지 못했습니다.' 'MAP_QUERY_NOT_EXECUTED'
                     $autoPendingReasons.Add('MAP 조회 트리거 미실행')
                 }
             } elseif ($mapBehavior) {
-                Add-Action $actions 'evaluateMapBehavior' 'PASS' ([string]$case.screen.screenNumber) 'MAP에 별도 조회 역할 컨트롤이 정의되지 않은 화면입니다.'
+                Add-HtsActionRecord $reportingContext $actions 'evaluateMapBehavior' 'PASS' ([string]$case.screen.screenNumber) 'MAP에 별도 조회 역할 컨트롤이 정의되지 않은 화면입니다.'
             }
             foreach ($reason in $autoPendingReasons) { $pendingReasons.Add($reason) }
             if ($automationIssues.Count -gt 0) { $pendingReasons.Add("자동 컨트롤 조작 일부 미완료($($automationIssues.Count)건)") }
@@ -2557,7 +2497,7 @@ for ($caseIndex = 0; $caseIndex -lt $cases.Count; $caseIndex++) {
         if ($currentMain.hung) { $errors.Add("HTS 메인 창이 응답하지 않습니다.") }
         $signalEvaluationDocument=[pscustomobject]@{schemaVersion='1.0';testPackId=[string]$testPack.testPackId;aggregateId="$($case.caseId)-signals";cases=@($observationContext.CurrentResultEvaluationCases.ToArray())}
         $signalEvaluationOutput=Invoke-RuleResultEvaluation -CliProject $cliProject -TestPackPath $resultEvaluationTestPackPath -EvaluationDocument $signalEvaluationDocument -WorkingDirectory $resultEvaluationWorkingDirectory -InvocationId 'case-signals'
-        Add-Action $actions "evaluateExplicitErrors" ([string]$signalEvaluationOutput.overallResult.status) "popup/process/log" ([string]$signalEvaluationOutput.overallResult.reason)
+        Add-HtsActionRecord $reportingContext $actions "evaluateExplicitErrors" ([string]$signalEvaluationOutput.overallResult.status) "popup/process/log" ([string]$signalEvaluationOutput.overallResult.reason)
     } catch {
         $executorException = $true
         # 예외 원문만으로는 PowerShell 바인딩 오류 위치를 알 수 없으므로 형식·행·스택을 실행 증거에 남긴다.
@@ -2576,7 +2516,7 @@ for ($caseIndex = 0; $caseIndex -lt $cases.Count; $caseIndex++) {
         }
         $errors.Add($safeExceptionMessage)
         $automationIssues.Add("실행기 예외 위치: $executorDiagnostic")
-        Add-Action $actions "executor" "ERROR" "runtime" $(if($externalInterruption){'HTS 연결 장애를 감지해 재접속·종료 버튼을 누르지 않고 실행을 중단했습니다.'}elseif($automationContractErrorCode -eq 'HTS_UI_ACCESS_DENIED'){'HTS UI 권한 경계로 화면 전환을 차단했습니다.'}elseif($automationContractErrorCode -eq 'SCREEN_NAVIGATION_TEXT_UNVERIFIED'){'HTS 화면번호 입력의 종단 간 검증을 완료하지 못해 화면 전환을 차단했습니다.'}else{"룰 실행기에서 예외가 발생했습니다: $executorDiagnostic"}) $(if($externalInterruption){'HTS_CONNECTION_LOST'}elseif($automationContractErrorCode -eq 'HTS_UI_ACCESS_DENIED'){'HTS_UI_ACCESS_DENIED'}elseif($automationContractErrorCode -eq 'SCREEN_NAVIGATION_TEXT_UNVERIFIED'){'SCREEN_NAVIGATION_TEXT_UNVERIFIED'}else{'EXECUTOR_EXCEPTION'})
+        Add-HtsActionRecord $reportingContext $actions "executor" "ERROR" "runtime" $(if($externalInterruption){'HTS 연결 장애를 감지해 재접속·종료 버튼을 누르지 않고 실행을 중단했습니다.'}elseif($automationContractErrorCode -eq 'HTS_UI_ACCESS_DENIED'){'HTS UI 권한 경계로 화면 전환을 차단했습니다.'}elseif($automationContractErrorCode -eq 'SCREEN_NAVIGATION_TEXT_UNVERIFIED'){'HTS 화면번호 입력의 종단 간 검증을 완료하지 못해 화면 전환을 차단했습니다.'}else{"룰 실행기에서 예외가 발생했습니다: $executorDiagnostic"}) $(if($externalInterruption){'HTS_CONNECTION_LOST'}elseif($automationContractErrorCode -eq 'HTS_UI_ACCESS_DENIED'){'HTS_UI_ACCESS_DENIED'}elseif($automationContractErrorCode -eq 'SCREEN_NAVIGATION_TEXT_UNVERIFIED'){'SCREEN_NAVIGATION_TEXT_UNVERIFIED'}else{'EXECUTOR_EXCEPTION'})
         if (-not $main -or -not [TargetRuleNative]::IsWindow([IntPtr][Int64]$main.hwnd)) { $main = $null }
     }
 
@@ -2590,40 +2530,40 @@ for ($caseIndex = 0; $caseIndex -lt $cases.Count; $caseIndex++) {
     $dialogsBeforeDismiss = if ($main) { @(Get-HtsDialogs $main $secret) } else { @() }
     if ($dialogsBeforeDismiss.Count -gt 0) {
         $dismissed = Dismiss-HtsDialogs $main $secret
-        Add-Action $actions "dismissDialog" $(if ($dismissed -eq $dialogsBeforeDismiss.Count) { "PASS" } else { "PENDING" }) "HTS dialog" "후속 테스트를 위해 HTS 대화상자 $dismissed/$($dialogsBeforeDismiss.Count)개를 닫았습니다." $(if ($dismissed -eq $dialogsBeforeDismiss.Count) { "" } else { "DIALOG_DISMISS_PENDING" })
+        Add-HtsActionRecord $reportingContext $actions "dismissDialog" $(if ($dismissed -eq $dialogsBeforeDismiss.Count) { "PASS" } else { "PENDING" }) "HTS dialog" "후속 테스트를 위해 HTS 대화상자 $dismissed/$($dialogsBeforeDismiss.Count)개를 닫았습니다." $(if ($dismissed -eq $dialogsBeforeDismiss.Count) { "" } else { "DIALOG_DISMISS_PENDING" })
         if ($dismissed -ne $dialogsBeforeDismiss.Count) { $pendingReasons.Add("HTS 대화상자 닫기") }
     }
     $remainingDialogs = if ($main -and [TargetRuleNative]::IsWindow([IntPtr][Int64]$main.hwnd)) { @(Get-HtsDialogs $main $secret) } else { @() }
     if ($existingScreenRequiredMissing) {
-        Add-Action $actions 'closeScreen' 'PENDING' ([string]$case.screen.screenNumber) '연결된 대상 화면이 없어 화면 종료 동작을 수행하지 않았습니다.' 'EXISTING_SCREEN_REQUIRED'
+        Add-HtsActionRecord $reportingContext $actions 'closeScreen' 'PENDING' ([string]$case.screen.screenNumber) '연결된 대상 화면이 없어 화면 종료 동작을 수행하지 않았습니다.' 'EXISTING_SCREEN_REQUIRED'
     } elseif ($remainingDialogs.Count -gt 0) {
-        Add-Action $actions "closeScreen" "PENDING" ([string]$case.screen.screenNumber) "모달 대화상자가 남아 있어 HTS 종료 위험을 피하도록 화면 닫기를 차단했습니다." "DIALOG_BLOCKS_SCREEN_CLOSE"
+        Add-HtsActionRecord $reportingContext $actions "closeScreen" "PENDING" ([string]$case.screen.screenNumber) "모달 대화상자가 남아 있어 HTS 종료 위험을 피하도록 화면 닫기를 차단했습니다." "DIALOG_BLOCKS_SCREEN_CLOSE"
         $pendingReasons.Add("모달 대화상자 후 화면 닫기 차단")
     } elseif ($retainScenarioScreen -and (Test-HtsRequestedScreen $screen ([string]$case.screen.screenNumber))) {
-        Add-Action $actions 'retainScreenForNextScenario' 'PASS' ([string]$case.screen.screenNumber) '같은 화면의 다음 시나리오 케이스를 위해 현재 화면을 유지했습니다.'
+        Add-HtsActionRecord $reportingContext $actions 'retainScreenForNextScenario' 'PASS' ([string]$case.screen.screenNumber) '같은 화면의 다음 시나리오 케이스를 위해 현재 화면을 유지했습니다.'
     } elseif ($PreserveTargetScreenAfterRun -and (Test-HtsRequestedScreen $screen ([string]$case.screen.screenNumber))) {
-        Add-Action $actions 'preserveTargetScreenAfterRun' 'PASS' ([string]$case.screen.screenNumber) $(if($openedTargetScreenForRun){'자동화가 연 대상 화면을 후속 확인을 위해 닫지 않고 유지했습니다.'}else{'현재 대상 화면을 후속 확인을 위해 닫지 않고 유지했습니다.'})
+        Add-HtsActionRecord $reportingContext $actions 'preserveTargetScreenAfterRun' 'PASS' ([string]$case.screen.screenNumber) $(if($openedTargetScreenForRun){'자동화가 연 대상 화면을 후속 확인을 위해 닫지 않고 유지했습니다.'}else{'현재 대상 화면을 후속 확인을 위해 닫지 않고 유지했습니다.'})
     } elseif ($usedExistingTargetScreen -and (Test-PreservedTargetScreen (Find-ScreenWindow $main ([string]$case.screen.screenNumber)))) {
-        Add-Action $actions 'preserveExistingScreen' 'PASS' ([string]$case.screen.screenNumber) '사용자가 미리 열어둔 화면이므로 테스트 종료 후에도 닫지 않고 유지했습니다.'
+        Add-HtsActionRecord $reportingContext $actions 'preserveExistingScreen' 'PASS' ([string]$case.screen.screenNumber) '사용자가 미리 열어둔 화면이므로 테스트 종료 후에도 닫지 않고 유지했습니다.'
     } else {
         $screenToClose=if(Test-HtsRequestedScreen $screen ([string]$case.screen.screenNumber)){$screen}else{Find-ScreenWindow $main ([string]$case.screen.screenNumber)}
         if ($screenToClose) {
             if (Close-HtsScreen $screenToClose) {
-                Add-Action $actions "closeScreen" "PASS" ([string]$case.screen.screenNumber) "테스트를 마친 화면을 의도적으로 닫았습니다."
+                Add-HtsActionRecord $reportingContext $actions "closeScreen" "PASS" ([string]$case.screen.screenNumber) "테스트를 마친 화면을 의도적으로 닫았습니다."
             } else {
-                Add-Action $actions "closeScreen" "PENDING" ([string]$case.screen.screenNumber) "테스트를 마친 화면을 닫지 못했습니다." "SCREEN_CLOSE_PENDING"
+                Add-HtsActionRecord $reportingContext $actions "closeScreen" "PENDING" ([string]$case.screen.screenNumber) "테스트를 마친 화면을 닫지 못했습니다." "SCREEN_CLOSE_PENDING"
                 $pendingReasons.Add("화면 닫기")
             }
         }
         if($main -and [TargetRuleNative]::IsWindow([IntPtr][Int64]$main.hwnd)){
             $siblingScreensClosed=Close-ExistingTargetScreens $main
-            if($siblingScreensClosed -gt 0){Add-Action $actions 'closeSiblingScreens' 'PASS' 'HTS sibling windows' "테스트 중 새로 열린 형제·연계 내부 창 $siblingScreensClosed개를 함께 닫았습니다."}
+            if($siblingScreensClosed -gt 0){Add-HtsActionRecord $reportingContext $actions 'closeSiblingScreens' 'PASS' 'HTS sibling windows' "테스트 중 새로 열린 형제·연계 내부 창 $siblingScreensClosed개를 함께 닫았습니다."}
             $remainingAfterClose=@(Get-HtsScreenWindows $main)
             if($remainingAfterClose.Count -gt 0){
-                Add-Action $actions 'verifySequentialClose' 'PENDING' ([string]$case.screen.screenNumber) "번호 창 $($remainingAfterClose.Count)개가 남아 다음 화면 열기를 차단해야 합니다." 'SCREEN_SEQUENCE_CLOSE_PENDING'
+                Add-HtsActionRecord $reportingContext $actions 'verifySequentialClose' 'PENDING' ([string]$case.screen.screenNumber) "번호 창 $($remainingAfterClose.Count)개가 남아 다음 화면 열기를 차단해야 합니다." 'SCREEN_SEQUENCE_CLOSE_PENDING'
                 $pendingReasons.Add('순차 화면 닫기 미완료')
             }else{
-                Add-Action $actions 'verifySequentialClose' 'PASS' ([string]$case.screen.screenNumber) '현재 화면과 연계 화면이 모두 닫혀 다음 화면을 열 수 있습니다.'
+                Add-HtsActionRecord $reportingContext $actions 'verifySequentialClose' 'PASS' ([string]$case.screen.screenNumber) '현재 화면과 연계 화면이 모두 닫혀 다음 화면을 열 수 있습니다.'
             }
         }
     }
@@ -2812,6 +2752,6 @@ $summaryStatus=[string]$runEvaluationOutput.overallResult.status
 
 Stop-FlaUiBridge -Context $sessionContext
 if (-not $SkipExcel) {
-    Export-RuleResultWorkbooks $ReportDir
+    Export-HtsRuleResultWorkbooks $reportingContext $ReportDir
 }
 Write-Output $ReportDir
