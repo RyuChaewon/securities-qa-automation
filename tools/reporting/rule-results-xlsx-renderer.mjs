@@ -1009,7 +1009,7 @@ const errors = await workbook.inspect({
 });
 console.log(errors.ndjson);
 
-for (const [sheetName, range] of [
+const previewRanges = [
   ["요약", "A1:H21"],
   ["테스트결과", `A1:AE${Math.min(15, resultRows.length + 1)}`],
   ["단계결과", `A1:J${Math.min(15, actionRows.length + 1)}`],
@@ -1028,9 +1028,12 @@ for (const [sheetName, range] of [
   ["시나리오계획", `A1:N${Math.min(20, scenarioRows.length + 4)}`],
   ["컨트롤바인딩", `A1:Q${Math.min(20, bindingRows.length + 4)}`],
   ["승인및제외", `A1:H${Math.min(20, approvalRows.length + 4)}`],
-]) {
-  const preview = await workbook.render({ sheetName, range, scale: 1, format: "png" });
-  await outputManager.writePreview(sheetName, preview);
+];
+if (outputManager.renderPreviews !== false) {
+  for (const [sheetName, range] of previewRanges) {
+    const preview = await workbook.render({ sheetName, range, scale: 1, format: "png" });
+    await outputManager.writePreview(sheetName, preview);
+  }
 }
 
 // 검사가 끝난 워크북만 XLSX로 내보내고 검사 로그를 곁에 보존한다.

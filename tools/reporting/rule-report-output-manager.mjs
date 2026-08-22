@@ -5,7 +5,7 @@
 import fs from "node:fs/promises";
 import path from "node:path";
 
-export function createRuleReportOutputManager(reportDirArg, outputFileArg) {
+export function createRuleReportOutputManager(reportDirArg, outputFileArg, options = {}) {
   const reportDir = path.resolve(reportDirArg);
   const outputName = path.basename(String(outputFileArg || "테스트결과.xlsx"));
   if (!outputName.toLowerCase().endsWith(".xlsx")) throw new Error("결과 workbook 출력은 .xlsx 파일이어야 합니다.");
@@ -18,6 +18,7 @@ export function createRuleReportOutputManager(reportDirArg, outputFileArg) {
   return {
     reportDir,
     outputPath: path.join(reportDir, outputName),
+    renderPreviews: options.renderPreviews !== false,
     async readEvidence(relativePath) {
       const value = String(relativePath ?? "").trim();
       if (!value) return null;

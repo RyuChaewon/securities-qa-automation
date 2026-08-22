@@ -67,6 +67,7 @@ try {
   const outputManager = createRuleReportOutputManager(validDir, "..\\outside.xlsx");
   check(path.dirname(outputManager.outputPath), path.resolve(validDir), "output remains inside report directory");
   check(await outputManager.readEvidence("..\\outside.png"), null, "outside evidence is rejected");
+  check(createRuleReportOutputManager(validDir, "report.xlsx", { renderPreviews: false }).renderPreviews, false, "preview rendering can be disabled without changing the default");
   console.log(`RULE_RESULTS_CONTRACT_TESTS=PASS assertions=${assertions}`);
 } finally {
   for (const tempDir of tempDirs) {
