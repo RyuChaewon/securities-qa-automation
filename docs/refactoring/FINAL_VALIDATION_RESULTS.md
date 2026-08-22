@@ -156,6 +156,40 @@ powershell.exe -NoProfile -ExecutionPolicy Bypass -File tests\PowerShell\test-pa
 
 이 회귀 테스트는 임시 TestPack compile, PendingApproval 실행 거부, hash 결합 승인, C# dry-run과 PowerShell Runner dry-run을 순서대로 수행한다. 결과는 14 assertions PASS이며 두 경로의 case 수·CaseId 순서가 같았다. PowerShell summary는 `PENDING`, `flaUiActionAttempts=0`이었다.
 
+## 최초 기준선 대비 최종 요약
+
+### 거대 파일 크기 변화
+
+| 기준선 파일 | `68d4b0a` | 현재 진입점 | 추출된 주요 구현 | 해석 |
+|---|---:|---:|---|---|
+| `scripts/run-target-rule-suite.ps1` | 3,335줄 / 255,743 bytes | 31줄 / 1,120 bytes | orchestration 1,796줄, session/navigation/discovery/binding/action/observation/safety/reporting/runtime-context 모듈 | 공개 entrypoint는 인자와 orchestration 위임만 소유 |
+| `scripts/modules/rule-control-exploration.ps1` | 2,099줄 / 146,514 bytes | 10줄 / 600 bytes | target context 46줄, discovery 1,219줄, binding 351줄, action 477줄 | 이전 import 경로는 wrapper, 기능은 책임별 파일로 분리 |
+| `tools/build-rule-results-workbook.mjs` | 1,252줄 / 122,861 bytes | 20줄 / 1,307 bytes | loader 104줄, view model 120줄, renderer 1,044줄, output manager 47줄 | JSON canonical source 검증과 표현·파일 책임 분리 |
+
+총 줄 수 감소가 목표는 아니며, 공개 진입점과 각 책임 경계가 독립 테스트 가능한지가 기준이다. orchestration과 XLSX renderer는 아래 기술 부채로 남긴다.
+
+### 제거된 중복과 추가된 회귀 테스트
+
+| 항목 | 기준선 | 현재 | 증거 |
+|---|---:|---:|---|
+| `Get-VariableCombinations` 발생 | 3 | 0 | `CombinationGenerator` 단일 선언 검사 |
+| `Get-RuleCases` 발생 | 2 | 0 | Runner가 Approved TestPack cases만 사용 |
+| `Get-HtsSignalJudgment` 발생 | 4 | 0 | PowerShell은 `evaluate-results` adapter만 사용 |
+| 자동 회귀 test file | 5 | 34 | C# 4, PowerShell 22, Reporter 3을 포함해 기준선 대비 29개 추가 |
+| 정적 소유권 gate | 없음 | 11 owners / 48 assertions | `verify-refactoring-completion.ps1` |
+
+추가된 핵심 회귀 범위는 legacy 판정 characterization, ResultEvaluator matrix/golden, TestPack/CaseId/approval/maxCases, pipeline 상태 분리, session/navigation/discovery/binding/action/observation/safety 모듈, Target Adapter/literal boundary, Reporter contract/golden/hygiene다.
+
+### 검증 종류와 남은 부채
+
+| 항목 | 현재 상태 | 기준선 대비 |
+|---|---|---|
+| 정적·단위 검증 | PASS | 단일 소유자와 금지 경계를 자동 gate로 추가 |
+| Fake/Sample 검증 | PASS | WinForms UIA3, Fake Target Adapter, PowerShell dependency injection, Reporter fixture 추가 |
+| Approved TestPack dry-run | 실행 성공, TestStatus `PENDING` | Dataset 직접 실행을 제거하고 승인·CaseId 동일성 검사 추가 |
+| 실제 HTS 검증 | PENDING | 이번 단계에서 0건; 실행 증거 없는 PASS 없음 |
+| 기술 부채 | orchestration 1,796줄, XLSX renderer 1,044줄, 실제 runtime evidence 미검증 | 기능 변경 없이 다음 리팩터링/현장 검증 단계로 이관 |
+
 ## 실제 실행, Fake 실행, 미실행
 
 | 구분 | 결과 | 범위 |

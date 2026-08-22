@@ -23,6 +23,31 @@ powershell -NoProfile -ExecutionPolicy Bypass `
 .\scripts\run-auto-scenario-pipeline.ps1 -DatasetPath <dataset.json> -TestPackPath <approved-test-pack.json> -PrepareOnly
 ```
 
+### TestPack 컴파일과 승인
+
+Runner는 원본 Dataset을 직접 확장하지 않으며 승인 상태와 content hash가 일치하는 TestPack만 받는다. 승인자는 pending pack의 `contentHash`, case 수, 기대 결과와 대상 profile을 검토한 뒤 approval 파일의 `status`, `approvedBy`, `approvedAt`, `evidenceRefs`를 채운다.
+
+```powershell
+dotnet run --project .\src\HtsQa.Cli -c Release --no-build -- `
+  compile-test-pack --dataset <dataset.json> --combination-policy Cartesian --max-cases 1000 --out <pending-test-pack.json>
+
+dotnet run --project .\src\HtsQa.Cli -c Release --no-build -- `
+  create-test-pack-approval --test-pack <pending-test-pack.json> --out <approval.json>
+
+# approval.json을 검토·승인한 뒤 같은 Dataset과 approval로 불변 pack을 다시 컴파일한다.
+dotnet run --project .\src\HtsQa.Cli -c Release --no-build -- `
+  compile-test-pack --dataset <dataset.json> --combination-policy Cartesian --max-cases 1000 `
+  --approval <approval.json> --out <approved-test-pack.json>
+
+dotnet run --project .\src\HtsQa.Cli -c Release --no-build -- `
+  validate-test-pack --file <approved-test-pack.json> --dataset <dataset.json>
+
+dotnet run --project .\src\HtsQa.Cli -c Release --no-build -- `
+  run-test-pack --file <approved-test-pack.json> --dry-run --report-dir <report-dir>
+```
+
+`maxCases`를 넘으면 TestPack을 잘라내지 않고 컴파일을 실패시킨다. Dataset이 바뀌면 source hash 검증이 실패하고 기존 승인은 재사용할 수 없다. dry-run은 실행 성공 여부와 관계없이 실제 UI 증거가 없으므로 TestStatus가 `PENDING`이다.
+
 ## 새 대상 설정
 
 [target-template.dataset.json](data/rule-tests/target-template.dataset.json)을 복제한 뒤 다음만 대상 환경에 맞게 수정한다.
@@ -48,19 +73,19 @@ dotnet run --project .\src\HtsQa.Cli -c Release --no-build -- `
 [pipeline.manifest.json](config/pipeline.manifest.json)이 실행 파일과 단계 연결을 기계 판독 가능한 형태로 정의한다.
 
 ```text
-run-auto-scenario-pipeline.ps1
-  -> HtsQa.Cli: Dataset 검증 + Approved TestPack 검증
-  -> HtsQa.Cli: MAP 추출
-  -> run-target-rule-suite.ps1 -TestPackPath ... -PlanOnly
-       -> HtsQa.FlaUi --stdio (FlaUI.UIA3 탐색)
-  -> HtsQa.Cli: 생성·검증·승인·컴파일·바인딩
-  -> run-target-rule-suite-recorded.ps1
-       -> record-desktop-frames.ps1
-       -> run-target-rule-suite.ps1
-            -> HtsQa.FlaUi --stdio (FlaUI.UIA3 조작)
-       -> export-rule-results-xlsx.ps1
-            -> build-rule-results-workbook.mjs
+compile lane
+  Dataset -> DatasetValidator -> CombinationGenerator -> ExpectationResolver
+          -> TestPackCompiler -> Approved TestPack
+
+execution lane
+  Approved TestPack -> FlaUI Runner
+                    -> Discovery -> TargetSnapshot(control-plan.json) -> Binding/Action
+                    -> Observation -> ResultEvaluator -> TestResult(test-results.json)
+                    -> Reporter -> XLSX/preview 파생 산출물
+  recorded wrapper  -> video/cursor audit 증거
 ```
+
+UI Discovery snapshot은 DatasetValidator의 입력이 아니다. 승인 전에는 UI session을 시작하지 않고, snapshot은 승인 뒤 시나리오 생성과 binding의 runtime evidence로만 사용한다. `test-results.json`이 결과의 canonical source이며 XLSX는 상태를 변경할 수 없다.
 
 - `run-auto-scenario-pipeline.ps1`: 전체 단계를 연결하는 기본 오케스트레이터
 - `run-target-rule-suite.ps1`: Approved TestPack만 받아 DryRun, PlanOnly, 실제 실행을 수행하는 핵심 실행기
@@ -107,6 +132,18 @@ run-auto-scenario-pipeline.ps1
 
 상세 정책은 [ERROR_JUDGMENT_POLICY.md](docs/ERROR_JUDGMENT_POLICY.md)를 따른다.
 
+### 상태 계약
+
+`PipelineStatus`와 `TestStatus`는 독립적이다.
+
+| 계약 | 값 | 의미 |
+|---|---|---|
+| `PipelineStatus` | `RUNNING`, `PENDING`, `DONE`, `ERROR` | 프로세스·파일·보고를 포함한 파이프라인 인프라 상태 |
+| 완료 호환 `status` | `DONE`, `DONE_WITH_TEST_FAILURES`, `DONE_WITH_TEST_ERRORS`, `DONE_WITH_PENDING` | 모두 `pipelineCompleted=true` |
+| `TestStatus` | `PASS`, `FAIL`, `ERROR`, `PENDING` | ResultEvaluator가 증거와 기대 계약으로 만든 테스트 결과 |
+
+테스트 FAIL/ERROR/PENDING은 파이프라인 인프라 ERROR가 아니다. 프로세스 시작 실패, 파일 손상, 예외 또는 계약 위반만 PipelineStatus `ERROR`다. `actualScenarioActionsExecuted`는 예외가 나도 이미 실행된 action 증거를 보존한다.
+
 ## 빌드와 검증
 
 ```powershell
@@ -114,9 +151,23 @@ $env:DOTNET_CLI_HOME=(Join-Path (Get-Location) '.dotnet-home')
 dotnet restore .\HtsQaPoc.sln
 dotnet build .\HtsQaPoc.sln -c Release --no-restore
 dotnet test .\HtsQaPoc.sln -c Release --no-build --no-restore
+powershell -NoProfile -ExecutionPolicy Bypass -File .\scripts\dev\verify-source-layout.ps1
+powershell -NoProfile -ExecutionPolicy Bypass -File .\scripts\dev\verify-refactoring-completion.ps1
 ```
 
 통합 테스트는 실제 WinForms 창을 STA 스레드에 표시하고 FlaUI UIA3가 텍스트, 목록, 체크, 라디오, 탭, 버튼 상태를 바꾸는지 확인한다. UIA 공급자가 콤보 항목을 숨기는 경우에는 성공으로 가장하지 않고 `fallbackRequired` 계약을 검증한다.
+
+전체 PowerShell과 Reporter 회귀 테스트는 다음처럼 실행한다.
+
+```powershell
+Get-ChildItem .\tests\PowerShell\*.tests.ps1 | Sort-Object Name | ForEach-Object {
+  powershell.exe -NoProfile -ExecutionPolicy Bypass -File $_.FullName
+  if ($LASTEXITCODE -ne 0) { throw "FAILED: $($_.Name)" }
+}
+node .\tests\reporting\rule-results-contract.tests.mjs
+node .\tests\reporting\rule-results-workbook-golden.mjs
+node .\tests\reporting\repository-hygiene.tests.mjs
+```
 
 ## 산출물
 
@@ -134,10 +185,13 @@ physical-plan.json
 recorded-run/full-run.mp4
 recorded-run/results/summary.json
 recorded-run/results/case-results.json
+recorded-run/results/test-results.json
 recorded-run/results/테스트결과-*.xlsx
 ```
 
 0101의 매도 탭 및 정정/취소 탭 대표 케이스는 로그인 HTS에서 실제 좌표 클릭, 상태별 버튼 재바인딩, 커서 감사까지 통과했다. 주문 확인창을 최종 제출하는 거래 검증은 아직 수행하지 않았으며 상태는 `PENDING`이다. 원시 영상·스크린샷·실행 로그는 계좌 정보와 로컬 환경 정보가 포함될 수 있어 공개 저장소에서 제외한다.
+
+이번 리팩터링 완료 검증에서는 실제 HTS를 열지 않았다. 설치별 UIA snapshot, runtime binding drift, 실제 popup/log evidence, recorded pipeline의 영상·cursor audit은 `PENDING`이다. 주문·매수·매도·정정·취소·이체·출금은 별도 명시 승인 없이는 실행하지 않는다.
 
 ## 관련 문서
 
@@ -149,4 +203,5 @@ recorded-run/results/테스트결과-*.xlsx
 - [0101_VALIDATION_STATUS.md](docs/0101_VALIDATION_STATUS.md): 현재 계획·실화면 검증 상태와 공개 범위
 - [ARTIFACT_RETENTION_POLICY.md](docs/ARTIFACT_RETENTION_POLICY.md): 로컬 JSON·XLSX·영상·로그의 보존 및 삭제 승인 경계
 - [CLEANUP_CANDIDATES.md](docs/CLEANUP_CANDIDATES.md): 미사용 대용량 생성물과 보존 항목
+- [FINAL_VALIDATION_RESULTS.md](docs/refactoring/FINAL_VALIDATION_RESULTS.md): 단일 소유자 감사, 전체 검증 명령과 실제/Fake/PENDING 구분
 - [TROUBLESHOOTING.md](TROUBLESHOOTING.md): 실행 오류 대응
