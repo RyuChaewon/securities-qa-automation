@@ -11,6 +11,7 @@ $cliProject = Join-Path $root 'src\HtsQa.Cli\HtsQa.Cli.csproj'
 $runner = Join-Path $root 'scripts\run-target-rule-suite.ps1'
 $dataset = Join-Path $root 'data\rule-tests\1q-hts-non07-static-smoke.dataset.json'
 $tempRoot = Join-Path (Join-Path $root 'artifacts') ('test-pack-regression-' + [guid]::NewGuid().ToString('N'))
+$powerShellHost = (Get-Process -Id $PID).Path
 $script:assertions = 0
 
 function Assert-True([bool]$Actual, [string]$Message) {
@@ -57,14 +58,14 @@ try {
 
     $pendingLog = Join-Path $tempRoot 'pending-rejection.log'
     $pendingErrorLog = Join-Path $tempRoot 'pending-rejection-error.log'
-    $pendingProcess = Start-Process -FilePath 'powershell.exe' -ArgumentList @(
+    $pendingProcess = Start-Process -FilePath $powerShellHost -ArgumentList @(
         '-NoProfile', '-ExecutionPolicy', 'Bypass', '-File', $runner,
         '-TestPackPath', $pendingPath, '-ReportDir', (Join-Path $tempRoot 'pending-rejected'), '-DryRun', '-SkipExcel'
     ) -RedirectStandardOutput $pendingLog -RedirectStandardError $pendingErrorLog -WindowStyle Hidden -Wait -PassThru
     Assert-True ($pendingProcess.ExitCode -ne 0) 'Runner must reject a pending TestPack.'
 
     Invoke-Cli @('run-test-pack', '--file', $approvedPath, '--dry-run', '--report-dir', $cliDryRun)
-    & powershell.exe -NoProfile -ExecutionPolicy Bypass -File $runner -TestPackPath $approvedPath -ReportDir $runnerDryRun -DryRun -SkipExcel | Out-Null
+    & $powerShellHost -NoProfile -ExecutionPolicy Bypass -File $runner -TestPackPath $approvedPath -ReportDir $runnerDryRun -DryRun -SkipExcel | Out-Null
     if ($LASTEXITCODE -ne 0) { throw "Approved TestPack Runner dry-run failed: $LASTEXITCODE" }
 
     $cliCases = @(Get-Content -LiteralPath (Join-Path $cliDryRun 'expanded-cases.json') -Raw -Encoding UTF8 | ConvertFrom-Json).cases

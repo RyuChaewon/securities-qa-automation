@@ -60,13 +60,13 @@ jobs:
             --filter "FullyQualifiedName~ResultEvaluatorTests.Not_Executed_Cannot_Pass|FullyQualifiedName~ResultEvaluatorTests.Executed_Without_Evidence_Is_Pending|FullyQualifiedName~ResultEvaluatorTests.ObservationOnly_Is_Recorded_But_Not_Validation_Pass"
           if ($LASTEXITCODE -ne 0) { throw "Canonical evaluator smoke tests failed: $LASTEXITCODE" }
 
-          & powershell.exe -NoProfile -ExecutionPolicy Bypass -File .\scripts\dev\verify-refactoring-completion.ps1
+          & pwsh -NoProfile -ExecutionPolicy Bypass -File .\scripts\dev\verify-refactoring-completion.ps1
           if ($LASTEXITCODE -ne 0) { throw "Canonical ownership verification failed: $LASTEXITCODE" }
 
       - name: Verify source layout and PowerShell syntax
         shell: pwsh
         run: |
-          & powershell.exe -NoProfile -ExecutionPolicy Bypass -File .\scripts\dev\verify-source-layout.ps1
+          & pwsh -NoProfile -ExecutionPolicy Bypass -File .\scripts\dev\verify-source-layout.ps1
           if ($LASTEXITCODE -ne 0) { throw "Source layout verification failed: $LASTEXITCODE" }
 
       - name: Run PowerShell regression tests
@@ -76,7 +76,7 @@ jobs:
           if ($tests.Count -eq 0) { throw "No PowerShell regression tests were found." }
           foreach ($test in $tests) {
             Write-Host "Running $($test.Name)"
-            & powershell.exe -NoProfile -ExecutionPolicy Bypass -File $test.FullName
+            & pwsh -NoProfile -ExecutionPolicy Bypass -File $test.FullName
             if ($LASTEXITCODE -ne 0) { throw "PowerShell regression failed: $($test.Name) / $LASTEXITCODE" }
           }
           Write-Host "POWERSHELL_REGRESSION=PASS files=$($tests.Count)"
