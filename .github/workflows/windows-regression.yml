@@ -1,0 +1,110 @@
+name: Windows regression gates
+
+on:
+  push:
+    branches:
+      - main
+      - "codex/**"
+  pull_request:
+    branches:
+      - main
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+concurrency:
+  group: windows-regression-${{ github.workflow }}-${{ github.ref }}
+  cancel-in-progress: true
+
+jobs:
+  offline-regression:
+    name: Offline .NET, PowerShell, and Node regression
+    runs-on: windows-latest
+    timeout-minutes: 30
+    env:
+      DOTNET_CLI_TELEMETRY_OPTOUT: "1"
+      DOTNET_NOLOGO: "1"
+      NUGET_XMLDOC_MODE: skip
+
+    steps:
+      - name: Check out repository
+        uses: actions/checkout@v4
+
+      - name: Set up .NET SDK
+        uses: actions/setup-dotnet@v4
+        with:
+          global-json-file: global.json
+
+      - name: Set up Node.js
+        uses: actions/setup-node@v4
+        with:
+          node-version: "22"
+
+      - name: Restore .NET dependencies
+        shell: pwsh
+        run: dotnet restore .\HtsQaPoc.sln
+
+      - name: Build Release
+        shell: pwsh
+        run: dotnet build .\HtsQaPoc.sln -c Release --no-restore
+
+      - name: Run .NET unit and fixture UIA tests
+        shell: pwsh
+        run: dotnet test .\HtsQaPoc.sln -c Release --no-build --no-restore --logger "console;verbosity=normal"
+
+      - name: Smoke canonical evaluator safety
+        shell: pwsh
+        run: |
+          dotnet test .\tests\HtsQa.Tests\HtsQa.Tests.csproj -c Release --no-build --no-restore `
+            --filter "FullyQualifiedName~ResultEvaluatorTests.Not_Executed_Cannot_Pass|FullyQualifiedName~ResultEvaluatorTests.Executed_Without_Evidence_Is_Pending|FullyQualifiedName~ResultEvaluatorTests.ObservationOnly_Is_Recorded_But_Not_Validation_Pass"
+          if ($LASTEXITCODE -ne 0) { throw "Canonical evaluator smoke tests failed: $LASTEXITCODE" }
+
+          & powershell.exe -NoProfile -ExecutionPolicy Bypass -File .\scripts\dev\verify-refactoring-completion.ps1
+          if ($LASTEXITCODE -ne 0) { throw "Canonical ownership verification failed: $LASTEXITCODE" }
+
+      - name: Verify source layout and PowerShell syntax
+        shell: pwsh
+        run: |
+          & powershell.exe -NoProfile -ExecutionPolicy Bypass -File .\scripts\dev\verify-source-layout.ps1
+          if ($LASTEXITCODE -ne 0) { throw "Source layout verification failed: $LASTEXITCODE" }
+
+      - name: Run PowerShell regression tests
+        shell: pwsh
+        run: |
+          $tests = @(Get-ChildItem -LiteralPath .\tests\PowerShell -File -Filter '*.tests.ps1' | Sort-Object Name)
+          if ($tests.Count -eq 0) { throw "No PowerShell regression tests were found." }
+          foreach ($test in $tests) {
+            Write-Host "Running $($test.Name)"
+            & powershell.exe -NoProfile -ExecutionPolicy Bypass -File $test.FullName
+            if ($LASTEXITCODE -ne 0) { throw "PowerShell regression failed: $($test.Name) / $LASTEXITCODE" }
+          }
+          Write-Host "POWERSHELL_REGRESSION=PASS files=$($tests.Count)"
+
+      - name: Check Node importer and reporter syntax
+        shell: pwsh
+        run: |
+          $roots = @('.\tools', '.\tests', '.\targets\1q-hts\0101\tools')
+          $files = @($roots |
+            ForEach-Object { Get-ChildItem -LiteralPath $_ -Recurse -File -Filter '*.mjs' } |
+            Sort-Object FullName -Unique)
+          if ($files.Count -eq 0) { throw "No Node modules were found." }
+          foreach ($file in $files) {
+            node --check $file.FullName
+            if ($LASTEXITCODE -ne 0) { throw "Node syntax check failed: $($file.FullName)" }
+          }
+          Write-Host "NODE_SYNTAX=PASS files=$($files.Count)"
+
+      - name: Run offline Node importer and reporter contracts
+        shell: pwsh
+        run: |
+          $tests = @(
+            '.\tests\targets\1q-hts\0101\importer-contract.tests.mjs',
+            '.\tests\reporting\rule-results-contract.tests.mjs',
+            '.\tests\reporting\repository-hygiene.tests.mjs'
+          )
+          foreach ($test in $tests) {
+            node $test
+            if ($LASTEXITCODE -ne 0) { throw "Node regression failed: $test / $LASTEXITCODE" }
+          }
+          Write-Host "NODE_REGRESSION=PASS files=$($tests.Count)"
