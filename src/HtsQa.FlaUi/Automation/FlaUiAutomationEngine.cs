@@ -264,10 +264,16 @@ public sealed class FlaUiAutomationEngine : IDisposable
                     return BridgeResponse.Failure(request, "UIA3_PATTERN_UNSUPPORTED", "콤보 항목이 SelectionItemPattern을 지원하지 않습니다.", fallback: true);
                 }
                 selectionItem.Select();
-                Thread.Sleep(80);
-                var observed = combo.SelectedItem?.Text ?? combo.Value;
-                var itemSelected = SafeRead(() => selectionItem.IsSelected.Value, false);
-                return ActionSuccess(request, "ComboBox.Expand+SelectionItemPattern.Select", itemSelected || string.Equals(observed, expected, StringComparison.Ordinal), observed, "콤보 항목을 선택했습니다.");
+                var selection = VerifyComboSelection(request, expected);
+                if (!selection.Verified)
+                {
+                    var response = BridgeResponse.Failure(request, "UIA3_COMBO_SELECTION_NOT_APPLIED", "UIA3 항목 선택 후 소유 콤보의 값이 바뀌지 않았습니다.", fallback: true);
+                    response.Pattern = "ComboBox.Expand+SelectionItemPattern.Select";
+                    response.ObservedValue = selection.Observed;
+                    return response;
+                }
+                var observed = selection.Observed;
+                return ActionSuccess(request, "ComboBox.Expand+SelectionItemPattern.Select", verified: true, observed, "콤보 항목을 선택했습니다.");
             }
             finally
             {
@@ -308,10 +314,16 @@ public sealed class FlaUiAutomationEngine : IDisposable
                     return BridgeResponse.Failure(request, "UIA3_PATTERN_UNSUPPORTED", "콤보 항목이 SelectionItemPattern을 지원하지 않습니다.", fallback: true);
                 }
                 selectionItem.Select();
-                Thread.Sleep(80);
-                var observed = combo.SelectedItem?.Text ?? combo.Value;
-                var itemSelected = SafeRead(() => selectionItem.IsSelected.Value, false);
-                return ActionSuccess(request, "ComboBox.Expand+SelectionItemPattern.Select", itemSelected || string.Equals(observed, value, StringComparison.Ordinal), observed, "콤보 표시값을 선택했습니다.");
+                var selection = VerifyComboSelection(request, value);
+                if (!selection.Verified)
+                {
+                    var response = BridgeResponse.Failure(request, "UIA3_COMBO_SELECTION_NOT_APPLIED", "UIA3 항목 선택 후 소유 콤보의 값이 바뀌지 않았습니다.", fallback: true);
+                    response.Pattern = "ComboBox.Expand+SelectionItemPattern.Select";
+                    response.ObservedValue = selection.Observed;
+                    return response;
+                }
+                var observed = selection.Observed;
+                return ActionSuccess(request, "ComboBox.Expand+SelectionItemPattern.Select", verified: true, observed, "콤보 표시값을 선택했습니다.");
             }
             finally
             {
@@ -327,6 +339,23 @@ public sealed class FlaUiAutomationEngine : IDisposable
         }
 
         return BridgeResponse.Failure(request, "UIA3_PATTERN_UNSUPPORTED", $"{type}에는 문자열 선택 래퍼를 적용할 수 없습니다.", fallback: true);
+    }
+
+    /// <summary>항목 자체 상태가 아니라 재식별한 소유 콤보의 표시값 변경을 확인한다.</summary>
+    private (bool Verified, string Observed) VerifyComboSelection(BridgeRequest request, string expected)
+    {
+        var observed = string.Empty;
+        var verified = WaitUntil(
+            () =>
+            {
+                var current = ResolveElement(GetRoot(request), request.Selector!);
+                if (current is null) return false;
+                var currentCombo = current.AsComboBox();
+                observed = SafeRead(() => currentCombo.SelectedItem?.Text ?? currentCombo.Value, string.Empty);
+                return !string.IsNullOrEmpty(expected) && string.Equals(observed, expected, StringComparison.Ordinal);
+            },
+            TimeSpan.FromSeconds(1));
+        return (verified, observed);
     }
 
     /// <summary>FlaUI Tab 래퍼로 목표 탭 인덱스를 선택하고 현재 인덱스를 재확인한다.</summary>

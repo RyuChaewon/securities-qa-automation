@@ -54,10 +54,22 @@ public sealed class FlaUiAutomationEngineTests : IDisposable
             Assert.Equal(FlaUiAutomationEngine.EngineName, result.Engine);
         });
 
-        // 이 WinForms 공급자는 펼친 콤보의 ListItem을 UIA3에 공개하지 않으므로 명시적 fallback이 정상 계약이다.
-        Assert.False(combo.Success);
-        Assert.True(combo.FallbackRequired);
-        Assert.Equal("UIA3_COMBO_ITEMS_NOT_EXPOSED", combo.ErrorCode);
+        // WinForms UIA 공급자는 실행 환경에 따라 펼친 항목을 별도 ComboLBox 트리에 공개하거나 숨길 수 있다.
+        // 항목이 보이고 소유 콤보까지 바뀌면 성공이며, 미노출 또는 소유값 미변경은 명시적 fallback이어야 한다.
+        Assert.Equal(FlaUiAutomationEngine.EngineName, combo.Engine);
+        if (combo.Success)
+        {
+            Assert.True(combo.Verified, $"{combo.Pattern}: {combo.ObservedValue}");
+            Assert.False(combo.FallbackRequired);
+            Assert.Equal("ComboBox.Expand+SelectionItemPattern.Select", combo.Pattern);
+            Assert.Equal(2, _fixture.Read(control => ((ComboBox)control["rangeCombo"]!).SelectedIndex));
+        }
+        else
+        {
+            Assert.True(combo.FallbackRequired);
+            Assert.Contains(combo.ErrorCode, new[] { "UIA3_COMBO_ITEMS_NOT_EXPOSED", "UIA3_COMBO_SELECTION_NOT_APPLIED" });
+            Assert.Equal(0, _fixture.Read(control => ((ComboBox)control["rangeCombo"]!).SelectedIndex));
+        }
 
         Assert.Equal("12345678-901", _fixture.Read(control => ((TextBox)control["accountText"]!).Text));
         Assert.Equal(2, _fixture.Read(control => ((ListBox)control.Find("resultList", searchAllChildren: true).Single()).SelectedIndex));
