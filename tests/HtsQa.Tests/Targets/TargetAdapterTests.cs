@@ -92,6 +92,11 @@ public sealed class TargetAdapterTests
         Assert.Equal(ControlRepositoryStatus.ConfigurationRequired, repository!.Status);
         Assert.Empty(repository.Entries);
         Assert.Equal(StateRestoreMode.ConfigurationRequired, stateGraph.RestorePolicy.Mode);
+        var authoring = Assert.IsType<RuleTargetScenarioAuthoringProfile>(profile.Adapter.ScenarioAuthoring);
+        Assert.Equal(OrderScenarioConfigurationStatus.ConfigurationRequired, authoring.Status);
+        Assert.Equal(3, authoring.TemplateReferences.Length);
+        Assert.True(authoring.ActualExecutionRequiresSeparateApproval);
+        Assert.All(authoring.TemplateReferences, reference => Assert.False(Path.IsPathRooted(reference)));
     }
 
     [Fact]

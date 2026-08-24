@@ -6,7 +6,7 @@ import path from "node:path";
 
 export const RULE_RESULTS_SHEET_NAMES = [
   "컬럼설명", "오류판정기준", "테스트모듈로직", "입력데이터안내", "설치카탈로그", "시나리오계획",
-  "컨트롤바인딩", "컨트롤저장소", "상태탐색", "승인및제외", "요약", "테스트결과", "단계결과", "입력변수", "컨트롤계획",
+  "컨트롤바인딩", "컨트롤저장소", "상태탐색", "주문작성", "승인및제외", "요약", "테스트결과", "단계결과", "입력변수", "컨트롤계획",
   "선택지테스트", "팝업관찰", "판정이벤트", "자동화미완료", "오류스크린샷",
 ];
 
@@ -127,6 +127,44 @@ function createControlRepositoryRows(document) {
     Array.isArray(resolution.evidence) ? resolution.evidence.join(" | ") : "",
   ]);
 }
+function createOrderAuthoringRows(sources) {
+  const rows = [];
+  const calibration = sources.calibrationSession;
+  if (calibration) {
+    rows.push(["Calibration", calibration.sessionId ?? "", calibration.status ?? "", "Session", calibration.screen ?? "", calibration.stateContext ?? "", Number(calibration.observations?.length ?? 0), calibration.reviewer ?? "", calibration.canonicalApprovalHash ?? "", calibration.repositoryApplied === true ? "Applied" : "NotApplied"]);
+    for (const observation of (calibration.observations ?? [])) {
+      rows.push(["Calibration", observation.observationId ?? "", calibration.status ?? "", "Observation", observation.locatorTier ?? "", observation.stateContext ?? "", observation.expectedControlKind ?? "", "", "", "read-only/redacted"]);
+    }
+  }
+  const validation = sources.orderScenarioValidation;
+  if (validation) {
+    rows.push(["Validation", validation.scenarioId ?? "", validation.status ?? "", "Summary", "", "", Number(validation.issues?.length ?? 0), "", "", validation.isValid === true ? "Valid" : "Blocked"]);
+    for (const issue of (validation.issues ?? [])) {
+      rows.push(["Validation", validation.scenarioId ?? "", validation.status ?? "", issue.code ?? "", issue.stepId ?? "", issue.field ?? "", issue.message ?? "", issue.remediation ?? "", "", issue.severity ?? "ERROR"]);
+    }
+  }
+  const plan = sources.orderRunPlan;
+  if (plan) {
+    rows.push(["RunPlan", plan.planId ?? "", plan.executionMode ?? "", "Summary", plan.scenarioId ?? "", plan.caseId ?? "", Number(plan.steps?.length ?? 0), plan.stateGraphId ?? "", plan.planHash ?? "", plan.actualExecutionAllowed === true ? "Allowed" : "SeparateApproval"]);
+    for (const step of (plan.steps ?? [])) {
+      rows.push([
+        "RunPlan", step.stepId ?? "", step.role ?? "", step.operation ?? "", step.repositoryKey ?? "", step.resolvedLocatorTier ?? "",
+        step.expectedMode ?? "", step.checkpointRequirement ?? "", step.approvalHash ?? "",
+        step.requiredForPass === true ? "RequiredForPass" : step.affectsVerdict === true ? "OptionalFailureBlocks" : "NoVerdictEffect",
+      ]);
+    }
+  }
+  const dryRun = sources.orderScenarioDryRun;
+  if (dryRun) {
+    rows.push([
+      "DryRun", dryRun.planId ?? "", dryRun.status ?? "", "Canonical", Number(dryRun.actualUiActionCount ?? 0),
+      Number(dryRun.transactionalActionCount ?? 0), dryRun.requiredCheckpointChecked === true ? "Checked" : "Unchecked",
+      dryRun.restorePlanChecked === true ? "Checked" : "Unchecked", dryRun.planHashValid === true ? "HashValid" : "HashInvalid", dryRun.reason ?? "",
+    ]);
+  }
+  return rows;
+}
+
 
 export function createRuleResultsWorkbookViewModel(sources) {
   const { summary, results, mapCatalog } = sources;
@@ -145,9 +183,10 @@ export function createRuleResultsWorkbookViewModel(sources) {
   ]);
   const stateDiscoveryRows = createStateDiscoveryRows(sources.stateDiscovery);
   const controlRepositoryRows = createControlRepositoryRows(sources.controlRepositoryResolutions);
+  const orderAuthoringRows = createOrderAuthoringRows(sources);
   const targetInstallationRoot = portablePath(mapCatalog.installationRoot, "targetProfile.map.installationRoot");
   return {
-    ...sources, ...incomplete, summaryRows, resultHeaders, resultRows, stateDiscoveryRows, controlRepositoryRows, sheetNames: RULE_RESULTS_SHEET_NAMES,
+    ...sources, ...incomplete, summaryRows, resultHeaders, resultRows, stateDiscoveryRows, controlRepositoryRows, orderAuthoringRows, sheetNames: RULE_RESULTS_SHEET_NAMES,
     targetDisplayName: summary.targetDisplayName ?? "대상 HTS", targetInstallationRoot,
     targetScreenDirectory: portablePath(mapCatalog.screenDirectory, path.join(targetInstallationRoot, "screen")),
     targetMapPattern: mapCatalog.filePattern ?? "targetProfile.map.filePattern",

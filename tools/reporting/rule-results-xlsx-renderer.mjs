@@ -8,7 +8,7 @@ export async function renderRuleResultsWorkbook(viewModel, outputManager) {
 const {
   summary, results, mapCatalog, compiledPlan, bindingCatalog, physicalPlan, scenarioReviewItems,
   targetDisplayName, targetInstallationRoot, targetScreenDirectory, targetMapPattern, exampleScreenNumber,
-  summaryRows, resultHeaders, resultRows, stateDiscoveryRows, controlRepositoryRows, incompleteRows, incompleteByCase, incompleteSummary,
+  summaryRows, resultHeaders, resultRows, stateDiscoveryRows, controlRepositoryRows, orderAuthoringRows, incompleteRows, incompleteByCase, incompleteSummary,
   statusLabel, scenarioReadinessLabel, bindingStatusLabel, confidenceLabel, reviewSeverityLabel,
   physicalDispositionLabel, approvalStatusLabel, actionLabel, cleanCollectedLabel,
   cleanExecutionDetail, compactNavigationTargets, incompleteLabel, excelDate,
@@ -25,6 +25,7 @@ const scenarioSheet = workbook.worksheets.add("시나리오계획");
 const bindingSheet = workbook.worksheets.add("컨트롤바인딩");
 const stateDiscoverySheet = workbook.worksheets.add("상태탐색");
 const controlRepositorySheet = workbook.worksheets.add("컨트롤저장소");
+const orderAuthoringSheet = workbook.worksheets.add("주문작성");
 const approvalSheet = workbook.worksheets.add("승인및제외");
 const summarySheet = workbook.worksheets.add("요약");
 const resultsSheet = workbook.worksheets.add("테스트결과");
@@ -100,7 +101,7 @@ function statusFill(status) {
   return colors.pending;
 }
 
-for (const sheet of [summarySheet, resultsSheet, actionsSheet, variablesSheet, controlsSheet, controlTestsSheet, popupsSheet, oracleEventsSheet, incompleteSheet, errorShotsSheet, columnGuideSheet, errorGuideSheet, pipelineSheet, inputGuideSheet, installationSheet, scenarioSheet, bindingSheet, controlRepositorySheet, stateDiscoverySheet, approvalSheet]) {
+for (const sheet of [summarySheet, resultsSheet, actionsSheet, variablesSheet, controlsSheet, controlTestsSheet, popupsSheet, oracleEventsSheet, incompleteSheet, errorShotsSheet, columnGuideSheet, errorGuideSheet, pipelineSheet, inputGuideSheet, installationSheet, scenarioSheet, bindingSheet, controlRepositorySheet, stateDiscoverySheet, orderAuthoringSheet, approvalSheet]) {
   sheet.showGridLines = false;
 }
 
@@ -120,6 +121,14 @@ writeGuideSheet(
   controlRepositoryRows ?? [],
   [34, 18, 24, 24, 38, 18, 32, 42, 18, 14, 42],
 );
+writeGuideSheet(
+  orderAuthoringSheet,
+  "캘리브레이션·정적 검증·불변 RunPlan·DryRun canonical 표시",
+  ["문서", "ID", "Canonical 상태/역할", "항목", "대상/키", "상태/Locator", "증거/건수", "복구/조치", "승인 Hash", "정책"],
+  orderAuthoringRows ?? [],
+  [18, 28, 22, 28, 38, 24, 38, 38, 34, 32],
+);
+
 
 summarySheet.getRange("A1").values = [[`${summary.targetDisplayName ?? "대상 화면"} 룰 기반 테스트 결과`]];
 summarySheet.getRange("A1:H2").format = {
@@ -1050,6 +1059,7 @@ const previewRanges = [
   ["승인및제외", `A1:H${Math.min(20, approvalRows.length + 4)}`],
   ["상태탐색", `A1:J${Math.min(20, (stateDiscoveryRows?.length ?? 0) + 4)}`],
   ["컨트롤저장소", `A1:K${Math.min(20, (controlRepositoryRows?.length ?? 0) + 4)}`],
+  ["주문작성", `A1:J${Math.min(30, (orderAuthoringRows?.length ?? 0) + 4)}`],
 ];
 if (outputManager.renderPreviews !== false) {
   for (const [sheetName, range] of previewRanges) {

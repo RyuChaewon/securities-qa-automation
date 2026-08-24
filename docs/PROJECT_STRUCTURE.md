@@ -86,12 +86,13 @@ Runner는 `RuleTestPack.cases`만 소비한다. `datasetSnapshot`은 대상 prof
 |---|---|---|
 | `Contracts` | 공통 상태와 JSON 계약 | `RuleCommon.cs` |
 | `Datasets` | 데이터셋 모델·검증과 legacy sanitize/secret 호환 helper | `RuleBased.cs` |
+| `Calibration` | 반복 read-only 관측, drift, human review, 승인 repository 적용 provenance | `OrderCalibration.cs`, `OrderCalibrationWorkflow.cs`, `OrderCalibrationLifecycle.cs` |
 | `Controls` | Control Repository schema, logical key, 승인 hash, locator trust/risk와 canonical resolution | `ControlRepository.cs` |
 | `Evaluation` | Observation + ExpectedResult + EvaluationPolicy를 완성 TestResult로 변환 | `ResultEvaluator.cs` |
 | `Installation` | HTS 설치 자료 카탈로그 | `HtsInstallation.cs` |
 | `Maps` | MAP 파싱·화면 모델·동작/오류 오라클 | `HtsMap.cs` |
 | `Outcomes` | legacy signal 계약을 ResultEvaluator에 연결하는 호환 adapter | `RuleOutcomePolicy.cs` |
-| `Scenarios` | 자동 생성·승인·컴파일·물리 계획 | `RuleScenarioGeneration.cs`, `ScenarioPlanning.cs` |
+| `Scenarios` | 자동 생성·승인·컴파일·물리 계획과 승인 key 기반 주문 authoring/validator/DryRun 계획 | `RuleScenarioGeneration.cs`, `ScenarioPlanning.cs`, `OrderScenarioAuthoring.cs` |
 | `Serialization` | JSON 입출력과 해시 | `JsonFile.cs` |
 | `Targets` | generic TargetProfile/TargetAdapter schema 검증 | `TargetAdapter.cs` |
 | `TestPacks` | CombinationPolicy, 조합, CaseId, 기대 해석, compile/approval/runner gate | `TestPack.cs` |
@@ -127,6 +128,7 @@ FlaUI 객체는 `Automation` 밖으로 내보내지 않는다. PowerShell에는 
 | `hts-observation.ps1` | message·상태·값·evidence 수집; 최종 판정 금지 |
 | `hts-safety.ps1` | 금지 동작, allowlist, 실행 전 안전 검증 |
 | `hts-control-repository.ps1` | hover capture와 Core canonical resolution의 무판정 adapter; 승인·risk 판정 금지 |
+| `hts-order-scenario-authoring.ps1` | 캘리브레이션·검증·compile·DryRun Core CLI 연결; UI·risk·verdict 금지 |
 | `hts-reporting.ps1` | 완성된 TestResult와 raw evidence 직렬화 보조 |
 | `hts-rule-suite-orchestration.ps1` | 승인 이후 모듈 호출 순서와 결과 전달 |
 | `hts-target-adapter.ps1` | TestPack target profile을 generic context로 정규화 |
@@ -139,13 +141,14 @@ UI 모듈은 ResultEvaluator나 XLSX renderer를 호출하지 않는다. orchest
 ## Reporting 책임
 
 | 파일 | 책임 |
-선택적인 `control-repository-resolutions.json`은 locator source, trust tier, fallback 사유와 승인 상태를 표시하는 canonical resolution 입력이다. Reporter는 resolution이나 TestResult verdict를 다시 계산하지 않는다.
 |---|---|
 | `tools/build-rule-results-workbook.mjs` | 인자 처리와 네 reporting component 조립 |
 | `rule-results-loader.mjs` | canonical JSON 로드·schema·상태 불변 검증·deep freeze |
 | `rule-results-view-model.mjs` | TestResult를 한국어 workbook 표시 모델로 변환 |
 | `rule-results-xlsx-renderer.mjs` | view model을 XLSX로 렌더링 |
 | `rule-report-output-manager.mjs` | report directory 밖 쓰기·읽기 차단과 preview 옵션 관리 |
+
+선택적인 `control-repository-resolutions.json`은 locator source, trust tier, fallback 사유와 승인 상태를 표시하는 canonical resolution 입력이다. 선택적인 `calibration-session.json`, `order-scenario-validation.json`, `order-run-plan.json`, `order-scenario-dry-run.json`은 `주문작성` sheet의 canonical 표시 입력이다. Reporter는 이 상태나 TestResult verdict를 다시 계산하지 않는다.
 
 `test-results.json`이 canonical source다. loader는 `case-results.json`/`summary.json`이 canonical 상태와 다르면 실패하고, PASS에 실행·증거가 없으면 실패한다. XLSX와 preview는 파생 산출물이라 TestStatus를 갱신하지 않는다.
 

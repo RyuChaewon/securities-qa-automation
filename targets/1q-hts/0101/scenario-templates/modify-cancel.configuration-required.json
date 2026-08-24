@@ -1,0 +1,29 @@
+{
+  "schemaVersion": "1.0",
+  "templateId": "0101-modify-cancel-configuration-required",
+  "displayName": "정정·취소 주문 시나리오 템플릿",
+  "status": "ConfigurationRequired",
+  "screen": "0101",
+  "candidateStateContext": "order-tab:modify-cancel",
+  "requiredLogicalControlRoles": [
+    "상태 도착 확인용 logicalName 미확정",
+    "대상 조회·선택용 logicalName 미확정",
+    "업무 입력용 logicalName 미확정",
+    "validation 메시지 관측용 logicalName 미확정",
+    "baseline 복구용 logicalName 미확정"
+  ],
+  "requiredPreconditions": [
+    "승인된 process/window/state fingerprint",
+    "승인된 repository key와 canonical approval hash",
+    "승인된 baseline 및 restore 경로"
+  ],
+  "inputActionRoles": ["승인된 비거래 입력 역할만 구성 필요", "정정·취소 제출은 항상 별도 차단"],
+  "requiredCheckpointRoles": ["업무 결과 또는 validation을 독립 관측하는 필수 Checkpoint 필요"],
+  "optionalCheckpointRoles": ["추가 화면 상태 관측은 verdict 비영향으로만 구성 가능"],
+  "validationRequiredExample": "미입력 또는 형식 오류 입력의 실제 승인 규칙과 메시지 증거가 확보된 경우에만 ValidationRequired로 작성",
+  "restoreRequirements": ["deterministic baseline state와 arrival Checkpoint가 실제 단말에서 승인돼야 함"],
+  "unconfirmedItems": ["locator", "logicalName", "transition", "baseline", "restore", "업무값", "validation 규칙", "Checkpoint 기대값"],
+  "requiredFieldEvidence": ["반복 UI 관측", "승인 metadata", "UIA/native 또는 MAP/runtime identity", "Checkpoint 증거", "restore 증거"],
+  "repositoryKeys": [],
+  "executable": false
+}

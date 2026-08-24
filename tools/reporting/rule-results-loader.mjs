@@ -130,6 +130,50 @@ function deepFreeze(value) {
 }
 
 export async function loadRuleResults(reportDir) {
+const CALIBRATION_STATUSES = new Set(["ConfigurationRequired", "ReviewRequired", "Unstable", "Approved", "Applied"]);
+const ORDER_VALIDATION_STATUSES = new Set(["Ready", "Blocked", "ConfigurationRequired", "ReviewRequired"]);
+
+function validateCalibrationSession(document) {
+  if (document?.schemaVersion !== "1.0" || !String(document?.sessionId ?? "").trim() || !Array.isArray(document?.observations)) {
+    throw new Error("calibration-session.json: schemaVersion 1.0, sessionId와 observations가 필요합니다.");
+  }
+  if (!CALIBRATION_STATUSES.has(document.status)) throw new Error(`calibration-session.json: 지원하지 않는 status '${document.status ?? ""}'입니다.`);
+  for (const observation of document.observations) {
+    if (observation.cursorMoved === true || observation.clickSent === true || observation.keyInputSent === true || observation.automaticallyApproved === true) {
+      throw new Error("calibration-session.json: read-only capture 경계가 위반됐습니다.");
+    }
+    if (observation.pixelCropStored === true || observation.sensitiveDataRedacted !== true) {
+      throw new Error("calibration-session.json: pixel crop 금지 및 redaction 계약이 필요합니다.");
+    }
+  }
+}
+
+function validateOrderScenarioValidation(document) {
+  if (document?.schemaVersion !== "1.0" || !String(document?.scenarioId ?? "").trim() || !Array.isArray(document?.issues)) {
+    throw new Error("order-scenario-validation.json: schemaVersion 1.0, scenarioId와 issues가 필요합니다.");
+  }
+  if (!ORDER_VALIDATION_STATUSES.has(document.status)) throw new Error(`order-scenario-validation.json: 지원하지 않는 status '${document.status ?? ""}'입니다.`);
+  if ((document.isValid === true) !== (document.status === "Ready" && document.issues.length === 0)) {
+    throw new Error("order-scenario-validation.json: canonical isValid/status/issues 계약이 일치하지 않습니다.");
+  }
+}
+
+function validateOrderRunPlan(document) {
+  if (document?.schemaVersion !== "1.0" || !String(document?.planId ?? "").trim() || !String(document?.planHash ?? "").trim() || !Array.isArray(document?.steps)) {
+    throw new Error("order-run-plan.json: schemaVersion 1.0, plan identity와 steps가 필요합니다.");
+  }
+  if (document.executionMode !== "DryRun" || document.actualExecutionAllowed === true) {
+    throw new Error("order-run-plan.json: 이 reporter는 actual execution plan을 허용하지 않습니다.");
+  }
+}
+
+function validateOrderDryRun(document) {
+  if (document?.schemaVersion !== "1.0" || document.status !== "PENDING") throw new Error("order-scenario-dry-run.json: canonical PENDING DryRun 결과가 필요합니다.");
+  if (Number(document.actualUiActionCount ?? -1) !== 0 || Number(document.transactionalActionCount ?? -1) !== 0) {
+    throw new Error("order-scenario-dry-run.json: UI/transactional action count는 0이어야 합니다.");
+  }
+}
+
   const summary = await readJson(reportDir, "summary.json");
   const parsedResults = await readJson(reportDir, "case-results.json");
   const results = Array.isArray(parsedResults) ? parsedResults : [parsedResults];
@@ -141,6 +185,14 @@ export async function loadRuleResults(reportDir) {
   if (stateDiscovery) validateStateDiscovery(stateDiscovery);
   const controlRepositoryResolutions = await optional("control-repository-resolutions.json", null);
   if (controlRepositoryResolutions) validateControlRepositoryResolutions(controlRepositoryResolutions);
+  const calibrationSession = await optional("calibration-session.json", null);
+  if (calibrationSession) validateCalibrationSession(calibrationSession);
+  const orderScenarioValidation = await optional("order-scenario-validation.json", null);
+  if (orderScenarioValidation) validateOrderScenarioValidation(orderScenarioValidation);
+  const orderRunPlan = await optional("order-run-plan.json", null);
+  if (orderRunPlan) validateOrderRunPlan(orderRunPlan);
+  const orderScenarioDryRun = await optional("order-scenario-dry-run.json", null);
+  if (orderScenarioDryRun) validateOrderDryRun(orderScenarioDryRun);
   return deepFreeze({
     reportDir,
     summary,
@@ -154,5 +206,9 @@ export async function loadRuleResults(reportDir) {
     scenarioReviewItems: await optional("scenario-review-items.json", []),
     controlRepositoryResolutions,
     stateDiscovery,
+    calibrationSession,
+    orderScenarioValidation,
+    orderRunPlan,
+    orderScenarioDryRun,
   });
 }

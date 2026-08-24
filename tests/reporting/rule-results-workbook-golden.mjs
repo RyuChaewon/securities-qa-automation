@@ -55,7 +55,8 @@ try {
   assert.deepEqual(workbook.worksheets.getItem("상태탐색").getRange("C5:C6").values.flat(), ["PENDING", "PENDING"], "Reporter must preserve canonical state statuses");
   assert.deepEqual(workbook.worksheets.getItem("컨트롤저장소").getRange("B5:C5").values[0], ["Blocked", "Unresolved"], "Reporter must preserve canonical resolution and trust tier");
   assert.equal(workbook.worksheets.getItem("컨트롤저장소").getRange("F5").values[0][0], "PendingApproval", "Reporter must preserve approval status");
-  console.log("RULE_RESULTS_WORKBOOK_GOLDEN=PASS sheets=20 statuses=PASS,FAIL,ERROR,PENDING state=PENDING restore=PENDING repository=Blocked");
+  assert.equal(workbook.worksheets.getItem("주문작성").getRange("A1").values[0][0], "캘리브레이션·정적 검증·불변 RunPlan·DryRun canonical 표시", "Order authoring sheet must remain display-only");
+  console.log(`RULE_RESULTS_WORKBOOK_GOLDEN=PASS sheets=${expected.sheetNames.length} statuses=PASS,FAIL,ERROR,PENDING state=PENDING restore=PENDING repository=Blocked`);
 } finally {
   const artifactsRoot = `${path.resolve(root, "artifacts")}${path.sep}`;
   const resolvedTemp = path.resolve(tempDir);

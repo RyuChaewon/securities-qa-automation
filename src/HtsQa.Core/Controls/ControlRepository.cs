@@ -583,6 +583,7 @@ public static class ControlRepositoryResolver
 
 public sealed record ControlCaptureCandidate
 {
+    public DateTimeOffset CapturedAt { get; init; }
     public string SchemaVersion { get; init; } = ControlRepositoryVersions.CaptureSchema;
     public ControlRepositoryEntryStatus Status { get; init; } = ControlRepositoryEntryStatus.ReviewRequired;
     public string ProcessName { get; init; } = "";

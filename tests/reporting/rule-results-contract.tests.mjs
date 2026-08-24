@@ -95,6 +95,59 @@ try {
   check(repositoryLoaded.controlRepositoryResolutions.resolutions[0].trustTier, "StableIdentity", "reporter preserves trust tier");
   check(createRuleResultsWorkbookViewModel(repositoryLoaded).controlRepositoryRows[0][5], "Approved", "reporter preserves approval status");
   check(Object.isFrozen(repositoryLoaded.controlRepositoryResolutions), true, "repository resolution document is immutable");
+  const authoringDir = await createReportDir();
+  tempDirs.push(authoringDir);
+  const calibration = {
+    schemaVersion: "1.0", sessionId: "fixture-session", targetProfileId: "fixture-target", repositoryId: "fixture-repository",
+    screen: "F001", map: "FAKE-MAP", stateContext: "state:a", capturedAt: "2026-08-24T09:00:00+09:00",
+    reviewer: "fixture-reviewer", status: "ReviewRequired", repositoryApplied: false, canonicalApprovalHash: "",
+    observations: [{
+      observationId: "one", capturedAt: "2026-08-24T09:00:00+09:00", screen: "F001", map: "FAKE-MAP", stateContext: "state:a",
+      locatorTier: "ApprovedAnchoredRelative", expectedControlKind: "Edit", sensitiveDataRedacted: true, pixelCropStored: false,
+      cursorMoved: false, clickSent: false, keyInputSent: false, automaticallyApproved: false,
+    }],
+  };
+  const validation = {
+    schemaVersion: "1.0", scenarioId: "fixture-scenario", status: "ConfigurationRequired", isValid: false,
+    issues: [{ code: "ORDER_SCENARIO.REPOSITORY_KEY_NOT_FOUND", stepId: "action", message: "not found", remediation: "approve first", severity: "ERROR" }],
+    resolvedControls: [],
+  };
+  const runPlan = {
+    schemaVersion: "1.0", compilerVersion: "1.0.0", planId: "fixture-plan", planHash: "a".repeat(64),
+    scenarioId: "fixture-scenario", caseId: "fixture-case", repositoryId: "fixture-repository", stateGraphId: "fixture-graph",
+    executionMode: "DryRun", actualExecutionAllowed: false, restoreSequence: ["restore"],
+    steps: [{
+      stepId: "required-checkpoint", sequence: 1, repositoryKey: "F001|FAKE-MAP|CONTROL|STATE:A",
+      resolvedLocatorTier: "StableIdentity", approvalHash: "b".repeat(64), role: "Checkpoint", operation: "AssertState",
+      expectedMode: "Success", checkpointRequirement: "Required", affectsVerdict: true, requiredForPass: true,
+    }],
+  };
+  const dryRun = {
+    schemaVersion: "1.0", planId: "fixture-plan", status: "PENDING", planHashValid: true,
+    requiredCheckpointChecked: true, restorePlanChecked: true, actualUiActionCount: 0, transactionalActionCount: 0,
+    reason: "DryRun does not determine PASS.",
+  };
+  await Promise.all([
+    fs.writeFile(path.join(authoringDir, "calibration-session.json"), JSON.stringify(calibration)),
+    fs.writeFile(path.join(authoringDir, "order-scenario-validation.json"), JSON.stringify(validation)),
+    fs.writeFile(path.join(authoringDir, "order-run-plan.json"), JSON.stringify(runPlan)),
+    fs.writeFile(path.join(authoringDir, "order-scenario-dry-run.json"), JSON.stringify(dryRun)),
+  ]);
+  const authoringLoaded = await loadRuleResults(authoringDir);
+  const authoringRows = createRuleResultsWorkbookViewModel(authoringLoaded).orderAuthoringRows;
+  check(authoringLoaded.calibrationSession.status, "ReviewRequired", "reporter preserves calibration status");
+  check(authoringLoaded.orderScenarioValidation.status, "ConfigurationRequired", "reporter preserves validation status");
+  check(authoringLoaded.orderScenarioDryRun.status, "PENDING", "reporter preserves DryRun status without PASS conversion");
+  check(authoringRows.find((row) => row[0] === "Validation" && row[3] === "Summary")?.[2], "ConfigurationRequired", "validation summary remains canonical");
+  check(authoringRows.find((row) => row[0] === "DryRun")?.[2], "PENDING", "DryRun display remains PENDING");
+  check(Object.isFrozen(authoringLoaded.orderRunPlan), true, "order run plan is immutable in reporter");
+
+  const unsafeDryRunDir = await createReportDir();
+  tempDirs.push(unsafeDryRunDir);
+  await fs.writeFile(path.join(unsafeDryRunDir, "order-scenario-dry-run.json"), JSON.stringify({ ...dryRun, actualUiActionCount: 1 }));
+  await assert.rejects(loadRuleResults(unsafeDryRunDir), /action count는 0/);
+  assertions += 1;
+
 
   const unsafeStateDir = await createReportDir();
   tempDirs.push(unsafeStateDir);

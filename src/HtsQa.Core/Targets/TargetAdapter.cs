@@ -94,6 +94,14 @@ public sealed record RuleTargetControlRepositoryProfile
     public RuleTargetControlRiskOverride[] RiskOverrides { get; init; } = [];
 }
 
+public sealed record RuleTargetScenarioAuthoringProfile
+{
+    public OrderScenarioConfigurationStatus Status { get; init; } = OrderScenarioConfigurationStatus.ConfigurationRequired;
+    public string[] TemplateReferences { get; init; } = [];
+    public bool ActualExecutionRequiresSeparateApproval { get; init; } = true;
+}
+
+
 
 /// <summary>대상별 업무 의미를 generic engine에 전달하는 versioned adapter 계약이다.</summary>
 public sealed record RuleTargetAdapterProfile
@@ -110,6 +118,7 @@ public sealed record RuleTargetAdapterProfile
     public StateGraph? StateGraph { get; init; }
     public RuleTargetImportProfile? Import { get; init; }
     public RuleTargetControlRepositoryProfile? ControlRepository { get; init; }
+    public RuleTargetScenarioAuthoringProfile? ScenarioAuthoring { get; init; }
 }
 
 /// <summary>Core 계획기가 adapter의 map alias와 state-context 의미를 동일하게 적용하게 한다.</summary>
@@ -240,6 +249,17 @@ public static class RuleTargetAdapterValidator
                     issues.Add(new("RULE.ADAPTER_CONTROL_REPOSITORY_OVERRIDE", "Risk overrides require a repositoryKey and at least one forbidden action.", Field: "targetProfile.adapter.controlRepository.riskOverrides"));
             }
         }
+        if (adapter.ScenarioAuthoring is { } authoring)
+        {
+            AddUnique(authoring.TemplateReferences, "RULE.ADAPTER_SCENARIO_TEMPLATE_DUPLICATE", "targetProfile.adapter.scenarioAuthoring.templateReferences", issues);
+            if (authoring.TemplateReferences.Length == 0 || authoring.TemplateReferences.Any(reference =>
+                    string.IsNullOrWhiteSpace(reference) || Path.IsPathRooted(reference) ||
+                    reference.Replace('\\', '/').Split('/').Any(segment => segment == "..")))
+                issues.Add(new("RULE.ADAPTER_SCENARIO_TEMPLATE_REFERENCE", "Scenario template references must be non-empty, non-traversing relative paths.", Field: "targetProfile.adapter.scenarioAuthoring.templateReferences"));
+            if (!authoring.ActualExecutionRequiresSeparateApproval)
+                issues.Add(new("RULE.ADAPTER_SCENARIO_EXECUTION_APPROVAL", "Order scenario actual execution must require separate approval.", Field: "targetProfile.adapter.scenarioAuthoring.actualExecutionRequiresSeparateApproval"));
+        }
+
 
 
         return issues;

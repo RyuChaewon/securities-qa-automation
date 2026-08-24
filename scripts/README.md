@@ -51,6 +51,7 @@
 
 - `modules/pipeline-common.ps1`
 - `modules/rule-control-exploration.ps1`
+- `modules/hts-order-scenario-authoring.ps1`: Core CLI의 캘리브레이션 세션·사람 검토·정적 검증·compile·DryRun을 연결하며 UI Action과 verdict를 수행하지 않는다.
 - `modules/report-sanitization.ps1`
 
 공개 명령을 추가할 때는 파일 헤더에 역할·입출력·부작용을 적고 manifest에 논리 진입점이 필요한지 먼저 판단한다. 공통 함수가 두 명령 이상에서 사용될 때만 `modules`로 이동한다.

@@ -144,6 +144,15 @@
       "status": "ConfigurationRequired",
       "riskOverrides": []
     },
+    "scenarioAuthoring": {
+      "status": "ConfigurationRequired",
+      "templateReferences": [
+        "scenario-templates/buy.configuration-required.json",
+        "scenario-templates/sell.configuration-required.json",
+        "scenario-templates/modify-cancel.configuration-required.json"
+      ],
+      "actualExecutionRequiresSeparateApproval": true
+    },
     "stateGraph": {
       "schemaVersion": "1.0",
       "graphId": "1q-hts-0101-order-screen",

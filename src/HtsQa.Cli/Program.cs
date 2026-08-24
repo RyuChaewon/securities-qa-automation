@@ -33,6 +33,14 @@ try
         "apply-control-repository-approval" => ApplyControlRepositoryApproval(args),
         "create-control-repository-review" => CreateControlRepositoryReview(args),
         "resolve-control-repository" => ResolveControlRepository(args),
+        "create-calibration-session" => CreateCalibrationSession(args),
+        "validate-calibration-session" => ValidateCalibrationSession(args),
+        "create-calibration-review" => CreateCalibrationReview(args),
+        "register-control-repository-entry" => RegisterControlRepositoryEntry(args),
+        "finalize-calibration-session" => FinalizeCalibrationSession(args),
+        "validate-order-scenario" => ValidateOrderScenario(args),
+        "compile-order-scenario" => CompileOrderScenario(args),
+        "dry-run-order-scenario" => DryRunOrderScenario(args),
         "materialize-scenario-bindings" => MaterializeScenarioBindings(args),
         "build-physical-scenario-plan" => BuildPhysicalScenarioPlan(args),
         "evaluate-results" => EvaluateResults(args),
@@ -71,6 +79,14 @@ int Help()
       validate-control-repository --file PATH
       create-control-repository-review --capture PATH --screen ID --logical-name NAME --state-context CONTEXT --risk-class CLASS --allowed-actions A,B --anchor ID [--map ID] [--source REF] [--evidence REF1,REF2] [--out PATH]
       resolve-control-repository --repository PATH --request PATH [--out PATH]
+      create-calibration-session --captures PATH1,PATH2 --session-id ID --target-profile-id ID --repository-id ID --screen ID --state-context CONTEXT --reviewer NAME [--map ID] [--out PATH]
+      validate-calibration-session --file PATH [--out PATH]
+      create-calibration-review --session PATH --logical-name NAME --risk-class CLASS --allowed-actions A,B --forbidden-actions A,B --source REF --evidence REF1,REF2 [--anchor ID] [--out PATH]
+      register-control-repository-entry --repository PATH --entry PATH --out PATH
+      finalize-calibration-session --session PATH --repository PATH --logical-name NAME --out PATH
+      validate-order-scenario --input PATH [--out PATH]
+      compile-order-scenario --input PATH --out PATH [--compiled-at ISO8601]
+      dry-run-order-scenario --plan PATH [--out PATH]
       build-physical-scenario-plan --plan PATH --bindings PATH --out PATH
       evaluate-results --test-pack PATH --observations PATH --output PATH
       analyze-run --run REPORT_DIR
@@ -215,6 +231,160 @@ int ResolveControlRepository(string[] argv)
     }
     return result.Status == ControlRepositoryResolutionStatus.Resolved ? 0 : 3;
 }
+
+// 기존 FlaUI read-only capture들을 반복 관측 세션으로 묶을 뿐 UI나 repository를 변경하지 않는다.
+int CreateCalibrationSession(string[] argv)
+{
+    var capturePaths = Required(argv, "--captures").Split(',', StringSplitOptions.TrimEntries | StringSplitOptions.RemoveEmptyEntries)
+        .Select(Full).ToArray();
+    if (capturePaths.Length == 0) throw new ArgumentException("--captures에는 하나 이상의 경로가 필요합니다.");
+    if (capturePaths.Distinct(StringComparer.OrdinalIgnoreCase).Count() != capturePaths.Length)
+        throw new ArgumentException("같은 capture 경로를 반복 관측으로 중복 사용할 수 없습니다.");
+    var captures = capturePaths.Select(JsonFile.Read<ControlCaptureCandidate>).ToArray();
+    var reviewer = Required(argv, "--reviewer");
+    var session = OrderCalibrationSessionFactory.Create(
+        Required(argv, "--session-id"),
+        Required(argv, "--target-profile-id"),
+        Required(argv, "--repository-id"),
+        Required(argv, "--screen"),
+        GetOpt(argv, "--map", ""),
+        Required(argv, "--state-context"),
+        captures) with { Reviewer = reviewer };
+    var outPath = Full(GetOpt(argv, "--out", Path.Combine(root, "artifacts", "calibration", session.SessionId, "calibration-session.json")));
+    if (File.Exists(outPath)) throw new IOException($"캘리브레이션 세션이 이미 존재합니다: {outPath}");
+    JsonFile.Write(outPath, session);
+    Console.WriteLine(outPath);
+    return 0;
+}
+
+int ValidateCalibrationSession(string[] argv)
+{
+    var session = JsonFile.Read<OrderCalibrationSession>(Full(Required(argv, "--file")));
+    var report = OrderCalibrationSessionAnalyzer.Analyze(session);
+    WriteOptionalJson(argv, report);
+    return report.IsValid ? 0 : 3;
+}
+
+// 안정된 반복 관측과 사람이 지정한 key/action/anchor로 ReviewRequired payload만 생성한다.
+int CreateCalibrationReview(string[] argv)
+{
+    var sessionPath = Full(Required(argv, "--session"));
+    var session = JsonFile.Read<OrderCalibrationSession>(sessionPath);
+    if (string.IsNullOrWhiteSpace(session.Reviewer))
+        throw new InvalidDataException("캘리브레이션 세션에는 reviewer가 필요합니다.");
+    if (!Enum.TryParse<ControlRiskClass>(Required(argv, "--risk-class"), true, out var riskClass))
+        throw new ArgumentException("--risk-class 값이 유효하지 않습니다.");
+    var allowed = ParseEnumList<ControlRepositoryAction>(Required(argv, "--allowed-actions"), "--allowed-actions");
+    var forbidden = ParseEnumList<ControlRepositoryAction>(GetOpt(argv, "--forbidden-actions", ""), "--forbidden-actions");
+    var evidence = Required(argv, "--evidence").Split(',', StringSplitOptions.TrimEntries | StringSplitOptions.RemoveEmptyEntries);
+    var entry = OrderCalibrationReviewFactory.Create(
+        session,
+        Required(argv, "--logical-name"),
+        GetOpt(argv, "--anchor", ""),
+        riskClass,
+        allowed,
+        forbidden,
+        Required(argv, "--source"),
+        evidence,
+        DateTimeOffset.Now);
+    var outPath = Full(GetOpt(argv, "--out", Path.ChangeExtension(sessionPath, ".review.json")));
+    if (File.Exists(outPath)) throw new IOException($"검토 payload가 이미 존재합니다: {outPath}");
+    JsonFile.Write(outPath, entry);
+    Console.WriteLine(outPath);
+    return 0;
+}
+
+// 승인된 entry를 새 repository 문서로만 저장하며 기존 입력 파일이나 key를 덮어쓰지 않는다.
+int RegisterControlRepositoryEntry(string[] argv)
+{
+    var repository = JsonFile.Read<ControlRepositoryDocument>(Full(Required(argv, "--repository")));
+    var entry = JsonFile.Read<ControlRepositoryEntry>(Full(Required(argv, "--entry")));
+    var updated = ControlRepositoryRegistration.Register(repository, entry);
+    var outPath = Full(Required(argv, "--out"));
+    if (File.Exists(outPath)) throw new IOException($"출력 repository가 이미 존재합니다: {outPath}");
+    JsonFile.Write(outPath, updated);
+    Console.WriteLine(outPath);
+    return 0;
+}
+
+// 명시적 등록이 끝난 entry의 canonical approval hash만 session provenance에 반영한다.
+int FinalizeCalibrationSession(string[] argv)
+{
+    var session = JsonFile.Read<OrderCalibrationSession>(Full(Required(argv, "--session")));
+    var repository = JsonFile.Read<ControlRepositoryDocument>(Full(Required(argv, "--repository")));
+    var applied = OrderCalibrationSessionLifecycle.MarkApplied(session, repository, Required(argv, "--logical-name"));
+    var outPath = Full(Required(argv, "--out"));
+    if (File.Exists(outPath)) throw new IOException($"완료 세션이 이미 존재합니다: {outPath}");
+    JsonFile.Write(outPath, applied);
+    Console.WriteLine(outPath);
+    return 0;
+}
+
+// Core 정적 validator 결과를 그대로 직렬화하며 판정이나 UI 실행을 하지 않는다.
+int ValidateOrderScenario(string[] argv)
+{
+    var input = JsonFile.Read<OrderScenarioValidationInput>(Full(Required(argv, "--input")));
+    var report = OrderScenarioValidator.Validate(input);
+    WriteOptionalJson(argv, report);
+    return report.IsValid ? 0 : 3;
+}
+
+// 정적 검증을 통과한 입력만 hash로 고정된 DryRun 계획으로 컴파일한다.
+int CompileOrderScenario(string[] argv)
+{
+    var input = JsonFile.Read<OrderScenarioValidationInput>(Full(Required(argv, "--input")));
+    var atText = GetOpt(argv, "--compiled-at", "");
+    var compiledAt = string.IsNullOrWhiteSpace(atText)
+        ? DateTimeOffset.Now
+        : DateTimeOffset.TryParse(atText, out var parsed) ? parsed : throw new ArgumentException("--compiled-at은 ISO8601 시각이어야 합니다.");
+    var result = OrderScenarioRunPlanCompiler.Compile(input, compiledAt);
+    if (!result.Validation.IsValid || result.Plan is null)
+    {
+        Console.WriteLine(JsonSerializer.Serialize(result.Validation, JsonDefaults.Options));
+        return 3;
+    }
+    var outPath = Full(Required(argv, "--out"));
+    if (File.Exists(outPath)) throw new IOException($"컴파일 출력이 이미 존재합니다: {outPath}");
+    JsonFile.Write(outPath, result.Plan);
+    Console.WriteLine(outPath);
+    return 0;
+}
+
+// 계획 무결성과 계약만 확인하며 실제 UI Action과 transactional Action을 모두 0으로 유지한다.
+int DryRunOrderScenario(string[] argv)
+{
+    var plan = JsonFile.Read<OrderScenarioRunPlan>(Full(Required(argv, "--plan")));
+    var result = OrderScenarioDryRun.Execute(plan);
+    WriteOptionalJson(argv, result);
+    var checks = new[]
+    {
+        result.PlanHashValid, result.RepositoryResolutionChecked, result.StateOrderChecked,
+        result.RequiredCheckpointChecked, result.ExpectedOutcomeChecked, result.VariableBindingChecked,
+        result.RiskPolicyChecked, result.RestorePlanChecked, result.ResultAndEvidenceSchemaChecked,
+        result.ActualUiActionCount == 0, result.TransactionalActionCount == 0
+    };
+    return checks.All(x => x) ? 0 : 3;
+}
+
+void WriteOptionalJson<T>(string[] argv, T value)
+{
+    var outValue = GetOpt(argv, "--out", "");
+    if (string.IsNullOrWhiteSpace(outValue)) Console.WriteLine(JsonSerializer.Serialize(value, JsonDefaults.Options));
+    else
+    {
+        var outPath = Full(outValue);
+        if (File.Exists(outPath)) throw new IOException($"출력 파일이 이미 존재합니다: {outPath}");
+        JsonFile.Write(outPath, value);
+        Console.WriteLine(outPath);
+    }
+}
+
+T[] ParseEnumList<T>(string value, string option) where T : struct, Enum =>
+    value.Split(',', StringSplitOptions.TrimEntries | StringSplitOptions.RemoveEmptyEntries)
+        .Select(item => Enum.TryParse<T>(item, true, out var parsed)
+            ? parsed
+            : throw new ArgumentException($"{option}에 지원하지 않는 값이 있습니다: {item}"))
+        .Distinct().ToArray();
 
 
 // TestPack과 원시 Observation 파일을 읽고 순수 ResultEvaluator가 만든 완성 TestResult만 출력한다.
