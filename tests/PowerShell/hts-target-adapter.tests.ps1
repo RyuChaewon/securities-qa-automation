@@ -20,6 +20,7 @@ $profile = [pscustomobject]@{
         mapHosts = @([pscustomobject]@{screenId='F001';mapScreenCode='MAP_A';containerScreenCode='ROOT';hostRole='content';scale=1.0})
         mapAliases = [pscustomobject]@{ MAP_OLD='MAP_A' }
         transactionalDialogs = [pscustomobject]@{confirmationClassification='confirm'}
+        stateGraph = [pscustomobject]@{graphId='fake-state-graph';configurationStatus='ConfigurationRequired'}
     }
 }
 
@@ -37,6 +38,7 @@ Assert-Equal '1' (Get-HtsTargetState $context $control) 'validated generic state
 Assert-Equal 'content' ([string](Get-HtsTargetMapHost $context 'F001' 'MAP_A').hostRole) 'map host comes from adapter'
 Assert-Equal 'content' ([string](Get-HtsTargetMapHost $context 'F001' 'MAP_OLD').hostRole) 'map aliases resolve through adapter'
 Assert-Equal 'confirm' ([string](Get-HtsTargetTransactionalDialogPolicy $context).confirmationClassification) 'dialog policy comes from adapter'
+Assert-Equal 'fake-state-graph' ([string](Get-HtsTargetStateGraph $context).graphId) 'state graph comes from adapter config'
 Assert-Equal 'FAKE_STATE_REQUIRED,FAKE_VALUE_MISSING,FAKE_STATE_MISMATCH' ((Get-HtsTargetStateErrorCodes $context) -join ',') 'compatibility error codes stay adapter-owned'
 
 $standalone = New-HtsTargetAdapterContext ([pscustomobject]@{})

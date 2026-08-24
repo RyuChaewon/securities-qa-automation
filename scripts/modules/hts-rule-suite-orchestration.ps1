@@ -36,6 +36,7 @@ $root = Split-Path -Parent $scriptsRoot
 . (Join-Path $PSScriptRoot "hts-session.ps1")
 . (Join-Path $PSScriptRoot "hts-navigation.ps1")
 . (Join-Path $PSScriptRoot "hts-discovery.ps1")
+. (Join-Path $PSScriptRoot "hts-state-discovery.ps1")
 . (Join-Path $PSScriptRoot "hts-binding.ps1")
 . (Join-Path $PSScriptRoot "hts-action.ps1")
 . (Join-Path $PSScriptRoot "hts-observation.ps1")

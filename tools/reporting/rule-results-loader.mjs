@@ -77,6 +77,34 @@ function validateDisplayContext(summary, results, canonicalDocument, canonicalBy
   }
 }
 
+const STATE_STATUSES = new Set(["SUCCESS", "FAILED", "PENDING"]);
+const RESTORE_STATUSES = new Set(["SUCCESS", "FAILED", "PENDING", "NOT_REQUIRED"]);
+const FAILURE_CATEGORIES = new Set(["NONE", "AUTOMATION", "ENVIRONMENT", "TEST_DATA", "APPLICATION", "POLICY", "UNKNOWN"]);
+
+function validateStateDiscovery(document) {
+  if (!document || typeof document !== "object") throw new Error("state-discovery-results.json: 객체가 필요합니다.");
+  if (document.schemaVersion !== "1.0") throw new Error(`state-discovery-results.json: 지원하지 않는 schemaVersion '${document.schemaVersion ?? ""}'입니다.`);
+  if (!String(document.graphId ?? "").trim() || !Array.isArray(document.states)) throw new Error("state-discovery-results.json: graphId와 states 배열이 필요합니다.");
+  if (Number(document.transactionalActionCount ?? 0) !== 0) throw new Error("state-discovery-results.json: transactionalActionCount는 0이어야 합니다.");
+  for (const state of document.states) {
+    if (!String(state?.stateContext?.stateId ?? "").trim() || !STATE_STATUSES.has(state?.status)) throw new Error("state-discovery-results.json: 각 state에는 stateContext와 canonical status가 필요합니다.");
+    if (!FAILURE_CATEGORIES.has(state?.failureCategory)) throw new Error(`state-discovery-results.json: 지원하지 않는 failureCategory '${state?.failureCategory ?? ""}'입니다.`);
+    if (state.status === "SUCCESS" && state.transition?.actionSent === true && state.transition?.arrivalCheckpointSatisfied !== true) {
+      throw new Error(`state-discovery-results.json/${state.stateContext.stateId}: action 전달만으로 SUCCESS가 될 수 없습니다.`);
+    }
+    if (["SUCCESS", "FAILED"].includes(state.status) && (!String(state.screenshotRef ?? "").trim() || !String(state.uiTreeRef ?? "").trim())) {
+      throw new Error(`state-discovery-results.json/${state.stateContext.stateId}: ${state.status}에는 screenshotRef와 uiTreeRef가 필요합니다.`);
+    }
+  }
+  if (!document.restore || !RESTORE_STATUSES.has(document.restore.status)) throw new Error("state-discovery-results.json: canonical restore status가 필요합니다.");
+  if (document.restore.status === "SUCCESS" && document.restore.actionSent === true && document.restore.arrivalCheckpointSatisfied !== true) {
+    throw new Error("state-discovery-results.json: restore action만으로 SUCCESS가 될 수 없습니다.");
+  }
+  if (document.restore.status === "FAILED" && (!String(document.restore.screenshotRef ?? "").trim() || !String(document.restore.uiTreeRef ?? "").trim())) {
+    throw new Error("state-discovery-results.json: FAILED restore에는 screenshotRef와 uiTreeRef가 필요합니다.");
+  }
+}
+
 function deepFreeze(value) {
   if (!value || typeof value !== "object" || Object.isFrozen(value)) return value;
   Object.freeze(value);
@@ -92,6 +120,8 @@ export async function loadRuleResults(reportDir) {
   const canonicalByCaseId = canonicalDocument ? validateCanonicalDocument(canonicalDocument) : new Map();
   validateDisplayContext(summary, results, canonicalDocument, canonicalByCaseId);
   const optional = async (name, fallback) => (await readJson(reportDir, name, true)) ?? fallback;
+  const stateDiscovery = await optional("state-discovery-results.json", null);
+  if (stateDiscovery) validateStateDiscovery(stateDiscovery);
   return deepFreeze({
     reportDir,
     summary,
@@ -103,5 +133,6 @@ export async function loadRuleResults(reportDir) {
     bindingCatalog: await optional("binding-catalog.json", null),
     physicalPlan: await optional("physical-plan.json", null),
     scenarioReviewItems: await optional("scenario-review-items.json", []),
+    stateDiscovery,
   });
 }

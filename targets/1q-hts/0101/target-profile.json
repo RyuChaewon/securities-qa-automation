@@ -138,6 +138,54 @@
       "expectedOutcomeModeHeaders": ["ExpectedMode", "expectedMode", "기대결과유형", "기대결과모드"],
       "requiredMapFamilyCount": 19,
       "activeStateMapScreenCode": "HT010115"
+    },
+    "stateGraph": {
+      "schemaVersion": "1.0",
+      "graphId": "1q-hts-0101-order-screen",
+      "screenId": "0101",
+      "configurationStatus": "ConfigurationRequired",
+      "baselineStateId": "",
+      "states": [
+        {
+          "stateId": "buy",
+          "stateContextId": "order-tab:buy",
+          "screenId": "0101",
+          "configurationStatus": "ConfigurationRequired",
+          "mapScreenCodes": ["HT010115"],
+          "mapHostKeys": ["0101|HT010115"],
+          "evidenceRefs": ["target-profile.adapter.statefulControls[0].options[0]"]
+        },
+        {
+          "stateId": "sell",
+          "stateContextId": "order-tab:sell",
+          "screenId": "0101",
+          "configurationStatus": "ConfigurationRequired",
+          "mapScreenCodes": ["HT010115"],
+          "mapHostKeys": ["0101|HT010115"],
+          "evidenceRefs": ["target-profile.adapter.statefulControls[0].options[1]"]
+        },
+        {
+          "stateId": "modify-cancel",
+          "stateContextId": "order-tab:modify-cancel",
+          "screenId": "0101",
+          "configurationStatus": "ConfigurationRequired",
+          "mapScreenCodes": ["HT010115"],
+          "mapHostKeys": ["0101|HT010115"],
+          "evidenceRefs": ["target-profile.adapter.statefulControls[0].options[2]"]
+        }
+      ],
+      "transitions": [],
+      "restorePolicy": {
+        "mode": "ConfigurationRequired",
+        "baselineStateId": "",
+        "maxAttempts": 1,
+        "timeoutMs": 5000,
+        "evidenceRequirements": []
+      },
+      "evidenceRefs": [
+        "target-profile.adapter.statefulControls[0]",
+        "target-profile.adapter.mapHosts[0]"
+      ]
     }
   }
 }

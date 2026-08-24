@@ -65,6 +65,31 @@ try {
   check(failClosed.canonicalDocument.results[1].evidenceRole, "Checkpoint", "reporter preserves evaluator evidence role");
   check(failClosed.canonicalDocument.results[1].actionVerified, true, "reporter preserves action verification metadata");
 
+  const stateReportDir = await createReportDir();
+  tempDirs.push(stateReportDir);
+  const stateDiscovery = {
+    schemaVersion: "1.0", graphId: "fake-graph", observedAt: "2026-08-24T00:00:00+09:00", transitionActionCount: 1, transactionalActionCount: 0,
+    states: [
+      { stateContext: { stateId: "a", stateContextId: "state:a" }, status: "SUCCESS", failureCategory: "NONE", reasonCode: "", controls: [{ runtimeControlId: "same" }], screenshotRef: "screenshots/a.png", uiTreeRef: "ui-tree/a.json" },
+      { stateContext: { stateId: "b", stateContextId: "state:b" }, status: "FAILED", failureCategory: "APPLICATION", reasonCode: "STATE_ARRIVAL_CHECKPOINT_NOT_SATISFIED", transition: { actionSent: true, actionVerified: true, arrivalCheckpointSatisfied: false }, controls: [], screenshotRef: "screenshots/b.png", uiTreeRef: "ui-tree/b.json" },
+    ],
+    restore: { status: "SUCCESS", actionSent: true, arrivalCheckpointSatisfied: true, failureCategory: "NONE", reasonCode: "" },
+  };
+  await fs.writeFile(path.join(stateReportDir, "state-discovery-results.json"), JSON.stringify(stateDiscovery));
+  const stateLoaded = await loadRuleResults(stateReportDir);
+  check(stateLoaded.stateDiscovery.states.map((state) => state.status), ["SUCCESS", "FAILED"], "reporter preserves canonical state statuses");
+  check(Object.isFrozen(stateLoaded.stateDiscovery), true, "state discovery document is immutable");
+  check(createRuleResultsWorkbookViewModel(stateLoaded).stateDiscoveryRows.map((row) => row[2]), ["SUCCESS", "FAILED", "SUCCESS"], "state and restore statuses are displayed without re-evaluation");
+  check(createRuleResultsWorkbookViewModel(stateLoaded).stateDiscoveryRows[2][0], "@restore", "restore result remains a separate display row");
+
+  const unsafeStateDir = await createReportDir();
+  tempDirs.push(unsafeStateDir);
+  const unsafeStateDiscovery = structuredClone(stateDiscovery);
+  unsafeStateDiscovery.states[1].status = "SUCCESS";
+  await fs.writeFile(path.join(unsafeStateDir, "state-discovery-results.json"), JSON.stringify(unsafeStateDiscovery));
+  await assert.rejects(loadRuleResults(unsafeStateDir), /action 전달만으로 SUCCESS/);
+  assertions += 1;
+
   const mismatchDir = await createReportDir();
   tempDirs.push(mismatchDir);
   const mismatchCases = JSON.parse(await fs.readFile(path.join(mismatchDir, "case-results.json"), "utf8"));

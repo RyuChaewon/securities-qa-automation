@@ -48,9 +48,10 @@ foreach ($path in $paths) {
     $functionsByFile[[IO.Path]::GetFileName($path)] = $names
     $allFunctionNames += $names
 }
-Assert-Equal 63 $allFunctionNames.Count 'split retains generic target functions plus explicit adapter/context dependencies'
-Assert-Equal 63 @($allFunctionNames | Sort-Object -Unique).Count 'each function has one implementation'
+Assert-Equal 64 $allFunctionNames.Count 'split retains generic target functions plus explicit adapter/context dependencies'
+Assert-Equal 64 @($allFunctionNames | Sort-Object -Unique).Count 'each function has one implementation'
 Assert-True ($functionsByFile['hts-target-adapter.ps1'] -contains 'New-HtsTargetAdapterContext') 'adapter module owns target profile normalization'
+Assert-True ($functionsByFile['hts-target-adapter.ps1'] -contains 'Get-HtsTargetStateGraph') 'adapter module owns target state graph access'
 Assert-True ($functionsByFile['hts-target-rule-context.ps1'] -contains 'New-HtsTargetRuleContext') 'context module owns per-run state construction'
 Assert-True ($functionsByFile['hts-target-rule-discovery.ps1'] -contains 'Get-RuleDiscoveredControls') 'discovery owns target control discovery'
 Assert-True ($functionsByFile['hts-target-rule-discovery.ps1'] -notcontains 'Invoke-RuleControlPlanItem') 'discovery does not own target actions'

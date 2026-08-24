@@ -1,6 +1,6 @@
 ﻿<#
 .SYNOPSIS versioned TargetAdapter profile을 generic 실행 컨텍스트와 조회 함수로 정규화한다.
-.DESCRIPTION 대상별 화면 ID, AutomationId, 상태형 컨트롤, MAP host와 대화상자 matcher를 외부 profile에서만 읽는다.
+.DESCRIPTION 대상별 화면 ID, AutomationId, State Graph, 상태형 컨트롤, MAP host와 대화상자 matcher를 외부 profile에서만 읽는다.
 .NOTES UI 조작, 파일 읽기, 결과 판정과 리포트 생성은 수행하지 않는다.
 #>
 
@@ -19,6 +19,12 @@ function New-HtsTargetAdapterContext($Profile) {
         Profile = $adapter
         StateByControlKey = $states
     }
+}
+
+# TargetAdapter가 소유한 화면별 State Graph를 generic 순회 모듈에 전달한다.
+function Get-HtsTargetStateGraph($AdapterContext) {
+    if (-not $AdapterContext -or -not $AdapterContext.Profile) { return $null }
+    $AdapterContext.Profile.stateGraph
 }
 
 # 대상별 상태 저장소가 사용하는 대소문자 비의존 canonical key를 만든다.

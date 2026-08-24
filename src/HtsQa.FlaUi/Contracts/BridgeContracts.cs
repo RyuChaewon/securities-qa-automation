@@ -15,7 +15,7 @@ public sealed class BridgeRequest
     /// <summary>요청과 응답을 실행 로그에서 연결하는 식별자다.</summary>
     public string RequestId { get; set; } = Guid.NewGuid().ToString("N");
 
-    /// <summary>ping, discover, action 중 실행할 연산이다.</summary>
+    /// <summary>ping, observeState, discover, action 중 실행할 연산이다.</summary>
     public string Operation { get; set; } = string.Empty;
 
     /// <summary>탐색과 조작을 이 HWND의 UIA 하위 트리로 제한한다.</summary>
@@ -99,6 +99,24 @@ public sealed class ElementOptionSnapshot
     public bool IsSelected { get; set; }
 }
 
+/// <summary>상태 의미를 추정하지 않고 현재 루트 창의 소유권, DPI와 fingerprint만 기록하는 읽기 전용 snapshot이다.</summary>
+public sealed class StateWindowSnapshot
+{
+    public string ProcessName { get; set; } = string.Empty;
+    public long RootHwnd { get; set; }
+    public int ProcessId { get; set; }
+    public string RuntimeId { get; set; } = string.Empty;
+    public string AutomationId { get; set; } = string.Empty;
+    public string ClassName { get; set; } = string.Empty;
+    public string FrameworkType { get; set; } = string.Empty;
+    public bool IsEnabled { get; set; }
+    public bool IsOffscreen { get; set; }
+    public ElementRectangle Bounds { get; set; } = new();
+    public uint Dpi { get; set; }
+    public string WindowFingerprint { get; set; } = string.Empty;
+    public DateTimeOffset ObservedAt { get; set; }
+}
+
 /// <summary>
 /// 모든 브리지 응답의 공통 모양이다. FallbackRequired가 true이면 호출자가 기록 후
 /// 기존 Win32 경로를 사용할 수 있지만, UIA3 성공을 가장하지는 않는다.
@@ -118,6 +136,7 @@ public sealed class BridgeResponse
     public string Message { get; set; } = string.Empty;
     public string ObservedValue { get; set; } = string.Empty;
     public IReadOnlyList<ElementSnapshot> Elements { get; set; } = Array.Empty<ElementSnapshot>();
+    public StateWindowSnapshot? StateObservation { get; set; }
 
     /// <summary>프로토콜 수준 예외를 일관된 실패 응답으로 변환한다.</summary>
     public static BridgeResponse Failure(BridgeRequest request, string code, string message, bool fallback = false) => new()

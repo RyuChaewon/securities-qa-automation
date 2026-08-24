@@ -78,7 +78,60 @@ public sealed class TargetAdapterTests
         Assert.Equal(19, profile.Map.FamilyFiles.Length);
         Assert.Equal(3, Assert.Single(profile.Adapter.StatefulControls).Options.Length);
         Assert.Equal(4, profile.Adapter.TransactionalDialogs!.Commands.Length);
+        var stateGraph = Assert.IsType<StateGraph>(profile.Adapter.StateGraph);
+        Assert.Equal(StateGraphConfigurationStatus.ConfigurationRequired, stateGraph.ConfigurationStatus);
+        Assert.Equal(3, stateGraph.States.Length);
+        Assert.All(stateGraph.States, state => Assert.Equal(StateGraphConfigurationStatus.ConfigurationRequired, state.ConfigurationStatus));
+        Assert.Empty(stateGraph.Transitions);
+        Assert.Equal(StateRestoreMode.ConfigurationRequired, stateGraph.RestorePolicy.Mode);
     }
+
+    [Fact]
+    public void State_Transition_Cannot_Target_A_Registered_Transactional_Command_Control()
+    {
+        var profile = FakeProfile();
+        profile = profile with { Adapter = profile.Adapter! with { StateGraph = FakeStateGraph("FAKE_ACTION") } };
+
+        var issues = RuleTargetAdapterValidator.Validate(profile, ["F001"]);
+
+        Assert.Contains(issues, issue => issue.Code == "RULE.ADAPTER_STATE_TRANSACTION_TARGET");
+    }
+
+    private static StateGraph FakeStateGraph(string targetControlId) => new()
+    {
+        GraphId = "fake-state-graph",
+        ScreenId = "F001",
+        ConfigurationStatus = StateGraphConfigurationStatus.ConfigurationRequired,
+        States =
+        [
+            new() { StateId = "a", StateContextId = "mode-a", ScreenId = "F001", EvidenceRefs = ["fixture:a"] },
+            new() { StateId = "b", StateContextId = "mode-b", ScreenId = "F001", EvidenceRefs = ["fixture:b"] }
+        ],
+        Transitions =
+        [
+            new()
+            {
+                TransitionId = "a-to-b",
+                SourceStateId = "a",
+                TargetStateId = "b",
+                Precondition = new() { ExpectedStateId = "a", EvidenceRequirements = ["fixture:precondition"] },
+                Action = FakeStateAction(targetControlId),
+                ArrivalCheckpoint = new() { CheckpointId = "arrive-b", Kind = "AssertState", EvidenceRequirements = ["fixture:arrival"] },
+                RestoreAction = FakeStateAction("FAKE_MODE_SELECTOR"),
+                EvidenceRequirements = ["fixture:transition"]
+            }
+        ],
+        RestorePolicy = new() { Mode = StateRestoreMode.ConfigurationRequired }
+    };
+
+    private static StateTransitionAction FakeStateAction(string targetControlId) => new()
+    {
+        TargetControlId = targetControlId,
+        Kind = StateTransitionActionKind.Select,
+        Allowlisted = true,
+        ApprovalEvidence = ["fixture:approval"],
+        Locator = new() { Strategy = StateLocatorStrategy.AutomationId, AutomationId = "fake-state-selector", Source = "fixture:locator", Confidence = StateLocatorConfidence.High }
+    };
 
     private static RuleTargetProfile FakeProfile() => new()
     {

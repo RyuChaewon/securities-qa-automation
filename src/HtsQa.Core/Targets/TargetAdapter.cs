@@ -94,6 +94,7 @@ public sealed record RuleTargetAdapterProfile
     public RuleTargetTransactionalDialogs? TransactionalDialogs { get; init; }
     public RuleTargetMapHost[] MapHosts { get; init; } = [];
     public Dictionary<string, string> MapAliases { get; init; } = [];
+    public StateGraph? StateGraph { get; init; }
     public RuleTargetImportProfile? Import { get; init; }
 }
 
@@ -184,6 +185,27 @@ public static class RuleTargetAdapterValidator
             AddRequiredUnique(dialogs.Commands.Select(x => x.LogicalName), "RULE.ADAPTER_DIALOG_COMMAND", "targetProfile.adapter.transactionalDialogs.commands.logicalName", issues);
             foreach (var command in dialogs.Commands)
                 AddRegex(command.MessagePattern, "RULE.ADAPTER_DIALOG_MESSAGE_PATTERN", "targetProfile.adapter.transactionalDialogs.commands.messagePattern", issues);
+        }
+
+        issues.AddRange(StateGraphValidator.Validate(adapter.StateGraph));
+        if (adapter.StateGraph is { } stateGraph)
+        {
+            if (!adapter.ScreenIds.Contains(stateGraph.ScreenId, StringComparer.OrdinalIgnoreCase))
+                issues.Add(new("RULE.ADAPTER_STATE_GRAPH_SCREEN", "Adapter stateGraph.screenId must be declared by the adapter.", Field: "targetProfile.adapter.stateGraph.screenId"));
+
+            var prohibitedControlIds = adapter.StatefulControls.SelectMany(control => control.Options)
+                .SelectMany(option => option.CommandControls)
+                .Concat(adapter.TransactionalDialogs?.Commands.Select(command => command.LogicalName) ?? [])
+                .ToHashSet(StringComparer.OrdinalIgnoreCase);
+            var configuredActions = new List<StateTransitionAction>();
+            foreach (var transition in stateGraph.Transitions)
+            {
+                configuredActions.Add(transition.Action);
+                configuredActions.Add(transition.RestoreAction);
+            }
+            if (stateGraph.RestorePolicy.Action is { } restoreAction) configuredActions.Add(restoreAction);
+            foreach (var action in configuredActions.Where(action => prohibitedControlIds.Contains(action.TargetControlId)))
+                issues.Add(new("RULE.ADAPTER_STATE_TRANSACTION_TARGET", "State transition cannot target a registered transactional command control.", Field: "targetProfile.adapter.stateGraph.transitions.action.targetControlId"));
         }
 
         AddUnique(adapter.MapHosts.Select(x => $"{x.ScreenId}|{x.MapScreenCode}"), "RULE.ADAPTER_MAP_HOST_DUPLICATE", "targetProfile.adapter.mapHosts", issues);

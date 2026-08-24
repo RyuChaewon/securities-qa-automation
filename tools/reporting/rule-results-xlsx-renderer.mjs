@@ -8,7 +8,7 @@ export async function renderRuleResultsWorkbook(viewModel, outputManager) {
 const {
   summary, results, mapCatalog, compiledPlan, bindingCatalog, physicalPlan, scenarioReviewItems,
   targetDisplayName, targetInstallationRoot, targetScreenDirectory, targetMapPattern, exampleScreenNumber,
-  summaryRows, resultHeaders, resultRows, incompleteRows, incompleteByCase, incompleteSummary,
+  summaryRows, resultHeaders, resultRows, stateDiscoveryRows, incompleteRows, incompleteByCase, incompleteSummary,
   statusLabel, scenarioReadinessLabel, bindingStatusLabel, confidenceLabel, reviewSeverityLabel,
   physicalDispositionLabel, approvalStatusLabel, actionLabel, cleanCollectedLabel,
   cleanExecutionDetail, compactNavigationTargets, incompleteLabel, excelDate,
@@ -23,6 +23,7 @@ const inputGuideSheet = workbook.worksheets.add("입력데이터안내");
 const installationSheet = workbook.worksheets.add("설치카탈로그");
 const scenarioSheet = workbook.worksheets.add("시나리오계획");
 const bindingSheet = workbook.worksheets.add("컨트롤바인딩");
+const stateDiscoverySheet = workbook.worksheets.add("상태탐색");
 const approvalSheet = workbook.worksheets.add("승인및제외");
 const summarySheet = workbook.worksheets.add("요약");
 const resultsSheet = workbook.worksheets.add("테스트결과");
@@ -98,9 +99,17 @@ function statusFill(status) {
   return colors.pending;
 }
 
-for (const sheet of [summarySheet, resultsSheet, actionsSheet, variablesSheet, controlsSheet, controlTestsSheet, popupsSheet, oracleEventsSheet, incompleteSheet, errorShotsSheet, columnGuideSheet, errorGuideSheet, pipelineSheet, inputGuideSheet, installationSheet, scenarioSheet, bindingSheet, approvalSheet]) {
+for (const sheet of [summarySheet, resultsSheet, actionsSheet, variablesSheet, controlsSheet, controlTestsSheet, popupsSheet, oracleEventsSheet, incompleteSheet, errorShotsSheet, columnGuideSheet, errorGuideSheet, pipelineSheet, inputGuideSheet, installationSheet, scenarioSheet, bindingSheet, stateDiscoverySheet, approvalSheet]) {
   sheet.showGridLines = false;
 }
+
+writeGuideSheet(
+  stateDiscoverySheet,
+  "상태별 control discovery 및 baseline 복구 결과",
+  ["상태 ID", "상태 Context", "Canonical 상태", "실패 분류", "사유 코드", "Control 수", "Action 전달", "Arrival Checkpoint", "Screenshot", "UI tree"],
+  stateDiscoveryRows ?? [],
+  [18, 24, 16, 16, 34, 12, 14, 20, 28, 28],
+);
 
 summarySheet.mergeCells("A1:H2");
 summarySheet.getRange("A1").values = [[`${summary.targetDisplayName ?? "대상 화면"} 룰 기반 테스트 결과`]];
@@ -805,6 +814,7 @@ const columnGuideRows = [
 columnGuideRows.push(
   ["시나리오계획", "A:N", "화면·시나리오·준비상태·커버리지·생성출처", "프로그램 자동 생성 또는 외부 반환 시나리오를 결정론적으로 컴파일한 결과", "시나리오가 참조한 변수만 조합하고 생성기/버전을 추적", "compiled-plan.json"],
   ["컨트롤바인딩", "A:Q", "logicalName·실행가능성·후보 근거", "MAP 논리 컨트롤과 실제 런타임 컨트롤의 결합 결과", "유일한 RuntimeActionable 후보만 실행 허용", "binding-catalog.json"],
+  ["상태탐색", "A:J", "상태·복구·Checkpoint·증거", "state-discovery-results.json의 canonical 결과를 상태별로 표시", "상태나 restore 성공을 reporter가 재계산하지 않음", "state-discovery-results.json"],
   ["승인및제외", "A:H", "검토·커버리지·실행승인", "필수 검토, 승인되지 않은 시나리오, 제외 사유", "미해결 필수 항목은 실행 차단", "scenario-review-items.json / physical-plan.json"],
   ["테스트결과", "Y:AE", "시나리오 추적 정보", "실행 케이스를 논리·물리 계획과 연결", "시나리오 모드에서만 값이 채워짐", "result.scenario* / logicalPlanId / physicalPlanId"],
   ["선택지테스트", "V:Z", "시나리오 단계 정보", "실제 컨트롤 조작이 어떤 시나리오 단계에서 발생했는지 기록", "단계 ID와 순번으로 원본 계획 추적", "controlTest.scenario*"],
@@ -1028,6 +1038,7 @@ const previewRanges = [
   ["시나리오계획", `A1:N${Math.min(20, scenarioRows.length + 4)}`],
   ["컨트롤바인딩", `A1:Q${Math.min(20, bindingRows.length + 4)}`],
   ["승인및제외", `A1:H${Math.min(20, approvalRows.length + 4)}`],
+  ["상태탐색", `A1:J${Math.min(20, (stateDiscoveryRows?.length ?? 0) + 4)}`],
 ];
 if (outputManager.renderPreviews !== false) {
   for (const [sheetName, range] of previewRanges) {

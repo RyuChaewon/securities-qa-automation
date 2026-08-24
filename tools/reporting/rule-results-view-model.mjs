@@ -6,7 +6,7 @@ import path from "node:path";
 
 export const RULE_RESULTS_SHEET_NAMES = [
   "컬럼설명", "오류판정기준", "테스트모듈로직", "입력데이터안내", "설치카탈로그", "시나리오계획",
-  "컨트롤바인딩", "승인및제외", "요약", "테스트결과", "단계결과", "입력변수", "컨트롤계획",
+  "컨트롤바인딩", "상태탐색", "승인및제외", "요약", "테스트결과", "단계결과", "입력변수", "컨트롤계획",
   "선택지테스트", "팝업관찰", "판정이벤트", "자동화미완료", "오류스크린샷",
 ];
 
@@ -92,6 +92,25 @@ const resultHeaders = [
 
 const portablePath = (value, fallback) => value && !path.isAbsolute(String(value)) ? String(value) : fallback;
 
+function createStateDiscoveryRows(stateDiscovery) {
+  if (!stateDiscovery) return [];
+  const rows = (stateDiscovery.states ?? []).map((state) => [
+    state.stateContext?.stateId ?? "",
+    state.stateContext?.stateContextId ?? "",
+    state.status ?? "",
+    state.failureCategory ?? "",
+    state.reasonCode ?? "",
+    Array.isArray(state.controls) ? state.controls.length : 0,
+    state.transition?.actionSent === true ? "예" : "아니요",
+    state.transition?.arrivalCheckpointSatisfied === true ? "충족" : "미충족",
+    state.screenshotRef ?? "",
+    state.uiTreeRef ?? "",
+  ]);
+  const restore = stateDiscovery.restore;
+  if (restore) rows.push(["@restore", "baseline", restore.status ?? "", restore.failureCategory ?? "", restore.reasonCode ?? "", 0, restore.actionSent === true ? "예" : "아니요", restore.arrivalCheckpointSatisfied === true ? "충족" : "미충족", restore.screenshotRef ?? "", restore.uiTreeRef ?? ""]);
+  return rows;
+}
+
 export function createRuleResultsWorkbookViewModel(sources) {
   const { summary, results, mapCatalog } = sources;
   const incomplete = createIncompleteModel(results);
@@ -107,9 +126,10 @@ export function createRuleResultsWorkbookViewModel(sources) {
     Number(r.elapsedMs ?? 0), (incomplete.incompleteByCase.get(r.caseId ?? "") ?? []).length, incomplete.incompleteSummary(r.caseId ?? ""), "자동화미완료/판정이벤트", (r.oracleEvents ?? []).filter((item) => item.disposition === "Expected").length,
     (r.oracleEvents ?? []).filter((item) => item.requiresReview).length, r.scenarioId ?? "", r.scenarioTitle ?? "", r.scenarioPriority ?? "", r.scenarioCategory ?? "", r.logicalPlanId ?? "", r.physicalPlanId ?? "", r.scenarioMode ? "예" : "아니요",
   ]);
+  const stateDiscoveryRows = createStateDiscoveryRows(sources.stateDiscovery);
   const targetInstallationRoot = portablePath(mapCatalog.installationRoot, "targetProfile.map.installationRoot");
   return {
-    ...sources, ...incomplete, summaryRows, resultHeaders, resultRows, sheetNames: RULE_RESULTS_SHEET_NAMES,
+    ...sources, ...incomplete, summaryRows, resultHeaders, resultRows, stateDiscoveryRows, sheetNames: RULE_RESULTS_SHEET_NAMES,
     targetDisplayName: summary.targetDisplayName ?? "대상 HTS", targetInstallationRoot,
     targetScreenDirectory: portablePath(mapCatalog.screenDirectory, path.join(targetInstallationRoot, "screen")),
     targetMapPattern: mapCatalog.filePattern ?? "targetProfile.map.filePattern",

@@ -86,6 +86,28 @@ public sealed class FlaUiAutomationEngineTests : IDisposable
         Assert.Equal("InvokePattern.Invoke", button.Pattern);
     }
 
+    /// <summary>상태 관측은 창 identity와 DPI를 기록하지만 어떠한 UI action도 보내지 않는다.</summary>
+    [Fact]
+    public void ObserveState_Returns_ReadOnly_Window_Fingerprint_Without_Action()
+    {
+        using var engine = new FlaUiAutomationEngine();
+
+        var response = engine.Execute(Request("observeState"));
+
+        Assert.True(response.Success, response.Message);
+        Assert.True(response.Verified);
+        Assert.False(response.ActionSent);
+        Assert.False(response.ActionVerified);
+        var observation = Assert.IsType<StateWindowSnapshot>(response.StateObservation);
+        Assert.Equal(_fixture.Handle.ToInt64(), observation.RootHwnd);
+        Assert.False(string.IsNullOrWhiteSpace(observation.ProcessName));
+        Assert.True(observation.ProcessId > 0);
+        Assert.True(observation.Dpi >= 96);
+        Assert.Equal(64, observation.WindowFingerprint.Length);
+        Assert.False(observation.IsOffscreen);
+        Assert.NotEqual(default, observation.ObservedAt);
+    }
+
     /// <summary>테스트용 화면 HWND를 사용하는 공통 요청을 만든다.</summary>
     private BridgeRequest Request(string operation) => new()
     {

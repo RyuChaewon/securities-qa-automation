@@ -3,6 +3,10 @@
 // 경계: 좌표 fallback은 이 엔진이 수행하지 않으며 지원 패턴 실패를 명시 코드로 상위 실행기에 전달한다.
 // 수정 지점: 새 컨트롤 동작은 selector 재검증, 실행 후 상태 확인, 통합 테스트를 한 묶음으로 추가한다.
 using System.Globalization;
+using System.Diagnostics;
+using System.Runtime.InteropServices;
+using System.Security.Cryptography;
+using System.Text;
 using FlaUI.Core;
 using FlaUI.Core.AutomationElements;
 using FlaUI.Core.Definitions;
@@ -38,10 +42,61 @@ public sealed class FlaUiAutomationEngine : IDisposable
         return request.Operation.Trim().ToLowerInvariant() switch
         {
             "ping" => Success(request, "FlaUI UIA3 실행기가 응답했습니다."),
+            "observestate" => ObserveState(request),
             "discover" => Discover(request),
             "action" => Act(request),
             _ => BridgeResponse.Failure(request, "UNKNOWN_OPERATION", $"지원하지 않는 연산입니다: {request.Operation}")
         };
+    }
+
+    /// <summary>현재 루트 창의 UIA·프로세스·DPI 정보를 읽기만 하고 상태 의미 판단은 adapter에 남긴다.</summary>
+    public BridgeResponse ObserveState(BridgeRequest request)
+    {
+        try
+        {
+            var root = GetRoot(request);
+            var bounds = Bounds(root);
+            var dpi = ReadDpi(request.RootHwnd);
+            var processId = SafeRead(() => root.Properties.ProcessId.ValueOrDefault, 0);
+            var processName = SafeRead(() => Process.GetProcessById(processId).ProcessName, string.Empty);
+            var runtimeId = RuntimeId(root);
+            var automationId = SafeRead(() => root.AutomationId ?? string.Empty, string.Empty);
+            var className = SafeRead(() => root.ClassName ?? string.Empty, string.Empty);
+            var frameworkType = SafeRead(() => root.FrameworkType.ToString(), string.Empty);
+            var fingerprintInput = string.Join("|", processId, processName, runtimeId, automationId, className, frameworkType,
+                bounds.Left, bounds.Top, bounds.Right, bounds.Bottom, dpi);
+            var fingerprint = Convert.ToHexString(SHA256.HashData(Encoding.UTF8.GetBytes(fingerprintInput))).ToLowerInvariant();
+
+            return new BridgeResponse
+            {
+                RequestId = request.RequestId,
+                Success = true,
+                Verified = true,
+                ActionSent = false,
+                ActionVerified = false,
+                Message = "현재 UIA 루트 창 상태를 읽기 전용으로 관측했습니다.",
+                StateObservation = new()
+                {
+                    RootHwnd = request.RootHwnd,
+                    ProcessId = processId,
+                    ProcessName = processName,
+                    RuntimeId = runtimeId,
+                    AutomationId = automationId,
+                    ClassName = className,
+                    FrameworkType = frameworkType,
+                    IsEnabled = SafeRead(() => root.IsEnabled, false),
+                    IsOffscreen = SafeRead(() => root.IsOffscreen, true),
+                    Bounds = bounds,
+                    Dpi = dpi,
+                    WindowFingerprint = fingerprint,
+                    ObservedAt = DateTimeOffset.Now
+                }
+            };
+        }
+        catch (Exception exception)
+        {
+            return BridgeResponse.Failure(request, "UIA3_STATE_OBSERVATION_FAILED", exception.Message);
+        }
     }
 
     /// <summary>루트 아래 활성 요소를 UIA3 속성과 패턴 단위로 구조화한다.</summary>
@@ -707,6 +762,21 @@ public sealed class FlaUiAutomationEngine : IDisposable
             Right = rectangle.Right,
             Bottom = rectangle.Bottom
         };
+    }
+
+    /// <summary>지원되는 Windows에서는 HWND의 DPI를 읽고 API 사용 불가 시 0으로 명시한다.</summary>
+    private static uint ReadDpi(long hwnd)
+    {
+        if (hwnd == 0 || !OperatingSystem.IsWindows()) return 0;
+        try { return NativeMethods.GetDpiForWindow(new IntPtr(hwnd)); }
+        catch (DllNotFoundException) { return 0; }
+        catch (EntryPointNotFoundException) { return 0; }
+    }
+
+    private static class NativeMethods
+    {
+        [DllImport("user32.dll")]
+        internal static extern uint GetDpiForWindow(IntPtr hwnd);
     }
 
     /// <summary>ControlType 접두사를 제거해 서로 다른 표현을 같은 값으로 비교한다.</summary>
