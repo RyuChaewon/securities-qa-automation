@@ -1,3 +1,6 @@
+// 역할: optional Checkpoint의 비차단 성공과 차단 실패 정책을 개별 TestResult 집계 경로에서 고정한다.
+// 범위: UI나 파일 없이 순수 ResultEvaluator 입력과 aggregate verdict만 검증한다.
+// 안전: optional Checkpoint가 required Checkpoint를 대신해 PASS를 만들지 못하게 한다.
 using HtsQa.Core;
 
 namespace HtsQa.Tests;
