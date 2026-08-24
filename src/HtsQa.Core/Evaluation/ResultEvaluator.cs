@@ -260,10 +260,16 @@ public sealed class ResultEvaluator
     {
         var expected = input.ExpectedResult;
         var applicationEvents = evidence.Where(item => item.Kind is not ObservationKind.Success and not ObservationKind.Info).ToArray();
-        if (applicationEvents.Length == 0) return Pass(input, "EXPECTED_SUCCESS", "허용 계약을 위반하지 않고 실행되었습니다.", evidence);
+        if (applicationEvents.Length == 0)
+            return evidence.Any(item => item.Kind == ObservationKind.Success)
+                ? Pass(input, "EXPECTED_SUCCESS", "명시적인 성공 증거가 허용 계약과 일치합니다.", evidence)
+                : Pending(input, input.EvaluationPolicy.MissingEvidenceStatus, RuleOutcomeDisposition.Review,
+                    "EXPECTED_SUCCESS_OR_ALLOWED_EVIDENCE_REQUIRED", "허용 계약에는 명시적인 성공 또는 허용 반응 증거가 필요합니다.", false, evidence);
         if (applicationEvents.Any(item => item.Kind != allowedKind && !(allowedKind == ObservationKind.InputValidation && item.Kind == ObservationKind.GenericError)))
             return Mismatch(input, "UNEXPECTED_APPLICATION_EVENT", "관찰 결과가 허용된 결과 유형과 일치하지 않습니다.", applicationEvents);
-        if (HasMatchers(expected) && applicationEvents.Any(item => !MatchesExpectedSignal(expected, item.Message, item.SourceCode)))
+        if (!HasMatchers(expected))
+            return Pending(input, input.EvaluationPolicy.MissingEvidenceStatus, RuleOutcomeDisposition.Review, "EXPECTED_MATCHER_REQUIRED", "허용 반응을 PASS로 판정하려면 문구 또는 오류 코드 matcher가 필요합니다.", false, applicationEvents);
+        if (applicationEvents.Any(item => !MatchesExpectedSignal(expected, item.Message, item.SourceCode)))
             return Mismatch(input, "EXPECTED_MATCHER_MISMATCH", "관찰 결과가 정의한 문구 또는 오류 코드와 일치하지 않습니다.", applicationEvents);
         return Pass(input, code, reason, applicationEvents);
     }

@@ -57,7 +57,7 @@ jobs:
         shell: pwsh
         run: |
           dotnet test .\tests\HtsQa.Tests\HtsQa.Tests.csproj -c Release --no-build --no-restore `
-            --filter "FullyQualifiedName~ResultEvaluatorTests.Not_Executed_Cannot_Pass|FullyQualifiedName~ResultEvaluatorTests.Executed_Without_Evidence_Is_Pending|FullyQualifiedName~ResultEvaluatorTests.ObservationOnly_Is_Recorded_But_Not_Validation_Pass"
+            --filter "FullyQualifiedName~ResultEvaluatorTests.Not_Executed_Cannot_Pass|FullyQualifiedName~ResultEvaluatorTests.Executed_Without_Evidence_Is_Pending|FullyQualifiedName~ResultEvaluatorTests.Invalid_Stock_Code_Without_Required_Validation_Is_Fail_Not_Pass|FullyQualifiedName~ResultEvaluatorTests.ValidationAllowed_With_Info_Only_Is_Pending_Not_Pass|FullyQualifiedName~ResultEvaluatorTests.ObservationOnly_Is_Recorded_But_Not_Validation_Pass"
           if ($LASTEXITCODE -ne 0) { throw "Canonical evaluator smoke tests failed: $LASTEXITCODE" }
 
           & pwsh -NoProfile -ExecutionPolicy Bypass -File .\scripts\dev\verify-refactoring-completion.ps1

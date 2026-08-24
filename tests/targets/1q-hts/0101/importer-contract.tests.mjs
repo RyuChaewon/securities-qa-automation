@@ -7,9 +7,11 @@ import crypto from "node:crypto";
 import fs from "node:fs/promises";
 import path from "node:path";
 import { spawnSync } from "node:child_process";
+import { classifyExpectedOutcome, isStructuredErrorCode, RULE_EXPECTED_OUTCOME_TYPES } from "../../../../targets/1q-hts/0101/tools/expected-outcome-classifier.mjs";
 
 const root = path.resolve(import.meta.dirname, "..", "..", "..", "..");
 const importerPath = path.join(root, "targets", "1q-hts", "0101", "tools", "import-testcases.mjs");
+const targetProfilePath = path.join(root, "targets", "1q-hts", "0101", "target-profile.json");
 const comparatorPath = path.join(import.meta.dirname, "compare-import-results.mjs");
 const artifactsRoot = path.join(root, "artifacts");
 const tempRoot = path.join(artifactsRoot, `importer-contract-${crypto.randomUUID()}`);
@@ -35,10 +37,55 @@ function runComparator() {
 
 try {
   const importer = await fs.readFile(importerPath, "utf8");
+  const targetProfile = JSON.parse(await fs.readFile(targetProfilePath, "utf8"));
   assert.match(importer, /sourceWorkbook:\s*path\.basename\(workbookPath\)/, "import summary must not expose a local workbook path");
   assert.match(importer, /candidateSheetNames/, "importer must use target-adapter approved sheet names");
   assert.doesNotMatch(importer, /\bfetch\s*\(|https?:\/\//, "importer execution must not call an external API");
-  assertions += 3;
+  assert.match(importer, /ExpectationClassification:/, "fallback classification reason must be serialized as evidence");
+  assert.match(importer, /generatorVersion:\s*"1\.6\.0"/, "semantic classifier change must bump importer generator version");
+  assert.deepEqual(targetProfile.adapter.import.expectedOutcomeModeHeaders,
+    ["ExpectedMode", "expectedMode", "기대결과유형", "기대결과모드"], "structured expected mode headers are target-owned");
+  assertions += 6;
+
+  const classified = (input) => classifyExpectedOutcome(input).type;
+  check(classified({ rawInput: "<계좌 미선택>", procedure: "필수 계좌 없이 진행", expectedResult: "계좌 필요 동작이 차단되고 오류 경로가 실행" }) === "ValidationRequired",
+    "prefixed missing-selection placeholders must require validation");
+  check(classified({ rawInput: "선택값 변경", procedure: "이벤트 호출", expectedResult: "핸들러가 실행되고 결과가 반영" }) === "Unspecified",
+    "generic handler execution must not become business Success");
+  check(classified({ rawInput: "<허용길이-1/허용길이/허용길이+1>", expectedResult: "초과 값은 차단" }) === "Unspecified",
+    "composite boundary placeholders must be expanded before classification");
+  check(classified({ rawInput: "005930\n<공백>", expectedResult: "공백은 오류 메시지" }) === "Unspecified",
+    "mixed valid and blank placeholders must remain unresolved");
+  check(classified({ structuredMode: "Success", rawInput: "정상값", expectedResult: "오류 팝업 문구 확인" }) === "Success",
+    "structured expected mode must override text fallback");
+  check(classified({ structuredMode: "REVIEW", expectedResult: "정상 처리" }) === "Unspecified",
+    "structured REVIEW must remain unresolved");
+  check(classified({ rawInput: "99999999", procedure: "유효하지 않은 종목코드 입력", expectedResult: "종목코드오류 메시지 표시" }) === "ValidationRequired",
+    "known invalid stock code intent must require validation");
+  check(classified({ rawInput: "<공백>", procedure: "필수 입력값 없이 진행", expectedResult: "입력이 차단되고 메시지 표시" }) === "ValidationRequired",
+    "missing required input must require validation");
+  check(classified({ rawInput: "ABC", procedure: "형식 위반 값 입력", expectedResult: "검증 오류 표시" }) === "ValidationRequired",
+    "format error must require validation");
+  check(classified({ rawInput: "<Max+1>", procedure: "허용 범위 초과", expectedResult: "진행되지 않고 오류 표시" }) === "ValidationRequired",
+    "out-of-range input must require validation");
+  check(classified({ rawInput: "005930", expectedResult: "정상 조회가 완료되고 결과 반영" }) === "Success",
+    "normal business outcome must classify as success");
+  check(classified({ rawInput: "경계값", procedure: "최대 경계 조건", expectedResult: "정책에 따라 성공 또는 검증" }) === "ValidationAllowed",
+    "only a genuinely alternative boundary may allow validation");
+  check(classified({ rawInput: "값", procedure: "OnError 이벤트 확인", expectedResult: "오류 팝업 메시지 또는 거부 경로" }) === "Unspecified",
+    "error words alone must not create ValidationAllowed");
+  check(classified({ rawInput: "값", expectedResult: "초기 상태와 표시 상태가 MAP과 일치하는지 확인" }) === "ObservationOnly",
+    "pure observation must remain ObservationOnly");
+  check(classified({ rawInput: "값", expectedResult: "동작 확인" }) === "Unspecified",
+    "insufficient expectation evidence must remain unresolved");
+  check(classified({ rawInput: "유효하지 않은 값", expectedResult: "검증 메시지", errorCodes: ["E100"] }) === "ValidationRequired",
+    "structured error code plus invalid intent must require validation");
+  check(classified({ rawInput: "오류 조건", expectedResult: "OnError 실행", errorCodes: ["MAP", "OnError"] }) === "Unspecified",
+    "descriptive error-code tokens must remain unresolved");
+  check(isStructuredErrorCode("ORDER_TAB_NOT_SELECTED") && isStructuredErrorCode("E100") && !isStructuredErrorCode("OnError"),
+    "only structured code-shaped tokens may become error-code matchers");
+  check(RULE_EXPECTED_OUTCOME_TYPES.includes(classifyExpectedOutcome({ structuredMode: "unsupported" }).type),
+    "classifier must emit only an existing Core enum name");
 
   await fs.mkdir(beforeDir, { recursive: true });
   await fs.mkdir(afterDir, { recursive: true });

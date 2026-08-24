@@ -68,6 +68,74 @@ public sealed class ResultEvaluatorTests
     }
 
     [Fact]
+    public void Invalid_Stock_Code_Without_Required_Validation_Is_Fail_Not_Pass()
+    {
+        var input = Case(
+            executed: true,
+            RuleExpectedOutcomeType.ValidationRequired,
+            [new Observation { ObservationId = "business-success", Kind = ObservationKind.Success, Message = "조회 완료" }],
+            patterns: ["종목코드오류"]);
+
+        var result = evaluator.Evaluate(input);
+
+        Assert.Equal(TestStatus.FAIL, result.Status);
+        Assert.Equal("EXPECTED_OUTCOME_NOT_OBSERVED", result.Code);
+        Assert.True(result.ProductDefectDetected);
+    }
+
+    [Fact]
+    public void ValidationAllowed_With_Explicit_Success_Evidence_Can_Pass()
+    {
+        var result = evaluator.Evaluate(Case(
+            executed: true,
+            RuleExpectedOutcomeType.ValidationAllowed,
+            [new Observation { ObservationId = "success", Kind = ObservationKind.Success, Message = "정상 처리" }]));
+
+        Assert.Equal(TestStatus.PASS, result.Status);
+        Assert.Equal("EXPECTED_SUCCESS", result.Code);
+    }
+
+    [Fact]
+    public void ValidationAllowed_With_Info_Only_Is_Pending_Not_Pass()
+    {
+        var result = evaluator.Evaluate(Case(
+            executed: true,
+            RuleExpectedOutcomeType.ValidationAllowed,
+            [new Observation { ObservationId = "info", Kind = ObservationKind.Info, Message = "화면을 관찰함" }]));
+
+        Assert.Equal(TestStatus.PENDING, result.Status);
+        Assert.Equal("EXPECTED_SUCCESS_OR_ALLOWED_EVIDENCE_REQUIRED", result.Code);
+        Assert.True(result.RequiresReview);
+    }
+
+    [Fact]
+    public void ValidationAllowed_Validation_Without_Matcher_Is_Pending_Not_Pass()
+    {
+        var result = evaluator.Evaluate(Case(
+            executed: true,
+            RuleExpectedOutcomeType.ValidationAllowed,
+            [new Observation { ObservationId = "validation", Kind = ObservationKind.InputValidation, Message = "경계 검증" }]));
+
+        Assert.Equal(TestStatus.PENDING, result.Status);
+        Assert.Equal("EXPECTED_MATCHER_REQUIRED", result.Code);
+    }
+
+    [Fact]
+    public void ValidationAllowed_With_Matching_Validation_Evidence_Can_Pass()
+    {
+        var input = Case(
+            executed: true,
+            RuleExpectedOutcomeType.ValidationAllowed,
+            [new Observation { ObservationId = "validation", Kind = ObservationKind.InputValidation, Message = "경계 검증" }],
+            patterns: ["경계 검증"]);
+
+        var result = evaluator.Evaluate(input);
+
+        Assert.Equal(TestStatus.PASS, result.Status);
+        Assert.Equal("EXPECTED_VALIDATION_OBSERVED", result.Code);
+    }
+
+    [Fact]
     public void Required_Matcher_Fails_When_Any_Collected_Observation_Mismatches()
     {
         var input = Case(

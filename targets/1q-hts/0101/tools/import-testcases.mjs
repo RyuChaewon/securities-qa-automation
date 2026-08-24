@@ -5,6 +5,7 @@
 import crypto from "node:crypto";
 import fs from "node:fs/promises";
 import path from "node:path";
+import { classifyExpectedOutcome, isStructuredErrorCode } from "./expected-outcome-classifier.mjs";
 import { FileBlob, SpreadsheetFile } from "@oai/artifact-tool";
 
 function parseArgs(argv) {
@@ -44,6 +45,7 @@ if (!targetScreenId || !statefulControl) throw new Error("target adapter에 scre
 const sourceBytes = await fs.readFile(workbookPath);
 const workbook = await SpreadsheetFile.importXlsx(await FileBlob.load(workbookPath));
 const candidateSheetNames = adapter.import?.candidateSheetNames ?? [];
+const expectedOutcomeModeHeaders = adapter.import?.expectedOutcomeModeHeaders ?? [];
 let tcSheet = null;
 let sourceSheetName = "";
 for (const candidate of candidateSheetNames) {
@@ -149,16 +151,40 @@ function concreteValue(raw, kind) {
 
 function expectedOutcome(row) {
   const result = at(row, "기대결과");
-  const errorCodes = unique(at(row, "예상오류코드").split(/[\s,;/]+/).filter((value) => value && !/^(없음|해당없음|-|N)$/i.test(value)));
-  const requiresValidation = errorCodes.length > 0 || /(오류|에러|경고|팝업|메시지|불가|거부)/.test(result);
-  return {
-    type: requiresValidation ? "ValidationAllowed" : "ObservationOnly",
-    messagePatterns: requiresValidation && result ? [result] : [],
+  const errorCodeTokens = unique(at(row, "예상오류코드").split(/[\s,;/]+/).filter((value) => value && !/^(없음|해당없음|-|N)$/i.test(value)));
+  const errorCodes = errorCodeTokens.filter(isStructuredErrorCode);
+  const ignoredErrorCodeTokenCount = errorCodeTokens.length - errorCodes.length;
+  const structuredHeader = expectedOutcomeModeHeaders.find((header) => headers.includes(header) && at(row, header));
+  const structuredMode = structuredHeader ? at(row, structuredHeader) : "";
+  const classification = classifyExpectedOutcome({
+    structuredMode,
+    expectedResult: result,
+    rawInput: at(row, "입력값"),
+    category: at(row, "대분류"),
+    subcategory: at(row, "중분류"),
+    procedure: at(row, "테스트절차"),
     errorCodes,
-    queryShouldComplete: null,
-    source: "Dataset",
-    confidence: "High",
-    evidence: unique([`${sourceSheetName}:${at(row, "TC_ID")}`, at(row, "근거조건"), at(row, "근거MAP")]),
+  });
+  const matchable = ["ValidationAllowed", "ValidationRequired", "FailureRequired", "NoDataAllowed", "WarningAllowed"].includes(classification.type);
+  return {
+    value: {
+      type: classification.type,
+      messagePatterns: matchable && result ? [result] : [],
+      errorCodes,
+      queryShouldComplete: null,
+      source: "Dataset",
+      confidence: classification.confidence,
+      evidence: unique([
+        `${sourceSheetName}:${at(row, "TC_ID")}`,
+        at(row, "근거조건"),
+        at(row, "근거MAP"),
+        `ExpectationClassification:${classification.method}:${classification.reason}`,
+        ignoredErrorCodeTokenCount > 0 ? `UnverifiedErrorCodeTokens:${ignoredErrorCodeTokenCount}` : "",
+        structuredHeader ? `ExpectedMode:${structuredHeader}=${structuredMode}` : "",
+      ]),
+    },
+    requiresReview: classification.type === "Unspecified",
+    reviewReason: classification.reason,
   };
 }
 
@@ -325,8 +351,10 @@ for (const row of rows) {
   }
 
   let valueRef = null;
+  let expectation = null;
   if (!orderTabTarget && action && controlId && (action === "Click" || input)) {
     if (action !== "Click") {
+      expectation = expectedOutcome(row);
       valueRef = `VAR-${safeId(tcId)}`;
       variables.push({
         name: valueRef,
@@ -334,7 +362,7 @@ for (const row of rows) {
         targetLogicalName: controlId,
         controlKind: kind,
         valueMatch: kind === "CheckBox" ? "Checked" : "Value",
-        values: [{ id: `VAL-${safeId(tcId)}`, value: input, displayValue: input, expectedOutcome: expectedOutcome(row), rationale: at(row, "사전조건"), sourceRefs: [`${sourceSheetName}:${tcId}`] }],
+        values: [{ id: `VAL-${safeId(tcId)}`, value: input, displayValue: input, expectedOutcome: expectation.value, rationale: at(row, "사전조건"), sourceRefs: [`${sourceSheetName}:${tcId}`] }],
         appliesToScreens: [targetScreenId],
         required: true,
         triggerQueryAfterChange: false,
@@ -376,10 +404,15 @@ for (const row of rows) {
 
   const automation = at(row, "자동화");
   const unresolvedInput = Boolean(!orderTabTarget && action && action !== "Click" && !input);
-  const manual = transactional || /수동|불가/i.test(automation) || unresolvedInput;
+  const unresolvedExpectation = expectation?.requiresReview === true;
+  const manual = transactional || /수동|불가/i.test(automation) || unresolvedInput || unresolvedExpectation;
   if (unresolvedInput) {
     const subject = `${tcId}:${controlId || "control"}`;
     reviewItems.push({ severity: "Required", screenNumber: targetScreenId, subject, question: "구체 실행 입력값 또는 상태 순회 규칙을 승인해 주세요.", reason: `입력값 '${at(row, "입력값")}'은 단일 실행값으로 확정할 수 없습니다.` });
+  }
+  if (unresolvedExpectation) {
+    const subject = `${tcId}:${controlId || "control"}:expected-outcome`;
+    reviewItems.push({ severity: "Required", screenNumber: targetScreenId, subject, question: "구조화된 expected mode 또는 승인된 기대 근거를 지정해 주세요.", reason: `기대결과 자동 분류 보류: ${expectation.reviewReason}` });
   }
   for (const file of workbookMapFiles(row)) workbookReferencedMaps.add(file);
   if (!mapScreenCode || !controlId) coverageGaps.push(`${tcId}: 내부화면코드 또는 컨트롤ID가 없어 전역 검증 단계만 생성됨`);
@@ -422,7 +455,7 @@ const generated = {
     combinationStrategy: "OneSourceRowPerScenario",
     generationMode: "0101_TC_Importer",
     generator: "targets/1q-hts/0101/tools/import-testcases.mjs",
-    generatorVersion: "1.5.0",
+    generatorVersion: "1.6.0",
     runtimeDiscoveryUsed: false,
     mapCatalogSha256: stableMapCatalogSha256,
     runtimeControlPlanSha256: "",

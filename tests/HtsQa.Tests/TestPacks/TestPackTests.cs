@@ -2,6 +2,7 @@
 // 범위: 순수 Core 계약만 사용하며 파일, PowerShell, FlaUI 또는 실제 HTS를 실행하지 않는다.
 // 수정 지점: TestPack 스키마나 정책 의미를 바꿀 때 이전 결정성·거부 조건을 유지하도록 이 행렬을 갱신한다.
 using HtsQa.Core;
+using System.Text.Json;
 
 namespace HtsQa.Tests;
 
@@ -25,6 +26,48 @@ public sealed class TestPackTests
         Assert.Equal(
             CaseIdFactory.CreateRuleCase("dataset", "0102", "account", ordered),
             CaseIdFactory.CreateRuleCase("dataset", "0102", "account", reversed));
+    }
+
+    [Fact]
+    public void Expected_Outcome_Migration_Preserves_CaseId_And_Enum_Serialization()
+    {
+        var variable = new RuleVariableDimension
+        {
+            Name = "stockCode",
+            Values =
+            [
+                new RuleVariableValue
+                {
+                    Id = "invalid",
+                    Value = "99999999",
+                    ExpectedOutcome = new RuleExpectedOutcome { Type = RuleExpectedOutcomeType.ValidationAllowed, MessagePatterns = ["종목코드오류"] }
+                }
+            ]
+        };
+        var baseline = Dataset() with { Variables = [variable] };
+        var hardened = baseline with
+        {
+            Variables =
+            [
+                variable with
+                {
+                    Values =
+                    [
+                        variable.Values[0] with
+                        {
+                            ExpectedOutcome = variable.Values[0].ExpectedOutcome with { Type = RuleExpectedOutcomeType.ValidationRequired }
+                        }
+                    ]
+                }
+            ]
+        };
+
+        Assert.Equal(Assert.Single(new CombinationGenerator().Generate(baseline)).CaseId,
+            Assert.Single(new CombinationGenerator().Generate(hardened)).CaseId);
+        var json = JsonSerializer.Serialize(hardened.Variables[0].Values[0].ExpectedOutcome, JsonDefaults.Options);
+        Assert.Contains("\"type\": \"ValidationRequired\"", json);
+        Assert.Equal(RuleExpectedOutcomeType.ValidationRequired,
+            JsonSerializer.Deserialize<RuleExpectedOutcome>(json, JsonDefaults.Options)!.Type);
     }
 
     [Fact]

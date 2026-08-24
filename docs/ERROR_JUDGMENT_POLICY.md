@@ -25,16 +25,21 @@
 | 1 | `Dataset` | 사용자가 명시한 유형 유지 | `High` | 데이터셋 값별 계약 |
 | 2 | `InstallationInputOption` | `Success` | `High` | `exchange.ini`, `empcommon.ini` 등 의미가 확정된 입력 사전 |
 | 2 | `InstallationMaster` | `Success` | `High` | 무결성을 확인한 `stkcode.cod`, `nxtcode.cod`, `etfcode.cod` 표본 |
-| 3 | `MapValidation` | 계산 가능한 위반값은 `ValidationRequired`, 그 외 관련값은 `ValidationAllowed` | 조건식 연결 시 `High`, 메시지만 연결 시 `Medium` | MAP 메시지, 대상 컨트롤, `If/ElseIf/Else` 조건식 |
+| 3 | `MapValidation` | 계산 가능한 위반값은 `ValidationRequired`, 동일 경계에서 두 결과가 공식적으로 허용될 때만 `ValidationAllowed`, 그 외는 `Unspecified` | 조건식 연결 시 `High`, 양쪽 허용 근거 시 `Medium` | MAP 메시지, 대상 컨트롤, `If/ElseIf/Else` 조건식 |
 | 3 | `MapBehavior` | 조회 역할은 `Success`, 일반 명령은 `ObservationOnly` | `High` | MAP 이벤트와 실제 요청 호출 그래프 |
 | 4 | `RuntimeChoice` | 활성 유한 선택지는 `Success` | `Medium` | 런타임 콤보·라디오·체크·탭 선택지 |
-| 4 | `GeneratedBoundary` | 명백한 형식 위반은 `ValidationRequired`, 불확실한 경계는 `ValidationAllowed` | `High` 또는 `Medium` | 마스터 형식과 자동 경계 생성 규칙 |
-| 5 | `ScreenExpectedPattern` | `ValidationAllowed` | `Medium` | 화면별 기대 팝업 패턴 |
+| 4 | `GeneratedBoundary` | 명백한 형식 위반은 `ValidationRequired`, 공식 양쪽 허용 경계만 `ValidationAllowed`, 불확실하면 `Unspecified` | `High`, `Medium` 또는 `Unspecified` | 마스터 형식과 자동 경계 생성 규칙 |
+| 5 | `ScreenExpectedPattern` | pattern만으로 유형을 정하지 않고 `Unspecified` | `Unspecified` | 화면별 기대 팝업 패턴 |
 | 6 | `Unspecified` | 자동 결함 단정 금지 | `Unspecified` | 충분한 근거 없음 |
 
 `evidence`에는 원본 파일, MAP 규칙 ID·메시지·조건식 또는 런타임 발견 경로를 기록한다. 높은 신뢰도의 정적 정상값이라도 계좌 권한·영업일·데이터 유효기간 같은 외부 선행조건까지 보증하지 않는다. 설치 자료가 알려 주지 않는 금액·수량·손익의 업무 정답은 별도 데이터 오라클이 필요하다.
 
-데이터셋 계약은 자동 추론을 재정의할 수 있다. 다만 `ValidationAllowed`나 `ObservationOnly`도 시스템·통신·인증·프로그램 실패를 숨길 수 없다. MAP 조건을 현재 실행기가 계산하지 못하면 검증 필수로 단정하지 않고 `ValidationAllowed/Medium` 또는 `Unspecified`로 낮춘다.
+데이터셋 계약은 자동 추론을 재정의할 수 있다. 다만 `ValidationAllowed`나 `ObservationOnly`도 시스템·통신·인증·프로그램 실패를 숨길 수 없다. MAP 조건을 현재 실행기가 계산하지 못하면, 같은 경계에서 정상 성공과 지정 validation이 모두 허용된다는 공식 근거가 있을 때만 `ValidationAllowed/Medium`을 사용하고 나머지는 `Unspecified`로 둔다.
+
+0101 importer는 target profile에 등록된 구조화 expected mode 열을 최우선으로 사용한다. 구조화 mode가 없는 기존 workbook에만 보수적 텍스트 fallback을 적용하며, 분류 방법과 이유를 `ExpectationClassification:<method>:<reason>` evidence로 남긴다. 오류·에러·경고·팝업·메시지·불가·거부라는 단어만으로 `ValidationAllowed`를 만들지 않는다.
+현재 enum에는 별도 `REVIEW` 값이 없으므로 명시적인 `REVIEW`/`PENDING`, 지원되지 않는 mode, 근거 부족은 `Unspecified`로 직렬화하고 필수 review item을 생성한다.
+
+복합 placeholder는 단일 실행값으로 분해되기 전까지 `Unspecified`다. 설명 문장을 공백으로 나눈 토큰은 오류코드로 인정하지 않으며, 코드 형태가 확인된 토큰만 matcher 후보로 보존한다. 코드 matcher만으로 validation과 product failure 유형을 추정하지 않는다.
 
 ## 관찰 이벤트 분류
 
@@ -52,15 +57,15 @@
 | `expectedOutcome.type` | 용도 |
 |---|---|
 | `Success` | 정상값이며 검증·경고·자료 없음이 발생하면 안 됨 |
-| `ValidationAllowed` | 경계값 탐색 중 지정 검증이 나타나도 정상으로 허용 |
+| `ValidationAllowed` | 같은 경계 조건에서 정상 성공 또는 지정 검증이 모두 가능한 경우에만 사용 |
 | `ValidationRequired` | 의도적인 잘못된 값이므로 지정 검증이 반드시 나타나야 함 |
 | `FailureRequired` | 오류 주입 시나리오에서 지정 실패가 반드시 나타나야 함 |
 | `NoDataAllowed` | 해당 조건에서 자료 없음이 정상일 수 있음 |
 | `WarningAllowed` | 해당 조건에서 지정 경고가 정상일 수 있음 |
 | `ObservationOnly` | 반응을 기록하되 비시스템 이벤트는 자동 결함 판정하지 않음 |
-| `Unspecified` | 입력 의도가 없어 비시스템 이벤트 발생 시 검토 필요 |
+| `Unspecified` | 입력 의도 또는 근거가 부족한 REVIEW/PENDING 상태이며 PASS 불가 |
 
-`messagePatterns`와 `errorCodes`가 있으면 수집된 관련 업무 이벤트가 모두 그중 하나와 일치해야 기대 반응으로 인정한다. 일부 이벤트만 일치하고 다른 이벤트가 불일치해도 PASS로 승격하지 않는다. 시스템 실패는 `ValidationAllowed`, `NoDataAllowed`, `WarningAllowed`, `ObservationOnly`로 숨길 수 없다.
+`ValidationRequired`와 허용 계약의 validation 경로는 `messagePatterns` 또는 `errorCodes`가 반드시 있어야 하며, 수집된 관련 업무 이벤트가 모두 그중 하나와 일치해야 기대 반응으로 인정한다. 일부 이벤트만 일치하거나 matcher가 없거나 다른 이벤트가 불일치하면 PASS로 승격하지 않는다. 시스템 실패는 `ValidationAllowed`, `NoDataAllowed`, `WarningAllowed`, `ObservationOnly`로 숨길 수 없다.
 
 ## 최종 판정표
 
@@ -79,7 +84,10 @@
 | 접속 해제·재접속 선택이 필요한 연결 장애 | 모든 계약 | `ERROR` | `HTS_CONNECTION_LOST` |
 | `queryShouldComplete: true`이나 조회 미실행 | 모든 계약 | `PENDING` | `QUERY_EXPECTATION_NOT_EXECUTED` |
 | 실행기 내부 예외 | 모든 계약 | `ERROR` | `EXECUTOR_EXCEPTION` |
-| 오류 신호 없음과 필수 조작 완료 | `Success` 또는 허용 계약 | `PASS` | `EXPECTED_SUCCESS` |
+| 오류 신호 없음과 필수 조작 완료 | `Success` | `PASS` | `EXPECTED_SUCCESS` |
+| 명시적인 성공 Observation | 허용 계약 | `PASS` | `EXPECTED_SUCCESS` |
+| Info/관찰 증거만 존재 | 허용 계약 | `PENDING` | `EXPECTED_SUCCESS_OR_ALLOWED_EVIDENCE_REQUIRED` |
+| 허용 반응이 있으나 matcher 없음 | 허용 계약 | `PENDING` | `EXPECTED_MATCHER_REQUIRED` |
 | 실제 조작 미실행 | 모든 계약 | `PENDING` | `NOT_EXECUTED` |
 | 실행 증거 없음 | 모든 계약 | `PENDING` | `EVIDENCE_MISSING` |
 | 관찰 전용 결과 | `ObservationOnly` | `PENDING` | `OBSERVATION_RECORDED` |
@@ -114,7 +122,7 @@ characterization test가 고정한 기존 C# 정책을 canonical 기준으로 �
 
 ## 과거 종목코드 판정 정정
 
-과거 실행에서 자동 탐색값 `99999999`를 종목코드 입력란에 넣은 뒤 `종목코드오류`가 표시되었다. 이는 잘못된 종목코드를 거부한 입력 검증이므로, 값의 계약이 `ValidationAllowed` 또는 `ValidationRequired`이고 문구 패턴이 일치하면 현재 정책에서는 `EXPECTED_VALIDATION_OBSERVED`, `PASS`, 제품 결함 0건으로 판정한다.
+과거 실행에서 자동 탐색값 `99999999`를 종목코드 입력란에 넣은 뒤 `종목코드오류`가 표시되었다. 승인 근거로 해당 값이 유효하지 않은 종목코드임이 확정된 경우 계약은 `ValidationRequired`여야 한다. 지정 matcher와 실제 validation 증거가 일치할 때만 `EXPECTED_VALIDATION_OBSERVED`, `PASS`가 가능하며, validation 없이 업무 성공으로 진행되면 `EXPECTED_OUTCOME_NOT_OBSERVED`, `FAIL`이다. 값의 유효성 자체가 승인 근거로 확정되지 않았다면 `Unspecified`, `PENDING`으로 남긴다.
 
 과거 보고서의 `EXPLICIT_ERROR_DETECTED`, `FAIL`은 오류라는 단어를 제품 결함으로 직접 연결한 구형 정책의 결과다. 원본 증적은 감사 이력으로 보존하지만 현재 결함 통계에는 합산하지 않는다. 새 정책의 실제 HTS 재실행 전까지 재판정 실행 결과는 `PENDING`이다.
 

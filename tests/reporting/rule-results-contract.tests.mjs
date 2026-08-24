@@ -42,6 +42,23 @@ try {
   check(legacy.canonicalSource, "case-results.json#testResult", "legacy JSON fallback source");
   check(legacy.results.map((item) => item.status), ["PASS", "FAIL", "ERROR", "PENDING"], "legacy statuses are preserved");
 
+  const failClosedDir = await createReportDir();
+  tempDirs.push(failClosedDir);
+  const failClosedDocument = JSON.parse(await fs.readFile(path.join(failClosedDir, "test-results.json"), "utf8"));
+  failClosedDocument.results[1].code = "EXPECTED_OUTCOME_NOT_OBSERVED";
+  failClosedDocument.results[1].reason = "required validation was not observed";
+  await fs.writeFile(path.join(failClosedDir, "test-results.json"), JSON.stringify(failClosedDocument));
+  const failClosedCases = JSON.parse(await fs.readFile(path.join(failClosedDir, "case-results.json"), "utf8"));
+  failClosedCases[1].testResult.code = "EXPECTED_OUTCOME_NOT_OBSERVED";
+  failClosedCases[1].testResult.reason = "required validation was not observed";
+  failClosedCases[1].errorCode = "EXPECTED_OUTCOME_NOT_OBSERVED";
+  failClosedCases[1].outputSummary = "required validation was not observed";
+  await fs.writeFile(path.join(failClosedDir, "case-results.json"), JSON.stringify(failClosedCases));
+  const failClosed = await loadRuleResults(failClosedDir);
+  check(failClosed.results[1].status, "FAIL", "reporter preserves evaluator fail verdict");
+  check(failClosed.results[1].testResult.code, "EXPECTED_OUTCOME_NOT_OBSERVED", "display context preserves evaluator reason code");
+  check(failClosed.canonicalDocument.results[1].code, "EXPECTED_OUTCOME_NOT_OBSERVED", "canonical evaluator reason code remains unchanged");
+
   const mismatchDir = await createReportDir();
   tempDirs.push(mismatchDir);
   const mismatchCases = JSON.parse(await fs.readFile(path.join(mismatchDir, "case-results.json"), "utf8"));
