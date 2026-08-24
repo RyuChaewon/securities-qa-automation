@@ -42,8 +42,11 @@ Assert-Equal 10 $resolvedAccount.hwnd 'account locator resolves the unique match
 $resolvedPassword = Resolve-HtsRoleControl -Context $bindingContext -Screen $screen -Role 'password' -Strategies @([pscustomobject]@{className='Edit';ordinal=0})
 Assert-Equal 11 $resolvedPassword.hwnd 'password role requires password style or label'
 $hotspot = Resolve-HtsRoleControl -Context $bindingContext -Screen $screen -Role 'visual' -Strategies @([pscustomobject]@{relativeX=50;relativeY=60;width=20;height=10})
-Assert-Equal 'ConfiguredVisualHotspot' $hotspot.className 'coordinate locator produces an explicit hotspot binding'
+Assert-True ($null -eq $hotspot) 'legacy coordinate locator is not executable without a canonical approved repository resolution'
 
+$mixed=Resolve-HtsRoleControl -Context $bindingContext -Screen $screen -Role 'account' -Strategies @([pscustomobject]@{relativeX=50;relativeY=60;className='Edit';nameRegex='계좌'})
+Assert-Equal 10 $mixed.hwnd 'stable selector wins even when legacy coordinate fields coexist for migration compatibility'
+Assert-True ([string]$mixed.className -ne 'ConfiguredVisualHotspot') 'coordinate fields do not reverse locator priority'
 $case = [pscustomobject]@{screen=[pscustomobject]@{locators=[pscustomobject]@{account=@([pscustomobject]@{nameRegex='계좌'});password=@([pscustomobject]@{className='Edit';ordinal=0})}};variables=@{}}
 $dataset = [pscustomobject]@{defaultLocators=[pscustomobject]@{};variables=@()}
 $claimed = Get-HtsClaimedControlHwndMap -Context $bindingContext -Screen $screen -Case $case -Dataset $dataset

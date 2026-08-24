@@ -43,6 +43,8 @@ public sealed class FlaUiAutomationEngine : IDisposable
         {
             "ping" => Success(request, "FlaUI UIA3 실행기가 응답했습니다."),
             "observestate" => ObserveState(request),
+            "capturecandidate" => CaptureCandidate(request),
+            "controlrepositorypreflight" => ObserveControlRepositoryPoint(request),
             "discover" => Discover(request),
             "action" => Act(request),
             _ => BridgeResponse.Failure(request, "UNKNOWN_OPERATION", $"지원하지 않는 연산입니다: {request.Operation}")
@@ -98,6 +100,181 @@ public sealed class FlaUiAutomationEngine : IDisposable
             return BridgeResponse.Failure(request, "UIA3_STATE_OBSERVATION_FAILED", exception.Message);
         }
     }
+
+    /// <summary>
+    /// 호출자가 hotkey 시점에 읽은 cursor 점 주변을 읽기 전용으로 관측해 ReviewRequired 후보를 만든다.
+    /// 이 경로는 cursor 이동, click, 입력, repository 저장 또는 승인을 수행하지 않는다.
+    /// </summary>
+    public BridgeResponse CaptureCandidate(BridgeRequest request)
+    {
+        if (request.CapturePoint is null)
+            return BridgeResponse.Failure(request, "CAPTURE_POINT_REQUIRED", "captureCandidate 요청에는 hotkey 시점의 cursor 점이 필요합니다.");
+
+        try
+        {
+            var root = GetRoot(request);
+            var windowBounds = Bounds(root);
+            var client = ControlRepositoryGeometry.TryReadCurrentClientRect(request.RootHwnd);
+            var dpi = ReadDpi(request.RootHwnd);
+            if (client is null || !client.IsValid || dpi == 0)
+                return BridgeResponse.Failure(request, "CAPTURE_CLIENT_GEOMETRY_UNAVAILABLE", "현재 client rect 또는 DPI를 읽지 못했습니다.");
+
+            var point = new ClientGeometryPoint(request.CapturePoint.X, request.CapturePoint.Y);
+            if (!client.Contains(point))
+                return BridgeResponse.Failure(request, "CAPTURE_POINT_OUT_OF_BOUNDS", "cursor 점이 현재 검증된 client bounds 밖에 있습니다.");
+
+            var processId = SafeRead(() => root.Properties.ProcessId.ValueOrDefault, 0);
+            var processName = SafeRead(() => Process.GetProcessById(processId).ProcessName, string.Empty);
+            var processVersion = SafeRead(() => Process.GetProcessById(processId).MainModule?.FileVersionInfo.FileVersion ?? string.Empty, string.Empty);
+            var processFingerprint = Sha256(string.Join("|", processName, processVersion));
+            var hostFingerprint = Sha256(string.Join("|", processFingerprint, RuntimeId(root),
+                SafeRead(() => root.AutomationId ?? string.Empty, string.Empty),
+                SafeRead(() => root.ClassName ?? string.Empty, string.Empty),
+                SafeRead(() => root.FrameworkType.ToString(), string.Empty)));
+
+            var hitCandidates = root.FindAllDescendants()
+                .Select(element => new { Element = element, Bounds = Bounds(element) })
+                .Where(candidate => Contains(candidate.Bounds, request.CapturePoint))
+                .OrderBy(candidate => (long)candidate.Bounds.Width * candidate.Bounds.Height)
+                .ThenBy(candidate => candidate.Bounds.Top)
+                .ThenBy(candidate => candidate.Bounds.Left)
+                .Take(4)
+                .ToArray();
+            var primary = hitCandidates.FirstOrDefault();
+            var controlKind = primary is null
+                ? NormalizeControlType(SafeRead(() => root.ControlType.ToString(), string.Empty))
+                : NormalizeControlType(SafeRead<string>(() => primary.Element.ControlType.ToString(), string.Empty));
+            var identityCandidates = hitCandidates.Select(candidate =>
+            {
+                var redactedIdentity = string.Join("|",
+                    RuntimeId(candidate.Element),
+                    NativeWindowHandle(candidate.Element),
+                    SafeRead<string>(() => candidate.Element.AutomationId ?? string.Empty, string.Empty),
+                    SafeRead<string>(() => candidate.Element.ClassName ?? string.Empty, string.Empty),
+                    NormalizeControlType(SafeRead<string>(() => candidate.Element.ControlType.ToString(), string.Empty)));
+                return $"uia-sha256:{Sha256(redactedIdentity)}";
+            }).Append($"host-sha256:{hostFingerprint}").Distinct(StringComparer.Ordinal).ToArray();
+
+            var relativeX = (point.X - client.Left) / (double)Math.Max(1, client.Width - 1);
+            var relativeY = (point.Y - client.Top) / (double)Math.Max(1, client.Height - 1);
+            var visualInput = string.Join("|", controlKind,
+                primary is null ? string.Empty : SafeRead<string>(() => primary.Element.ClassName ?? string.Empty, string.Empty),
+                relativeX.ToString("R", CultureInfo.InvariantCulture), relativeY.ToString("R", CultureInfo.InvariantCulture));
+
+            return new BridgeResponse
+            {
+                RequestId = request.RequestId,
+                Success = true,
+                Verified = true,
+                ActionSent = false,
+                ActionVerified = false,
+                Message = "cursor를 움직이거나 click하지 않고 redacted Control Repository 검토 후보를 만들었습니다.",
+                CaptureCandidate = new()
+                {
+                    RootHwnd = request.RootHwnd,
+                    ProcessId = processId,
+                    ProcessName = processName,
+                    ProcessFingerprint = processFingerprint,
+                    HostFingerprint = hostFingerprint,
+                    StateContext = request.StateContext ?? string.Empty,
+                    MapScreenCode = request.MapScreenCode ?? string.Empty,
+                    CoordinateSpace = string.IsNullOrWhiteSpace(request.CoordinateSpace) ? "ScreenClient" : request.CoordinateSpace,
+                    WindowWidth = windowBounds.Width,
+                    WindowHeight = windowBounds.Height,
+                    ClientWidth = client.Width,
+                    ClientHeight = client.Height,
+                    RelativeX = relativeX,
+                    RelativeY = relativeY,
+                    Dpi = dpi,
+                    DpiScale = dpi / 96.0,
+                    RedactedIdentityCandidates = identityCandidates,
+                    ExpectedControlKindCandidate = controlKind,
+                    VisualSignatureHash = Sha256(visualInput),
+                    RedactionsApplied = ["control name omitted", "current value omitted", "password value omitted", "pixel crop not retained"],
+                    CursorMoved = false,
+                    ClickSent = false,
+                    AutomaticallyApproved = false,
+                    CapturedAt = DateTimeOffset.Now
+                }
+            };
+        }
+        catch (Exception exception)
+        {
+            return BridgeResponse.Failure(request, "UIA3_CAPTURE_CANDIDATE_FAILED", exception.Message);
+        }
+    }
+
+    /// <summary>
+    /// 승인 normalized 좌표를 현재 client rect/DPI에 다시 적용하고 같은 read-only hit-test primitive로 대상 증거를 재관측한다.
+    /// canonical 승인·risk 판정과 cursor action은 수행하지 않는다.
+    /// </summary>
+    public BridgeResponse ObserveControlRepositoryPoint(BridgeRequest request)
+    {
+        if (request.RelativeX is null || request.RelativeY is null)
+            return BridgeResponse.Failure(request, "PREFLIGHT_RELATIVE_POINT_REQUIRED", "controlRepositoryPreflight 요청에는 normalized relativeX/relativeY가 필요합니다.");
+        var client = ControlRepositoryGeometry.TryReadCurrentClientRect(request.RootHwnd);
+        var dpi = ReadDpi(request.RootHwnd);
+        if (client is null)
+            return BridgeResponse.Failure(request, "PREFLIGHT_CLIENT_GEOMETRY_UNAVAILABLE", "실행 직전 current client rect를 읽지 못했습니다.");
+        var transform = ControlRepositoryGeometry.Transform(request.RelativeX.Value, request.RelativeY.Value, client, dpi);
+        if (!transform.IsValid || transform.ScreenPoint is null)
+            return BridgeResponse.Failure(request, "PREFLIGHT_COORDINATE_TRANSFORM_INVALID", transform.FailureReason);
+
+        var captureRequest = new BridgeRequest
+        {
+            RequestId = request.RequestId,
+            Operation = "captureCandidate",
+            RootHwnd = request.RootHwnd,
+            CapturePoint = new() { X = transform.ScreenPoint.X, Y = transform.ScreenPoint.Y },
+            StateContext = request.StateContext,
+            MapScreenCode = request.MapScreenCode,
+            CoordinateSpace = request.CoordinateSpace
+        };
+        var observed = CaptureCandidate(captureRequest);
+        if (!observed.Success || observed.CaptureCandidate is null)
+            return BridgeResponse.Failure(request, observed.ErrorCode, observed.Message);
+        var candidate = observed.CaptureCandidate;
+        return new()
+        {
+            RequestId = request.RequestId,
+            Success = true,
+            Verified = true,
+            ActionSent = false,
+            ActionVerified = false,
+            Message = "현재 client rect/DPI와 hit-test를 cursor 이동·click 없이 재관측했습니다.",
+            ControlRepositoryPreflight = new()
+            {
+                RootHwnd = candidate.RootHwnd,
+                ProcessId = candidate.ProcessId,
+                ProcessName = candidate.ProcessName,
+                ProcessFingerprint = candidate.ProcessFingerprint,
+                HostFingerprint = candidate.HostFingerprint,
+                StateContext = candidate.StateContext,
+                MapScreenCode = candidate.MapScreenCode,
+                RelativeX = candidate.RelativeX,
+                RelativeY = candidate.RelativeY,
+                CurrentClientRect = new()
+                {
+                    Left = client.Left, Top = client.Top, Right = client.Left + client.Width, Bottom = client.Top + client.Height
+                },
+                ResolvedScreenPoint = new() { X = transform.ScreenPoint.X, Y = transform.ScreenPoint.Y },
+                Dpi = candidate.Dpi,
+                DpiScale = candidate.DpiScale,
+                ObservedAnchorIds = candidate.RedactedIdentityCandidates,
+                ObservedControlKind = candidate.ExpectedControlKindCandidate,
+                ObservedVisualSignatureHash = candidate.VisualSignatureHash,
+                CursorMoved = false,
+                ClickSent = false,
+                ObservedAt = DateTimeOffset.Now
+            }
+        };
+    }
+
+    private static bool Contains(ElementRectangle rect, CapturePoint point) =>
+        rect.Width > 0 && rect.Height > 0 && point.X >= rect.Left && point.Y >= rect.Top && point.X < rect.Right && point.Y < rect.Bottom;
+
+    private static string Sha256(string value) =>
+        Convert.ToHexString(SHA256.HashData(Encoding.UTF8.GetBytes(value))).ToLowerInvariant();
 
     /// <summary>루트 아래 활성 요소를 UIA3 속성과 패턴 단위로 구조화한다.</summary>
     public BridgeResponse Discover(BridgeRequest request)

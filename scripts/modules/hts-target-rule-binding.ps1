@@ -100,6 +100,7 @@ function Get-RuleScenarioPlanItems($Context, $Controls, $ScenarioCase) {
             planItemId="$([string]$ScenarioCase.caseId)-$([string]$step.stepId)";control=$control;option=$option
             status=$(if($ready){'READY'}else{'PENDING'});errorCode=$(if($ready){''}else{'SCENARIO_CONTROL_NOT_BOUND'})
             scenarioStepId=[string]$step.stepId;scenarioSequence=[int]$step.sequence;scenarioAction=$action
+            controlRepositoryKey=[string]$step.controlRepositoryKey
             controlLogicalName=$logicalName
             mapScreenCode=$mapScreenCode;stateContext=$stateContext;transactional=[bool]$step.transactional
             expectedObservation=[string]$step.expectedObservation
@@ -180,11 +181,21 @@ function Resolve-RuleLiveControl($Context, $NavigationContext, $Screen, $Planned
         return $current
     }
     if ($PlannedControl.className -eq "ConfiguredVisualHotspot") {
-        $relative = $PlannedControl.relativeRect
-        return [pscustomobject]@{
-            hwnd=0;visible=$true;enabled=$true;className="ConfiguredVisualHotspot";rawTitle=$PlannedControl.name;style=0
-            rect=[pscustomobject]@{left=[int]$Screen.rect.left+[int]$relative.left;top=[int]$Screen.rect.top+[int]$relative.top;right=[int]$Screen.rect.left+[int]$relative.right;bottom=[int]$Screen.rect.top+[int]$relative.bottom;width=[int]$relative.width;height=[int]$relative.height}
+        if (-not ($PlannedControl.PSObject.Properties.Name -contains 'controlRepositoryResolution')) {
+            $Context.LastLiveControlResolution = [pscustomobject]@{success=$false;errorCode='CONTROL_REPOSITORY_APPROVAL_REQUIRED';mode='RepositoryRequired';candidateCount=0;evidence=@('legacy coordinate locator is not executable')}
+            return $null
         }
+        if (-not (Get-Command ConvertFrom-HtsCanonicalControlResolution -ErrorAction SilentlyContinue)) {
+            $Context.LastLiveControlResolution = [pscustomobject]@{success=$false;errorCode='CONTROL_REPOSITORY_ADAPTER_UNAVAILABLE';mode='RepositoryRequired';candidateCount=0;evidence=@()}
+            return $null
+        }
+        $resolved=ConvertFrom-HtsCanonicalControlResolution $PlannedControl.controlRepositoryResolution
+        if (-not $resolved) {
+            $Context.LastLiveControlResolution = [pscustomobject]@{success=$false;errorCode='CONTROL_REPOSITORY_RESOLUTION_BLOCKED';mode='RepositoryBlocked';candidateCount=0;evidence=@([string]$PlannedControl.controlRepositoryResolution.reasonCode)}
+            return $null
+        }
+        $Context.LastLiveControlResolution = [pscustomobject]@{success=$true;errorCode='';mode='ApprovedAnchoredRelative';candidateCount=1;evidence=@([string]$PlannedControl.controlRepositoryResolution.repositoryKey,[string]$PlannedControl.controlRepositoryResolution.approvalPayloadHash)}
+        return $resolved
     }
     if ($PlannedControl.className -like "UIA:*") {
         $plannedRect=$PlannedControl.relativeRect

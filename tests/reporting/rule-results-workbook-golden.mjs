@@ -28,6 +28,14 @@ try {
   };
   await fs.writeFile(path.join(tempDir, "state-discovery-results.json"), JSON.stringify(stateDiscovery));
   const canonicalBefore = await sha256(path.join(tempDir, "test-results.json"));
+  const controlResolutions = {
+    schemaVersion: "1.0", repositoryId: "fake-controls", resolutions: [{
+      repositoryKey: "F001|MAP|CONTROL|STATE", status: "Blocked", trustTier: "Unresolved", locatorSource: "",
+      fallbackReason: "", reasonCode: "ENTRY_NOT_APPROVED", reason: "review required", approvalStatus: "PendingApproval",
+      approvalPayloadHash: "", action: "Input", actionSent: false, evidence: ["fixture:capture"],
+    }],
+  };
+  await fs.writeFile(path.join(tempDir, "control-repository-resolutions.json"), JSON.stringify(controlResolutions));
   const execution = spawnSync(process.execPath, [path.join(root, "tools", "build-rule-results-workbook.mjs"), tempDir, outputName], {
     cwd: root,
     encoding: "utf8",
@@ -45,7 +53,9 @@ try {
   assert.deepEqual(workbook.worksheets.getItem("테스트결과").getRange("K2:K5").values.flat(), expected.resultStatuses, "TestResult statuses changed");
   assert.deepEqual(workbook.worksheets.getItem("상태탐색").getRange("A5:A6").values.flat(), ["a", "@restore"], "State and restore rows must remain separate");
   assert.deepEqual(workbook.worksheets.getItem("상태탐색").getRange("C5:C6").values.flat(), ["PENDING", "PENDING"], "Reporter must preserve canonical state statuses");
-  console.log("RULE_RESULTS_WORKBOOK_GOLDEN=PASS sheets=19 statuses=PASS,FAIL,ERROR,PENDING state=PENDING restore=PENDING");
+  assert.deepEqual(workbook.worksheets.getItem("컨트롤저장소").getRange("B5:C5").values[0], ["Blocked", "Unresolved"], "Reporter must preserve canonical resolution and trust tier");
+  assert.equal(workbook.worksheets.getItem("컨트롤저장소").getRange("F5").values[0][0], "PendingApproval", "Reporter must preserve approval status");
+  console.log("RULE_RESULTS_WORKBOOK_GOLDEN=PASS sheets=20 statuses=PASS,FAIL,ERROR,PENDING state=PENDING restore=PENDING repository=Blocked");
 } finally {
   const artifactsRoot = `${path.resolve(root, "artifacts")}${path.sep}`;
   const resolvedTemp = path.resolve(tempDir);

@@ -32,6 +32,7 @@ $root = Split-Path -Parent $scriptsRoot
 . (Join-Path $PSScriptRoot "pipeline-common.ps1")
 . (Join-Path $PSScriptRoot "report-sanitization.ps1")
 . (Join-Path $PSScriptRoot "result-evaluator.ps1")
+. (Join-Path $PSScriptRoot "hts-control-repository.ps1")
 . (Join-Path $PSScriptRoot "hts-native.ps1")
 . (Join-Path $PSScriptRoot "hts-session.ps1")
 . (Join-Path $PSScriptRoot "hts-navigation.ps1")

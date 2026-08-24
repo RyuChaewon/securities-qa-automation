@@ -83,6 +83,14 @@ public sealed class TargetAdapterTests
         Assert.Equal(3, stateGraph.States.Length);
         Assert.All(stateGraph.States, state => Assert.Equal(StateGraphConfigurationStatus.ConfigurationRequired, state.ConfigurationStatus));
         Assert.Empty(stateGraph.Transitions);
+        var repositoryProfile = Assert.IsType<RuleTargetControlRepositoryProfile>(profile.Adapter.ControlRepository);
+        Assert.Equal(ControlRepositoryStatus.ConfigurationRequired, repositoryProfile.Status);
+        Assert.Equal("control-repository.json", repositoryProfile.Reference);
+        var repositoryPath = FindRepositoryFile("targets", "1q-hts", "0101", repositoryProfile.Reference);
+        var repository = JsonSerializer.Deserialize<ControlRepositoryDocument>(File.ReadAllText(repositoryPath), JsonDefaults.Options);
+        Assert.NotNull(repository);
+        Assert.Equal(ControlRepositoryStatus.ConfigurationRequired, repository!.Status);
+        Assert.Empty(repository.Entries);
         Assert.Equal(StateRestoreMode.ConfigurationRequired, stateGraph.RestorePolicy.Mode);
     }
 

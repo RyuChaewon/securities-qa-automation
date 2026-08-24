@@ -82,6 +82,20 @@ try {
   check(createRuleResultsWorkbookViewModel(stateLoaded).stateDiscoveryRows.map((row) => row[2]), ["SUCCESS", "FAILED", "SUCCESS"], "state and restore statuses are displayed without re-evaluation");
   check(createRuleResultsWorkbookViewModel(stateLoaded).stateDiscoveryRows[2][0], "@restore", "restore result remains a separate display row");
 
+  const controlResolutions = {
+    schemaVersion: "1.0", repositoryId: "fake-controls", resolutions: [{
+      repositoryKey: "F001|MAP|CONTROL|STATE", status: "Resolved", trustTier: "StableIdentity", locatorSource: "StableIdentity",
+      fallbackReason: "", reasonCode: "RESOLVED", reason: "canonical", approvalStatus: "Approved", approvalPayloadHash: "a".repeat(64),
+      action: "Assert", actionSent: false, evidence: ["fixture:uia"],
+    }],
+  };
+  await fs.writeFile(path.join(stateReportDir, "control-repository-resolutions.json"), JSON.stringify(controlResolutions));
+  const repositoryLoaded = await loadRuleResults(stateReportDir);
+  check(repositoryLoaded.controlRepositoryResolutions.resolutions[0].status, "Resolved", "reporter preserves canonical locator resolution");
+  check(repositoryLoaded.controlRepositoryResolutions.resolutions[0].trustTier, "StableIdentity", "reporter preserves trust tier");
+  check(createRuleResultsWorkbookViewModel(repositoryLoaded).controlRepositoryRows[0][5], "Approved", "reporter preserves approval status");
+  check(Object.isFrozen(repositoryLoaded.controlRepositoryResolutions), true, "repository resolution document is immutable");
+
   const unsafeStateDir = await createReportDir();
   tempDirs.push(unsafeStateDir);
   const unsafeStateDiscovery = structuredClone(stateDiscovery);

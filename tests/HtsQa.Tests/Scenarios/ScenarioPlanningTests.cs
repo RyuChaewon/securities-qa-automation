@@ -484,6 +484,15 @@ public sealed class ScenarioPlanningTests
                 ]
             }
         ], "installation");
+        var compiledStep = Assert.Single(Assert.Single(logical.Cases).Steps);
+        var requirement = Assert.Single(Assert.Single(logical.Screens).BindingRequirements);
+        Assert.Equal($"{TestTargetFixture.ScreenNumber}|HT010101|BTN_ORDER|ORDER-TAB", compiledStep.ControlRepositoryKey);
+        Assert.Equal(compiledStep.ControlRepositoryKey, requirement.ControlRepositoryKey);
+        var stepJson = System.Text.Json.JsonSerializer.Serialize(compiledStep, JsonDefaults.Options);
+        Assert.DoesNotContain("relativeX", stepJson, StringComparison.OrdinalIgnoreCase);
+        Assert.DoesNotContain("automationId", stepJson, StringComparison.OrdinalIgnoreCase);
+        Assert.DoesNotContain("locator", stepJson, StringComparison.OrdinalIgnoreCase);
+
 
         var binding = Assert.Single(bindings.Screens[0].Controls);
         Assert.Equal("HT010101|BTN_Order|order-tab", binding.BindingKey);

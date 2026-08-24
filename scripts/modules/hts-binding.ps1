@@ -144,17 +144,9 @@ function Resolve-HtsRoleControl {
     $children = @(Invoke-HtsBindingDependency -Context $Context -Name 'GetChildWindows' -Arguments @([Int64]$Screen.hwnd) |
         Where-Object { $_.visible -and $_.enabled -and $_.rect.width -gt 4 -and $_.rect.height -gt 4 })
     foreach ($strategy in @($Strategies)) {
-        if ($null -ne $strategy.relativeX -and $null -ne $strategy.relativeY) {
-            $width = if ($strategy.width) { [int]$strategy.width } else { 24 }
-            $height = if ($strategy.height) { [int]$strategy.height } else { 20 }
-            $centerX = [int]$Screen.rect.left + [int]$strategy.relativeX
-            $centerY = [int]$Screen.rect.top + [int]$strategy.relativeY
-            return [pscustomobject]@{
-                hwnd=0;parent=[Int64]$Screen.hwnd;pid=$Screen.pid;visible=$true;enabled=$true;hung=$false
-                className='ConfiguredVisualHotspot';rawTitle=$Role;style=0
-                rect=[pscustomobject]@{left=$centerX-[int]($width/2);top=$centerY-[int]($height/2);right=$centerX+[int]($width/2);bottom=$centerY+[int]($height/2);width=$width;height=$height}
-            }
-        }
+        # legacy scenario/dataset 좌표는 승인 해시와 실행 직전 증거가 없으므로 locator로 승격하지 않는다.
+        $hasStableSelector = -not [string]::IsNullOrWhiteSpace([string]$strategy.nameRegex) -or -not [string]::IsNullOrWhiteSpace([string]$strategy.className) -or -not [string]::IsNullOrWhiteSpace([string]$strategy.controlType)
+        if (-not $hasStableSelector) { continue }
         $isHeuristic = $null -ne $strategy.ordinal -and [string]::IsNullOrWhiteSpace([string]$strategy.nameRegex) -and
             [string]::IsNullOrWhiteSpace([string]$strategy.className) -and [string]::IsNullOrWhiteSpace([string]$strategy.controlType)
         if ($isHeuristic) { continue }

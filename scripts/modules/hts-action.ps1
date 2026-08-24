@@ -273,6 +273,21 @@ function Focus-HtsInputWindow($ActionContext, $Window) {
 
 # 허용된 UI 요소 중심 좌표에서 단일 또는 이중 클릭을 수행한다.
 function Click-Center($ActionContext, $Window, [switch]$DoubleClick) {
+    if ($Window -and [string]$Window.className -eq 'ConfiguredVisualHotspot') {
+        $resolution = if ($Window.PSObject.Properties.Name -contains 'controlRepositoryResolution') { $Window.controlRepositoryResolution } else { $null }
+        $resolutionAction=[string]$resolution.action
+        $actionMatches=if($DoubleClick){$resolutionAction -eq 'DoubleClick'}else{
+            @('Focus','Input','Select','Toggle','Click','OpenConfirmation') -contains $resolutionAction
+        }
+        $approved = $resolution -and [string]$resolution.status -eq 'Resolved' -and [string]$resolution.trustTier -eq 'ApprovedAnchoredRelative' -and
+            [string]$resolution.approvalStatus -eq 'Approved' -and -not [string]::IsNullOrWhiteSpace([string]$resolution.approvalPayloadHash) -and
+            [bool]$resolution.physicalAction -and $actionMatches -and -not [bool]$resolution.actionSent
+        if (-not $approved) {
+            $message='CONTROL_REPOSITORY_APPROVAL_REQUIRED: ConfiguredVisualHotspot lacks a current canonical approved resolution.'
+            Write-HtsSafetyInputBoundaryAudit -Context $ActionContext.SafetyContext -InputType 'MouseClick' -Status 'BLOCKED' -X -1 -Y -1 -Detail $message
+            throw $message
+        }
+    }
     $foregroundReady=$false
     $foregroundError=''
     for($attempt=0;$attempt -lt 3;$attempt++){

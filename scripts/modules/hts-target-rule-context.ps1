@@ -17,12 +17,13 @@ function New-HtsTargetRuleContext([string]$RootPath, $Dataset, $MapCatalog = $nu
             $regionConfig = Get-Content -LiteralPath $regionPath -Raw -Encoding UTF8 | ConvertFrom-Json
         }
     }
-
     [pscustomobject]@{
         RootPath = $RootPath
         Dataset = $Dataset
         TargetAdapter = $targetAdapter
         RegionConfig = $regionConfig
+        ControlRepositoryReference = [string]$Dataset.targetProfile.adapter.controlRepository.reference
+        ControlRepositoryStatus = [string]$Dataset.targetProfile.adapter.controlRepository.status
         MapCatalog = $MapCatalog
         MapTransformCache = @{}
         ActualTabOrderCache = @{}

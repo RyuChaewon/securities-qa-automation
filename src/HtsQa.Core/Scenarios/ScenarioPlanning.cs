@@ -260,6 +260,7 @@ public sealed record ScenarioBindingRequirement
     public string MapScreenCode { get; init; } = "";
     public string StateContext { get; init; } = "";
     public string BindingKey { get; init; } = "";
+    public string ControlRepositoryKey { get; init; } = "";
     public string TargetRole { get; init; } = "Input";
     public RuleControlKind ControlKind { get; init; } = RuleControlKind.Auto;
     public bool Required { get; init; } = true;
@@ -312,6 +313,7 @@ public sealed record CompiledScenarioStep
     public string? ControlLogicalName { get; init; }
     public string MapScreenCode { get; init; } = "";
     public string StateContext { get; init; } = "";
+    public string ControlRepositoryKey { get; init; } = "";
     public bool Transactional { get; init; }
     public string? ValueRef { get; init; }
     public CompiledScenarioValue? SelectedValue { get; init; }
@@ -1081,6 +1083,9 @@ public sealed class ScenarioPlanCompiler
                             ControlLogicalName = step.ControlLogicalName,
                             MapScreenCode = string.IsNullOrWhiteSpace(step.MapScreenCode) ? scenario.MapScreenCode : step.MapScreenCode,
                             StateContext = step.StateContext,
+                            ControlRepositoryKey = string.IsNullOrWhiteSpace(step.ControlLogicalName) ? "" :
+                                global::HtsQa.Core.ControlRepositoryKey.CreateCanonical(screen.ScreenNumber,
+                                    string.IsNullOrWhiteSpace(step.MapScreenCode) ? scenario.MapScreenCode : step.MapScreenCode, step.ControlLogicalName, step.StateContext),
                             Transactional = step.Transactional,
                             ValueRef = step.ValueRef,
                             SelectedValue = !string.IsNullOrWhiteSpace(step.ValueRef) ? selectedValues.GetValueOrDefault(step.ValueRef) : null,
@@ -1117,6 +1122,7 @@ public sealed class ScenarioPlanCompiler
                         StateContext = first.step.StateContext,
                         BindingKey = group.Key,
                         TargetRole = variable?.TargetRole ?? locator?.TargetRole ?? "Command",
+                        ControlRepositoryKey = global::HtsQa.Core.ControlRepositoryKey.CreateCanonical(screen.ScreenNumber, mapScreenCode, logicalName, first.step.StateContext),
                         ControlKind = variable?.ControlKind ?? InferKind(group.First().step.Action),
                         Required = variable?.Required ?? true,
                         ScenarioIds = group.Select(x => x.scenario.ScenarioId).Distinct(StringComparer.OrdinalIgnoreCase).ToArray(),

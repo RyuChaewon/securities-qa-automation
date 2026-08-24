@@ -139,6 +139,11 @@
       "requiredMapFamilyCount": 19,
       "activeStateMapScreenCode": "HT010115"
     },
+    "controlRepository": {
+      "reference": "control-repository.json",
+      "status": "ConfigurationRequired",
+      "riskOverrides": []
+    },
     "stateGraph": {
       "schemaVersion": "1.0",
       "graphId": "1q-hts-0101-order-screen",

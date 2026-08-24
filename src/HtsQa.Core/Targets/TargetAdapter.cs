@@ -81,6 +81,19 @@ public sealed record RuleTargetImportProfile
     public int RequiredMapFamilyCount { get; init; }
     public string ActiveStateMapScreenCode { get; init; } = "";
 }
+public sealed record RuleTargetControlRiskOverride
+{
+    public string RepositoryKey { get; init; } = "";
+    public ControlRepositoryAction[] ForbiddenActions { get; init; } = [];
+}
+
+public sealed record RuleTargetControlRepositoryProfile
+{
+    public string Reference { get; init; } = "";
+    public ControlRepositoryStatus Status { get; init; } = ControlRepositoryStatus.ConfigurationRequired;
+    public RuleTargetControlRiskOverride[] RiskOverrides { get; init; } = [];
+}
+
 
 /// <summary>대상별 업무 의미를 generic engine에 전달하는 versioned adapter 계약이다.</summary>
 public sealed record RuleTargetAdapterProfile
@@ -96,6 +109,7 @@ public sealed record RuleTargetAdapterProfile
     public Dictionary<string, string> MapAliases { get; init; } = [];
     public StateGraph? StateGraph { get; init; }
     public RuleTargetImportProfile? Import { get; init; }
+    public RuleTargetControlRepositoryProfile? ControlRepository { get; init; }
 }
 
 /// <summary>Core 계획기가 adapter의 map alias와 state-context 의미를 동일하게 적용하게 한다.</summary>
@@ -214,6 +228,19 @@ public static class RuleTargetAdapterValidator
             issues.Add(new("RULE.ADAPTER_MAP_HOST", "Adapter map hosts require screen, map, container, role and positive scale.", Field: "targetProfile.adapter.mapHosts"));
         if (adapter.MapAliases.Any(x => string.IsNullOrWhiteSpace(x.Key) || string.IsNullOrWhiteSpace(x.Value)))
             issues.Add(new("RULE.ADAPTER_MAP_ALIAS", "Adapter map aliases require non-empty source and target values.", Field: "targetProfile.adapter.mapAliases"));
+        if (adapter.ControlRepository is { } controlRepository)
+        {
+            if (string.IsNullOrWhiteSpace(controlRepository.Reference) || Path.IsPathRooted(controlRepository.Reference) ||
+                controlRepository.Reference.Replace('\\', '/').Split('/').Any(segment => segment == ".."))
+                issues.Add(new("RULE.ADAPTER_CONTROL_REPOSITORY_REFERENCE", "Control Repository reference must be a non-traversing relative path.", Field: "targetProfile.adapter.controlRepository.reference"));
+            AddUnique(controlRepository.RiskOverrides.Select(x => x.RepositoryKey), "RULE.ADAPTER_CONTROL_REPOSITORY_OVERRIDE_DUPLICATE", "targetProfile.adapter.controlRepository.riskOverrides", issues);
+            foreach (var riskOverride in controlRepository.RiskOverrides)
+            {
+                if (string.IsNullOrWhiteSpace(riskOverride.RepositoryKey) || riskOverride.ForbiddenActions.Length == 0)
+                    issues.Add(new("RULE.ADAPTER_CONTROL_REPOSITORY_OVERRIDE", "Risk overrides require a repositoryKey and at least one forbidden action.", Field: "targetProfile.adapter.controlRepository.riskOverrides"));
+            }
+        }
+
 
         return issues;
     }

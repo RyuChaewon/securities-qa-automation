@@ -105,6 +105,23 @@ function validateStateDiscovery(document) {
   }
 }
 
+const CONTROL_RESOLUTION_STATUSES = new Set(["Resolved", "Blocked", "ReviewSuggestion", "Unresolved"]);
+const CONTROL_TRUST_TIERS = new Set(["Unresolved", "StableIdentity", "MapRuntimeBinding", "ApprovedAnchoredRelative", "VisualObservationOnly"]);
+const CONTROL_APPROVAL_STATUSES = new Set(["PendingApproval", "Approved", "Rejected"]);
+
+function validateControlRepositoryResolutions(document) {
+  if (!document || typeof document !== "object") throw new Error("control-repository-resolutions.json: 객체가 필요합니다.");
+  if (document.schemaVersion !== "1.0" || !Array.isArray(document.resolutions)) throw new Error("control-repository-resolutions.json: schemaVersion 1.0과 resolutions 배열이 필요합니다.");
+  for (const resolution of document.resolutions) {
+    if (!String(resolution?.repositoryKey ?? "").trim() || !CONTROL_RESOLUTION_STATUSES.has(resolution?.status)) {
+      throw new Error("control-repository-resolutions.json: 각 resolution에는 repositoryKey와 canonical status가 필요합니다.");
+    }
+    if (!CONTROL_TRUST_TIERS.has(resolution?.trustTier)) throw new Error(`control-repository-resolutions.json: 지원하지 않는 trustTier '${resolution?.trustTier ?? ""}'입니다.`);
+    if (!CONTROL_APPROVAL_STATUSES.has(resolution?.approvalStatus)) throw new Error(`control-repository-resolutions.json: 지원하지 않는 approvalStatus '${resolution?.approvalStatus ?? ""}'입니다.`);
+    if (resolution.actionSent === true) throw new Error("control-repository-resolutions.json: locator resolution은 physical action 전 증거여야 합니다.");
+  }
+}
+
 function deepFreeze(value) {
   if (!value || typeof value !== "object" || Object.isFrozen(value)) return value;
   Object.freeze(value);
@@ -122,6 +139,8 @@ export async function loadRuleResults(reportDir) {
   const optional = async (name, fallback) => (await readJson(reportDir, name, true)) ?? fallback;
   const stateDiscovery = await optional("state-discovery-results.json", null);
   if (stateDiscovery) validateStateDiscovery(stateDiscovery);
+  const controlRepositoryResolutions = await optional("control-repository-resolutions.json", null);
+  if (controlRepositoryResolutions) validateControlRepositoryResolutions(controlRepositoryResolutions);
   return deepFreeze({
     reportDir,
     summary,
@@ -133,6 +152,7 @@ export async function loadRuleResults(reportDir) {
     bindingCatalog: await optional("binding-catalog.json", null),
     physicalPlan: await optional("physical-plan.json", null),
     scenarioReviewItems: await optional("scenario-review-items.json", []),
+    controlRepositoryResolutions,
     stateDiscovery,
   });
 }
