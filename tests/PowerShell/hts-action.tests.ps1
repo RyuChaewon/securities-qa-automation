@@ -29,9 +29,10 @@ $dependencies = [pscustomobject]@{
     InvokeBridgeRequest = {
         param($Session,$Request)
         $script:lastRequest = $Request
+        if($script:bridgeMode -eq 'sensitive'){return [pscustomobject]@{success=$true;verified=$false;actionSent=$true;actionVerified=$false;errorCode='';message='delivery only';pattern='ValuePattern.SetValue'}}
         if($script:bridgeMode -eq 'throw'){throw 'fake bridge exception'}
-        if($script:bridgeMode -eq 'fallback'){return [pscustomobject]@{success=$false;verified=$false;errorCode='PATTERN_UNAVAILABLE';message='fallback';pattern=''}}
-        [pscustomobject]@{success=$true;verified=$true;errorCode='';message='ok';pattern='Invoke'}
+        if($script:bridgeMode -eq 'fallback'){return [pscustomobject]@{success=$false;verified=$false;actionSent=$false;actionVerified=$false;errorCode='PATTERN_UNAVAILABLE';message='fallback';pattern=''}}
+        [pscustomobject]@{success=$true;verified=$true;actionSent=$true;actionVerified=$true;errorCode='';message='ok';pattern='Invoke'}
     }
     WriteInputAudit = { param([string]$Type,[string]$Status,[int]$X,[int]$Y,[string]$Detail) [void]$script:audits.Add([pscustomobject]@{type=$Type;status=$Status;detail=$Detail}) }
     InvokeRuleControlPlanItem = { param($Navigation,$Screen,$PlanItem) [void]$script:adapterCalls.Add('plan'); [pscustomobject]@{status='SUCCEEDED';planItem=$PlanItem} }
@@ -51,16 +52,21 @@ Assert-Equal 2 $script:lastRequest.index 'optional selector index is preserved'
 Assert-Equal 71 $script:lastRequest.rootHwnd 'action is scoped to the explicit input surface'
 Assert-Equal 'ALLOWED' $script:audits[0].status 'verified action writes an allowed audit event'
 
+$script:bridgeMode = 'sensitive'
+$sensitive = Invoke-HtsFlaUiControlAction -Context $context -Window $window -Action 'setText' -Value 'never-log-this' -Sensitive
+Assert-True ([bool]$script:lastRequest.sensitive) 'sensitive input marker is forwarded to the bridge'
+Assert-True ([bool]$sensitive.actionSent -and -not [bool]$sensitive.actionVerified) 'sensitive delivery is preserved without claiming readback verification'
+Assert-True (-not ((ConvertTo-Json -InputObject $script:audits -Compress -Depth 4) -match [regex]::Escape('never-log-this'))) 'sensitive plaintext is absent from action audit logs'
 $script:bridgeMode = 'fallback'
 $fallback = Invoke-HtsFlaUiControlAction -Context $context -Window $window -Action 'invoke'
 Assert-Equal 'PATTERN_UNAVAILABLE' $fallback.errorCode 'unverified bridge result remains a raw fallback result'
-Assert-Equal 1 $metrics.FlaUiFallbackRequests 'fallback metric increments without judging a test result'
+Assert-Equal 2 $metrics.FlaUiFallbackRequests 'fallback metric includes unverified sensitive delivery without judging a test result'
 Assert-True ($metrics.FlaUiFallbackReasons.Contains('invoke:PATTERN_UNAVAILABLE')) 'fallback reason is retained'
 
 $script:bridgeMode = 'throw'
 $exception = Invoke-HtsFlaUiControlAction -Context $context -Window $window -Action 'setText' -Value 'sample'
 Assert-Equal 'UIA3_BRIDGE_EXCEPTION' $exception.errorCode 'bridge exception is an action infrastructure result'
-Assert-Equal 2 $metrics.FlaUiFallbackRequests 'bridge exception also records fallback need'
+Assert-Equal 3 $metrics.FlaUiFallbackRequests 'bridge exception also records fallback need'
 
 $beforeAttempts = $metrics.FlaUiActionAttempts
 $hotspot = Invoke-HtsFlaUiControlAction -Context $context -Window ([pscustomobject]@{className='ConfiguredVisualHotspot'}) -Action 'invoke'

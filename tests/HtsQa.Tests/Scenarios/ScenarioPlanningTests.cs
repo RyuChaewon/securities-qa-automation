@@ -119,9 +119,9 @@ public sealed class ScenarioPlanningTests
     }
 
     [Fact]
-    public void Passive_NoTransmission_Only_Scenario_Is_Not_Executable()
+    public void Required_NoTransmission_Checkpoint_Is_Executable()
     {
-        var scenario = Scenario("TS-0101-PASSIVE", null, "RQ_SAMPLE") with
+        var scenario = Scenario("TS-0101-NO-TRANSMISSION", null, "RQ_SAMPLE") with
         {
             Steps =
             [
@@ -137,11 +137,46 @@ public sealed class ScenarioPlanningTests
         ], "installation");
         var physical = materializer.BuildPhysicalPlan(logical, bindings, "bindings");
 
-        Assert.Contains(logical.Issues, x => x.Code == "SCENARIO.NO_EFFECT_STEP" && x.Severity == "WARNING");
+        Assert.DoesNotContain(logical.Issues, x => x.Code == "SCENARIO.REQUIRED_CHECKPOINT_MISSING");
+        Assert.Equal("READY", physical.Status);
+        Assert.Single(physical.ExecutableCaseIds);
+        Assert.Equal("READY", Assert.Single(physical.ScenarioDispositions).Status);
+    }
+
+    [Theory]
+    [InlineData(false)]
+    [InlineData(true)]
+    public void Action_Only_Or_Optional_Checkpoint_Cannot_Be_Physically_Executable(bool includeOptionalCheckpoint)
+    {
+        var steps = new List<GeneratedScenarioStep>
+        {
+            new() { Sequence = 1, Action = "Click", ControlLogicalName = "BTN_Order" }
+        };
+        if (includeOptionalCheckpoint)
+            steps.Add(new GeneratedScenarioStep
+            {
+                Sequence = 2,
+                Action = "AssertVisible",
+                ControlLogicalName = "BTN_Order",
+                CheckpointRequired = false
+            });
+        var scenario = Scenario("TS-0101-ACTION-ONLY", null, "BTN_Order") with { Steps = steps.ToArray() };
+        var logical = Compile(Source([scenario], []));
+        var materializer = new ScenarioBindingMaterializer();
+        var bindings = materializer.Materialize(logical,
+        [
+            new RuntimeControlPlanRow
+            {
+                ScreenNumber = TestTargetFixture.ScreenNumber,
+                DiscoveredControls = [ActionableControl("button", "BTN_Order", "HT010101")]
+            }
+        ], "installation");
+        var physical = materializer.BuildPhysicalPlan(logical, bindings, "bindings");
+
+        Assert.Contains(logical.Issues, x => x.Code == "SCENARIO.REQUIRED_CHECKPOINT_MISSING" && x.Severity == "WARNING");
         Assert.Equal("BLOCKED", physical.Status);
         Assert.Empty(physical.ExecutableCaseIds);
-        Assert.Equal("PENDING_BINDING", Assert.Single(physical.ScenarioDispositions).Status);
-        Assert.Contains(Assert.Single(physical.ScenarioDispositions).Reasons, x => x.Contains("PASS 판정"));
+        Assert.Contains(Assert.Single(physical.ScenarioDispositions).Reasons, x => x.Contains("required Checkpoint"));
     }
 
     [Fact]
@@ -748,12 +783,12 @@ public sealed class ScenarioPlanningTests
             ?
             [
                 new GeneratedScenarioStep { Sequence = 1, Action = "Click", ControlLogicalName = control },
-                new GeneratedScenarioStep { Sequence = 2, Action = "Observe" }
+                new GeneratedScenarioStep { Sequence = 2, Action = "AssertVisible", ControlLogicalName = control }
             ]
             :
             [
                 new GeneratedScenarioStep { Sequence = 1, Action = "Input", ControlLogicalName = control, ValueRef = valueRef },
-                new GeneratedScenarioStep { Sequence = 2, Action = "Observe" }
+                new GeneratedScenarioStep { Sequence = 2, Action = "AssertVisible", ControlLogicalName = control }
             ]
     };
 

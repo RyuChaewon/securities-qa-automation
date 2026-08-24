@@ -103,6 +103,7 @@ function Get-RuleScenarioPlanItems($Context, $Controls, $ScenarioCase) {
             controlLogicalName=$logicalName
             mapScreenCode=$mapScreenCode;stateContext=$stateContext;transactional=[bool]$step.transactional
             expectedObservation=[string]$step.expectedObservation
+            checkpointRequired=$(if($null -eq $step.checkpointRequired){$true}else{[bool]$step.checkpointRequired})
             executionPhase=[string]$step.executionPhase;runtimeTabOrderEligible=[bool]$step.runtimeTabOrderEligible
             executionOrder=$executionOrder;coordinateFocus=($executionOrder -eq 'CoordinateFocus')
             triggerQueryAfterChange=$(if($selected){[bool]$selected.triggerQueryAfterChange}else{$false})

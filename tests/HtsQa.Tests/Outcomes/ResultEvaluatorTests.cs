@@ -2,6 +2,7 @@
 // 범위: UI·파일·PowerShell 없이 순수 평가 행렬과 요약 우선순위만 검사한다.
 // 안전: 미실행·무증거·미해결·관찰 전용 결과가 PASS로 승격되지 않는 계약을 고정한다.
 using HtsQa.Core;
+using System.Text.Json;
 
 namespace HtsQa.Tests;
 
@@ -45,7 +46,7 @@ public sealed class ResultEvaluatorTests
         var result = evaluator.Evaluate(input);
 
         Assert.Equal(TestStatus.PENDING, result.Status);
-        Assert.Equal("EVIDENCE_MISSING", result.Code);
+        Assert.Equal("REQUIRED_CHECKPOINT_EVIDENCE_MISSING", result.Code);
     }
 
     [Theory]
@@ -259,7 +260,7 @@ public sealed class ResultEvaluatorTests
             Observations =
             [
                 matching.Observations[0],
-                new Observation { ObservationId = "unexpected", Kind = ObservationKind.ProductFailure, Message = "different-failure" }
+                new Observation { ObservationId = "unexpected", Kind = ObservationKind.ProductFailure, Message = "different-failure", EvidenceRole = ObservationEvidenceRole.Checkpoint }
             ]
         };
         Assert.Equal(TestStatus.FAIL, evaluator.Evaluate(mixed).Status);
@@ -284,6 +285,208 @@ public sealed class ResultEvaluatorTests
 
         Assert.Equal(TestStatus.ERROR, result.Status);
     }
+    [Fact]
+    public void Action_Delivery_Without_Checkpoint_Cannot_Pass()
+    {
+        var action = evaluator.Evaluate(Case(
+            executed: true,
+            RuleExpectedOutcomeType.Success,
+            [new Observation
+            {
+                ObservationId = "click",
+                Kind = ObservationKind.Success,
+                EvidenceRole = ObservationEvidenceRole.Action,
+                CheckpointRequired = false
+            }]));
+
+        Assert.Equal(TestStatus.PENDING, action.Status);
+        Assert.Equal("ACTION_DELIVERED", action.Code);
+        Assert.True(action.ActionSent);
+        Assert.True(action.ActionVerified);
+        Assert.Equal(ObservationEvidenceRole.Action, action.EvidenceRole);
+
+        var aggregate = evaluator.Aggregate("click-only", [action]);
+        Assert.Equal(TestStatus.PENDING, aggregate.Status);
+        Assert.Equal("REQUIRED_CHECKPOINT_MISSING", aggregate.Code);
+    }
+
+    [Fact]
+    public void Input_Delivery_With_Unobserved_Required_Message_Cannot_Pass()
+    {
+        var result = evaluator.Evaluate(Case(
+            executed: true,
+            RuleExpectedOutcomeType.Success,
+            [
+                new Observation
+                {
+                    ObservationId = "input",
+                    Kind = ObservationKind.Success,
+                    EvidenceRole = ObservationEvidenceRole.Action,
+                    CheckpointRequired = false
+                },
+                new Observation
+                {
+                    ObservationId = "required-message",
+                    Kind = ObservationKind.EvidenceMissing,
+                    Executed = true,
+                    EvidencePresent = false,
+                    EvidenceRole = ObservationEvidenceRole.Checkpoint,
+                    CheckpointRequired = true
+                }
+            ]));
+
+        Assert.Equal(TestStatus.PENDING, result.Status);
+        Assert.Equal("REQUIRED_CHECKPOINT_EVIDENCE_MISSING", result.Code);
+    }
+
+    [Fact]
+    public void Required_Checkpoint_Passes_Only_After_Product_Evidence()
+    {
+        var action = evaluator.Evaluate(Case(
+            executed: true,
+            RuleExpectedOutcomeType.Success,
+            [new Observation
+            {
+                ObservationId = "input",
+                Kind = ObservationKind.Success,
+                EvidenceRole = ObservationEvidenceRole.Action,
+                CheckpointRequired = false
+            }])) with { CaseId = "action" };
+        var checkpoint = evaluator.Evaluate(Case(
+            executed: true,
+            RuleExpectedOutcomeType.Success,
+            [new Observation
+            {
+                ObservationId = "message",
+                Kind = ObservationKind.Success,
+                EvidenceRole = ObservationEvidenceRole.Checkpoint,
+                CheckpointRequired = true
+            }])) with { CaseId = "checkpoint" };
+
+        Assert.Equal(TestStatus.PASS, checkpoint.Status);
+        var aggregate = evaluator.Aggregate("with-checkpoint", [action, checkpoint]);
+        Assert.Equal(TestStatus.PASS, aggregate.Status);
+        Assert.True(aggregate.EvidencePresent);
+        Assert.True(aggregate.ExpectationSatisfied);
+    }
+
+    [Fact]
+    public void Required_Checkpoint_Partially_Not_Executed_Cannot_Pass()
+    {
+        var result = evaluator.Evaluate(Case(
+            executed: true,
+            RuleExpectedOutcomeType.Success,
+            [
+                new Observation { ObservationId = "done", Kind = ObservationKind.Success, EvidenceRole = ObservationEvidenceRole.Checkpoint },
+                new Observation { ObservationId = "not-run", Kind = ObservationKind.Success, Executed = false, EvidenceRole = ObservationEvidenceRole.Checkpoint }
+            ]));
+
+        Assert.Equal(TestStatus.PENDING, result.Status);
+        Assert.Equal("REQUIRED_CHECKPOINT_NOT_EXECUTED", result.Code);
+    }
+
+    [Fact]
+    public void Optional_Checkpoint_Missing_Is_Non_Blocking_But_Executed_Failure_Blocks()
+    {
+        var required = new Observation
+        {
+            ObservationId = "required",
+            Kind = ObservationKind.Success,
+            EvidenceRole = ObservationEvidenceRole.Checkpoint,
+            CheckpointRequired = true
+        };
+        var missingOptional = new Observation
+        {
+            ObservationId = "optional-missing",
+            Kind = ObservationKind.EvidenceMissing,
+            Executed = false,
+            EvidencePresent = false,
+            EvidenceRole = ObservationEvidenceRole.Checkpoint,
+            CheckpointRequired = false
+        };
+        var failedOptional = missingOptional with
+        {
+            ObservationId = "optional-failed",
+            Kind = ObservationKind.InputValidation,
+            Executed = true,
+            EvidencePresent = true
+        };
+
+        Assert.Equal(TestStatus.PASS, evaluator.Evaluate(Case(
+            executed: true,
+            RuleExpectedOutcomeType.Success,
+            [required, missingOptional])).Status);
+
+        var failure = evaluator.Evaluate(Case(
+            executed: true,
+            RuleExpectedOutcomeType.Success,
+            [required, failedOptional]));
+        Assert.Equal(TestStatus.FAIL, failure.Status);
+        Assert.Equal("UNEXPECTED_APPLICATION_EVENT", failure.Code);
+    }
+
+    [Fact]
+    public void Unspecified_Evidence_Role_Is_Fail_Closed()
+    {
+        var input = new ResultEvaluationCase
+        {
+            CaseId = "unresolved-role",
+            Executed = true,
+            ExpectedResult = new ExpectedResult { Type = RuleExpectedOutcomeType.Success },
+            Observations = [new Observation { ObservationId = "unknown", Kind = ObservationKind.Success, EvidenceRole = ObservationEvidenceRole.Unspecified }]
+        };
+
+        var result = evaluator.Evaluate(input);
+
+        Assert.Equal(TestStatus.PENDING, result.Status);
+        Assert.Equal("EVIDENCE_ROLE_REQUIRED", result.Code);
+    }
+
+    [Fact]
+    public void Aggregate_Rejects_Action_Pass_From_External_Completed_Result()
+    {
+        var invalid = new TestResult
+        {
+            CaseId = "action-pass",
+            Status = TestStatus.PASS,
+            Disposition = RuleOutcomeDisposition.Expected,
+            Code = "ACTION_SENT",
+            Reason = "delivery only",
+            Executed = true,
+            EvidencePresent = true,
+            EvidenceRole = ObservationEvidenceRole.Action,
+            CheckpointRequired = false,
+            ActionSent = true,
+            ActionVerified = true
+        };
+
+        Assert.Throws<InvalidDataException>(() => evaluator.Aggregate("report", [invalid]));
+    }
+
+    [Fact]
+    public void Legacy_TestResult_Json_Remains_Consumable_As_Required_Checkpoint()
+    {
+        const string json = """
+            {
+              "caseId": "legacy",
+              "status": "PASS",
+              "disposition": "Expected",
+              "code": "EXPECTED_SUCCESS",
+              "reason": "legacy",
+              "executed": true,
+              "evidencePresent": true,
+              "expectationSatisfied": true
+            }
+            """;
+
+        var result = JsonSerializer.Deserialize<TestResult>(json, JsonDefaults.Options);
+
+        Assert.NotNull(result);
+        Assert.Equal(ObservationEvidenceRole.Checkpoint, result.EvidenceRole);
+        Assert.True(result.CheckpointRequired);
+        Assert.Equal(TestStatus.PASS, evaluator.Aggregate("legacy-overall", [result]).Status);
+    }
+
 
     [Fact]
     public void Summary_Uses_Error_Fail_Pending_Pass_Precedence()
@@ -361,6 +564,9 @@ public sealed class ResultEvaluatorTests
                 MessagePatterns = patterns ?? [],
                 ErrorCodes = errorCodes ?? []
             },
-            Observations = observations
+            Observations = observations.Select(item =>
+                item.EvidenceRole == ObservationEvidenceRole.Unspecified
+                    ? item with { EvidenceRole = ObservationEvidenceRole.Checkpoint }
+                    : item).ToArray()
         };
 }

@@ -47,6 +47,10 @@ try {
   const failClosedDocument = JSON.parse(await fs.readFile(path.join(failClosedDir, "test-results.json"), "utf8"));
   failClosedDocument.results[1].code = "EXPECTED_OUTCOME_NOT_OBSERVED";
   failClosedDocument.results[1].reason = "required validation was not observed";
+  failClosedDocument.results[1].evidenceRole = "Checkpoint";
+  failClosedDocument.results[1].checkpointRequired = true;
+  failClosedDocument.results[1].actionSent = true;
+  failClosedDocument.results[1].actionVerified = true;
   await fs.writeFile(path.join(failClosedDir, "test-results.json"), JSON.stringify(failClosedDocument));
   const failClosedCases = JSON.parse(await fs.readFile(path.join(failClosedDir, "case-results.json"), "utf8"));
   failClosedCases[1].testResult.code = "EXPECTED_OUTCOME_NOT_OBSERVED";
@@ -58,6 +62,8 @@ try {
   check(failClosed.results[1].status, "FAIL", "reporter preserves evaluator fail verdict");
   check(failClosed.results[1].testResult.code, "EXPECTED_OUTCOME_NOT_OBSERVED", "display context preserves evaluator reason code");
   check(failClosed.canonicalDocument.results[1].code, "EXPECTED_OUTCOME_NOT_OBSERVED", "canonical evaluator reason code remains unchanged");
+  check(failClosed.canonicalDocument.results[1].evidenceRole, "Checkpoint", "reporter preserves evaluator evidence role");
+  check(failClosed.canonicalDocument.results[1].actionVerified, true, "reporter preserves action verification metadata");
 
   const mismatchDir = await createReportDir();
   tempDirs.push(mismatchDir);
@@ -69,6 +75,16 @@ try {
 
   const unsafePassDir = await createReportDir();
   tempDirs.push(unsafePassDir);
+  const actionPassDir = await createReportDir();
+  tempDirs.push(actionPassDir);
+  const actionPassDocument = JSON.parse(await fs.readFile(path.join(actionPassDir, "test-results.json"), "utf8"));
+  actionPassDocument.results[0].evidenceRole = "Action";
+  actionPassDocument.results[0].checkpointRequired = false;
+  actionPassDocument.results[0].actionSent = true;
+  actionPassDocument.results[0].actionVerified = true;
+  await fs.writeFile(path.join(actionPassDir, "test-results.json"), JSON.stringify(actionPassDocument));
+  await assert.rejects(loadRuleResults(actionPassDir), /Action 전달 결과는 canonical PASS/);
+  assertions += 1;
   const unsafeDocument = JSON.parse(await fs.readFile(path.join(unsafePassDir, "test-results.json"), "utf8"));
   unsafeDocument.results[0].executed = false;
   await fs.writeFile(path.join(unsafePassDir, "test-results.json"), JSON.stringify(unsafeDocument));

@@ -30,6 +30,9 @@ public sealed class BridgeRequest
     /// <summary>텍스트, 선택 표시값, 범위값처럼 문자열로 전달할 값이다.</summary>
     public string? Value { get; set; }
 
+    /// <summary>민감 입력은 readback과 응답·snapshot 기록에서 평문을 제거한다.</summary>
+    public bool Sensitive { get; set; }
+
     /// <summary>콤보·목록·탭 선택 순번이다.</summary>
     public int? Index { get; set; }
 
@@ -105,6 +108,8 @@ public sealed class BridgeResponse
     public string RequestId { get; set; } = string.Empty;
     public bool Success { get; set; }
     public bool Verified { get; set; }
+    public bool ActionSent { get; set; }
+    public bool ActionVerified { get; set; }
     public bool FallbackRequired { get; set; }
     public string Engine { get; set; } = FlaUiAutomationEngine.EngineName;
     public string EngineVersion { get; set; } = FlaUiAutomationEngine.EngineVersion;
@@ -120,6 +125,8 @@ public sealed class BridgeResponse
         RequestId = request.RequestId,
         Success = false,
         Verified = false,
+        ActionSent = false,
+        ActionVerified = false,
         FallbackRequired = fallback,
         ErrorCode = code,
         Message = message

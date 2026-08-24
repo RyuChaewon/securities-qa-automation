@@ -139,11 +139,12 @@ public sealed class FlaUiAutomationEngine : IDisposable
         };
     }
 
-    /// <summary>ValuePattern 또는 FlaUI TextBox 래퍼로 값을 설정하고 읽기 가능한 경우 동일성을 확인한다.</summary>
+    /// <summary>텍스트 Action을 전달하고 일반 필드의 exact readback만 별도의 action verification으로 인정한다.</summary>
     private BridgeResponse SetText(BridgeRequest request, AutomationElement element, bool pressEnter)
     {
         var value = request.Value ?? string.Empty;
         var patternName = string.Empty;
+        var sensitive = request.Sensitive || IsPassword(element);
 
         if (element.Patterns.Value.TryGetPattern(out var valuePattern) && !valuePattern.IsReadOnly.Value)
         {
@@ -166,10 +167,27 @@ public sealed class FlaUiAutomationEngine : IDisposable
             patternName += "+RETURN";
         }
 
-        var observed = ReadValue(element);
-        var verified = string.IsNullOrEmpty(observed) || string.Equals(observed, value, StringComparison.Ordinal);
-        return ActionSuccess(request, patternName, verified, observed,
-            pressEnter ? "텍스트를 설정하고 Enter 키를 보냈습니다." : "텍스트를 설정했습니다.");
+        var readback = sensitive ? (Available: false, Value: string.Empty) : TryReadValue(element);
+        return CompleteSetTextAction(request, patternName, readback.Available, readback.Value, sensitive, pressEnter);
+    }
+
+    internal static BridgeResponse CompleteSetTextAction(
+        BridgeRequest request,
+        string patternName,
+        bool readbackAvailable,
+        string observedValue,
+        bool sensitive,
+        bool pressEnter = false)
+    {
+        var observed = sensitive ? string.Empty : observedValue ?? string.Empty;
+        var verified = !sensitive
+            && readbackAvailable
+            && !string.IsNullOrEmpty(observed)
+            && string.Equals(observed, request.Value ?? string.Empty, StringComparison.Ordinal);
+        var message = sensitive
+            ? "민감 텍스트 Action을 전달했습니다. 승인된 대체 Checkpoint 없이는 검증 완료로 승격하지 않습니다."
+            : pressEnter ? "텍스트를 설정하고 Enter 키를 보냈습니다." : "텍스트를 설정했습니다.";
+        return ActionSuccess(request, patternName, verified, observed, message);
     }
 
     /// <summary>InvokePattern을 사용해 버튼의 의미 동작을 실행한다.</summary>
@@ -655,9 +673,20 @@ public sealed class FlaUiAutomationEngine : IDisposable
         return SafeRead(() => (double?)(minimum ? range.Minimum.Value : range.Maximum.Value), null);
     }
 
-    /// <summary>읽기 가능한 ValuePattern 현재값을 반환하며 비지원 요소는 빈 문자열로 둔다.</summary>
+    /// <summary>읽기 가능한 ValuePattern 현재값과 readback 가능 여부를 구분한다.</summary>
+    private static (bool Available, string Value) TryReadValue(AutomationElement element)
+    {
+        if (!element.Patterns.Value.TryGetPattern(out var pattern)) return (false, string.Empty);
+        try { return (true, pattern.Value.Value ?? string.Empty); }
+        catch { return (false, string.Empty); }
+    }
+
+    /// <summary>snapshot에는 비밀번호 readback을 절대 저장하지 않는다.</summary>
     private static string ReadValue(AutomationElement element) =>
-        element.Patterns.Value.TryGetPattern(out var pattern) ? SafeRead(() => pattern.Value.Value, string.Empty) : string.Empty;
+        IsPassword(element) ? string.Empty : TryReadValue(element).Value;
+
+    private static bool IsPassword(AutomationElement element) =>
+        SafeRead(() => element.Properties.IsPassword.ValueOrDefault, false);
 
     /// <summary>FlaUI RuntimeId 배열을 프로세스 간 안정적으로 전달할 문자열로 만든다.</summary>
     private static string RuntimeId(AutomationElement element) =>
@@ -718,6 +747,8 @@ public sealed class FlaUiAutomationEngine : IDisposable
         RequestId = request.RequestId,
         Success = true,
         Verified = verified,
+        ActionSent = true,
+        ActionVerified = verified,
         Pattern = pattern,
         ObservedValue = observed,
         Message = message

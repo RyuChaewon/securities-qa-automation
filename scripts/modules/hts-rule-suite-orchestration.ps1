@@ -286,8 +286,8 @@ $actionDependencies = [pscustomobject]@{
 $actionContext = New-HtsActionContext -SessionContext $sessionContext -Metrics $automationMetrics -Dependencies $actionDependencies -RuntimeContext $runtimeContext -TargetAdapterContext $targetRuleContext.TargetAdapter
 $observationDependencies = [pscustomobject]@{
     CreateSignalEvaluationCase = {
-        param([string]$CaseId,[string]$EventType,[string]$Text,[string]$SourceCode,[string]$Source,$ExpectedOutcome)
-        New-RuleSignalEvaluationCase -CaseId $CaseId -EventType $EventType -Text $Text -SourceCode $SourceCode -Source $Source -ExpectedOutcome $ExpectedOutcome
+        param([string]$CaseId,[string]$EventType,[string]$Text,[string]$SourceCode,[string]$Source,$ExpectedOutcome,[string]$EvidenceRole,[bool]$CheckpointRequired)
+        New-RuleSignalEvaluationCase -CaseId $CaseId -EventType $EventType -Text $Text -SourceCode $SourceCode -Source $Source -ExpectedOutcome $ExpectedOutcome -EvidenceRole $EvidenceRole -CheckpointRequired $CheckpointRequired
     }
     GetNow = { Get-Date }
     GetTopWindows = { @(Get-TopWindows) }
@@ -759,7 +759,7 @@ for ($caseIndex = 0; $caseIndex -lt $cases.Count; $caseIndex++) {
                     $variableRequirementRecord=$null
                     if([string]$resolvedVariableExpectation.type -in @('ValidationRequired','FailureRequired')){
                         $variableRequirementRecord=[pscustomobject]@{controlId="dataset-variable:$name";optionId=[string]$resolvedVariableExpectation.expectationId;outcome=$resolvedVariableExpectation;observations=(New-Object Collections.Generic.List[object])}
-                        $variableRequirementRecord.observations.Add([pscustomobject]@{observationId="dataset-variable:$name-completion";kind='Success';executed=$true;evidencePresent=$true;message='데이터셋 조건값 적용을 완료했습니다.';sourceCode='';source='dataset variable completion'})
+                        $variableRequirementRecord.observations.Add([pscustomobject]@{observationId="dataset-variable:$name-completion";kind='Success';executed=$true;evidencePresent=$true;evidenceRole='Action';checkpointRequired=$false;message='데이터셋 조건값 적용을 완료했습니다.';sourceCode='';source='dataset variable completion'})
                         $requiredExpectations.Add($variableRequirementRecord)
                     }
                     if($resolvedVariableExpectation.queryShouldComplete -eq $true){
@@ -909,7 +909,9 @@ for ($caseIndex = 0; $caseIndex -lt $cases.Count; $caseIndex++) {
                             $expectedOutcome `
                             $false `
                             $false `
-                            'control-not-executed'
+                            'control-not-executed' `
+                            $(if($scenarioMode -and [string]$planItem.scenarioAction -like 'Assert*'){'Checkpoint'}else{'Action'}) `
+                            $(if($scenarioMode -and [string]$planItem.scenarioAction -like 'Assert*'){[bool]$planItem.checkpointRequired}else{$false})
                         $controlTestResult = $controlEvaluation.testResult
                         $controlTests.Add([pscustomobject]@{
                             scenarioId=$(if($scenarioMode){[string]$case.scenarioCase.scenarioId}else{''});scenarioTitle=$(if($scenarioMode){[string]$case.scenarioCase.scenarioTitle}else{''})
@@ -1244,9 +1246,11 @@ for ($caseIndex = 0; $caseIndex -lt $cases.Count; $caseIndex++) {
                         ([string]$invoke.output) `
                         $controlObservationCode `
                         $controlCompletionExpectation `
-                        ([bool]($invoke.success -or $newErrors)) `
+                        ([bool]($invoke.success -or $newErrors -or $isAssertionStep)) `
                         ($controlObservationKind -ne 'EvidenceMissing') `
-                        'control-completion'
+                        'control-completion' `
+                        $(if($isAssertionStep){'Checkpoint'}else{'Action'}) `
+                        $(if($isAssertionStep){[bool]$planItem.checkpointRequired}else{$false})
                     $controlTestResult = $controlEvaluation.testResult
                     if($requiredExpectationRecord){$requiredExpectationRecord.observations.Add(@($controlEvaluation.evaluationCase.observations)[0])}
                     $status = [string]$controlTestResult.status
@@ -1349,7 +1353,7 @@ for ($caseIndex = 0; $caseIndex -lt $cases.Count; $caseIndex++) {
                         } catch {
                             $guardMessage=Protect-Text $_.Exception.Message $secret
                             $queryExpectation = [pscustomobject]@{type='Success';expectationId="required-query-$queryIndex";messagePatterns=@();errorCodes=@();evidence=@('필수 조회 실행 계약')}
-                            $guardEvaluation = Invoke-HtsRawObservationEvaluation -Context $evaluationAdapterContext 'EvidenceMissing' $guardMessage 'INPUT_GUARD_BLOCKED' $queryExpectation $false $false 'required-query-guard'
+                            $guardEvaluation = Invoke-HtsRawObservationEvaluation -Context $evaluationAdapterContext 'EvidenceMissing' $guardMessage 'INPUT_GUARD_BLOCKED' $queryExpectation $false $false 'required-query-guard' 'Action' $false
                             $guardTestResult = $guardEvaluation.testResult
                             $controlTests.Add([pscustomobject]@{
                                 planItemId="REQUIRED-QUERY-$queryIndex";controlId="REQUIRED-QUERY-$queryIndex";controlKind="Button";controlName='조회'
@@ -1406,7 +1410,7 @@ for ($caseIndex = 0; $caseIndex -lt $cases.Count; $caseIndex++) {
                         $queryObservationCode=if($queryAlive){''}elseif($queryNavigationHandled){'TARGET_RESTORE_FAILED'}else{'SCREEN_CLOSED_UNEXPECTEDLY'}
                         $queryName=if($queryControl.rawTitle){[string]$queryControl.rawTitle}elseif($tabOrderQueryControl){[string]$tabOrderQueryControl.name}else{"조회"}
                         $queryExpectation = [pscustomobject]@{type='Success';expectationId="required-query-$queryIndex";messagePatterns=@();errorCodes=@();evidence=@('필수 조회 실행 계약')}
-                        $queryEvaluation = Invoke-HtsRawObservationEvaluation -Context $evaluationAdapterContext $queryObservationKind '활성화된 조회 버튼을 필수 단계에서 실제 클릭했습니다.' $queryObservationCode $queryExpectation $true ($queryObservationKind -ne 'EvidenceMissing') 'required-query'
+                        $queryEvaluation = Invoke-HtsRawObservationEvaluation -Context $evaluationAdapterContext $queryObservationKind '활성화된 조회 버튼을 필수 단계에서 실제 클릭했습니다.' $queryObservationCode $queryExpectation $true ($queryObservationKind -ne 'EvidenceMissing') 'required-query' 'Action' $false
                         $queryTestResult = $queryEvaluation.testResult
                         $queryStatus = [string]$queryTestResult.status
                         $controlTests.Add([pscustomobject]@{
@@ -1421,7 +1425,7 @@ for ($caseIndex = 0; $caseIndex -lt $cases.Count; $caseIndex++) {
                 } elseif (@($controlTests | Where-Object { $_.controlKind -eq 'Button' -and $_.controlName -eq '조회(탭오더)' -and $_.queryTriggered -and -not $_.errorDetected }).Count -gt 0) {
                     $completedTabQueries=@($controlTests | Where-Object { $_.controlKind -eq 'Button' -and $_.controlName -eq '조회(탭오더)' -and $_.queryTriggered -and -not $_.errorDetected }).Count
                     $queryHistoryExpectation = [pscustomobject]@{type='Success';expectationId='required-query-history';messagePatterns=@();errorCodes=@();evidence=@('탭오더 조회 실행 이력')}
-                    $queryHistoryEvaluation = Invoke-HtsRawObservationEvaluation -Context $evaluationAdapterContext 'Success' "탭오더 조회 버튼 $completedTabQueries개 실행 이력" '' $queryHistoryExpectation $true $true 'required-query-history'
+                    $queryHistoryEvaluation = Invoke-HtsRawObservationEvaluation -Context $evaluationAdapterContext 'Success' "탭오더 조회 버튼 $completedTabQueries개 실행 이력" '' $queryHistoryExpectation $true $true 'required-query-history' 'Action' $false
                     $queryHistoryTestResult = $queryHistoryEvaluation.testResult
                     $controlTests.Add([pscustomobject]@{
                         planItemId='REQUIRED-QUERY-HISTORY';controlId='REQUIRED-QUERY-HISTORY';controlKind='Button';controlName='조회(탭오더)'
@@ -1624,7 +1628,9 @@ for ($caseIndex = 0; $caseIndex -lt $cases.Count; $caseIndex++) {
         $completionExpectation `
         $actualCaseActionsExecuted `
         ($completionObservationKind -ne 'EvidenceMissing') `
-        'case-completion'
+        'case-completion' `
+        'Action' `
+        $false
     $caseEvaluationDocument = [pscustomobject]@{
         schemaVersion='1.0';testPackId=[string]$testPack.testPackId
         aggregateId=[string]$case.caseId;cases=@($observationContext.CurrentResultEvaluationCases.ToArray())

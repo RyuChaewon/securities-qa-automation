@@ -201,7 +201,7 @@ function New-HtsSignalObservation {
     $type=if($ExpectedOutcome){[string]$ExpectedOutcome.type}else{'Unspecified'}
     $sequence = Get-HtsNextObservationSequence -Context $Context
     $evaluationCase = Invoke-HtsObservationDependency -Context $Context -Name 'CreateSignalEvaluationCase' -Arguments @(
-        ("signal-{0:D6}" -f $sequence),$eventType,$Text,$code,$source,$ExpectedOutcome
+        ("signal-{0:D6}" -f $sequence),$eventType,$Text,$code,$source,$ExpectedOutcome,'Checkpoint',$true
     )
     [pscustomobject]@{
         eventType=$eventType;disposition='Observed';expectedOutcomeType=$type

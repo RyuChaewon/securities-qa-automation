@@ -25,6 +25,9 @@ function validateTestResult(result, source) {
   if (result.status === "PASS" && (result.executed !== true || result.evidencePresent !== true)) {
     throw new Error(`${source}: PASS에는 executed=true와 evidencePresent=true가 필요합니다.`);
   }
+  if (result.status === "PASS" && result.evidenceRole === "Action") {
+    throw new Error(`${source}: Action 전달 결과는 canonical PASS가 될 수 없습니다.`);
+  }
 }
 
 function validateCanonicalDocument(document) {

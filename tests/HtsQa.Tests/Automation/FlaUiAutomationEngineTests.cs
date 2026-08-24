@@ -1,6 +1,7 @@
 // 역할: 실제 WinForms UIA 공급자에 FlaUI UIA3를 연결해 탐색, 재식별과 의미 패턴 조작을 검증한다.
 // 범위: 격리된 SampleTarget만 사용하며 실제 HTS 프로세스나 사용자 세션은 조작하지 않는다.
 // 수정 지점: Automation 엔진의 새 패턴 또는 오류 코드는 성공·미지원·검증 실패 사례를 함께 추가한다.
+using System.Text.Json;
 using System.Diagnostics;
 using System.Windows.Forms;
 using HtsQa.FlaUi;
@@ -27,6 +28,9 @@ public sealed class FlaUiAutomationEngineTests : IDisposable
         Assert.Contains(response.Elements, element => element.AutomationId == "buyRadio" && element.ControlType == "ControlType.RadioButton");
         Assert.Contains(response.Elements, element => element.AutomationId == "mainTabs" && element.ControlType == "ControlType.Tab");
         Assert.Contains(response.Elements, element => element.AutomationId == "queryButton" && element.SupportedActions.Contains("invoke"));
+        var password = Assert.Single(response.Elements, element => element.AutomationId == "passwordText");
+        Assert.Empty(password.CurrentValue);
+        Assert.DoesNotContain("fixture-password", JsonSerializer.Serialize(response), StringComparison.Ordinal);
 
         var combo = Assert.Single(response.Elements, element => element.AutomationId == "rangeCombo");
         Assert.Contains("selectIndex", combo.SupportedActions);
@@ -51,6 +55,8 @@ public sealed class FlaUiAutomationEngineTests : IDisposable
         {
             Assert.True(result.Success, $"{result.ErrorCode}: {result.Message}");
             Assert.True(result.Verified, $"{result.Pattern}: {result.ObservedValue}");
+            Assert.True(result.ActionSent);
+            Assert.True(result.ActionVerified);
             Assert.Equal(FlaUiAutomationEngine.EngineName, result.Engine);
         });
 
@@ -181,6 +187,7 @@ public sealed class FlaUiAutomationEngineTests : IDisposable
             };
 
             var text = new TextBox { Name = "accountText", AccessibleName = "계좌번호", Left = 20, Top = 20, Width = 180 };
+            var password = new TextBox { Name = "passwordText", AccessibleName = "비밀번호", Left = 220, Top = 315, Width = 140, UseSystemPasswordChar = true, Text = "fixture-password" };
             var combo = new ComboBox { Name = "rangeCombo", AccessibleName = "조회기간", Left = 220, Top = 20, Width = 140, DropDownStyle = ComboBoxStyle.DropDownList };
             combo.Items.AddRange(new object[] { "전체", "당일", "일주일" });
             combo.SelectedIndex = 0;
@@ -198,7 +205,7 @@ public sealed class FlaUiAutomationEngineTests : IDisposable
             var result = new Label { Name = "resultLabel", AccessibleName = "조회 결과", Text = "대기", Left = 20, Top = 315, Width = 180 };
             button.Click += (_, _) => result.Text = "조회 완료";
 
-            form.Controls.AddRange(new Control[] { text, combo, check, sell, buy, tabs, button, result });
+            form.Controls.AddRange(new Control[] { text, password, combo, check, sell, buy, tabs, button, result });
             return form;
         }
 

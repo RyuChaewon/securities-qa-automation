@@ -12,7 +12,7 @@ public static class ScenarioPlanVersions
     public const string SourceSchema = "1.0";
     public const string ApprovalSchema = "1.0";
     public const string CompiledSchema = "1.0";
-    public const string Compiler = "1.0.0";
+    public const string Compiler = "1.1.0";
 }
 
 public sealed record GeneratedScenarioDocument
@@ -75,6 +75,7 @@ public sealed record GeneratedScenarioStep
     public bool Transactional { get; init; }
     public string? ValueRef { get; init; }
     public string ExpectedObservation { get; init; } = "";
+    public bool? CheckpointRequired { get; init; }
 }
 
 public sealed record GeneratedDatasetPatch
@@ -315,6 +316,7 @@ public sealed record CompiledScenarioStep
     public string? ValueRef { get; init; }
     public CompiledScenarioValue? SelectedValue { get; init; }
     public string ExpectedObservation { get; init; } = "";
+    public bool? CheckpointRequired { get; init; }
     public string ExecutionPhase { get; init; } = "Action";
     public bool RuntimeTabOrderEligible { get; init; }
 }
@@ -591,14 +593,14 @@ public sealed class ScenarioBindingMaterializer
                 var reasons = new List<string>(scenario.BlockingReasons);
                 var status = "PENDING_BINDING";
                 var scenarioCases = logicalPlan.Cases.Where(x => x.ScenarioId.Equals(scenario.ScenarioId, StringComparison.OrdinalIgnoreCase)).ToArray();
-                var hasExecutableEvidence = scenarioCases.SelectMany(x => x.Steps).Any(x => GeneratedScenarioValidator.ProvidesExecutableEvidence(x.Action));
+                var hasRequiredCheckpoint = scenarioCases.SelectMany(x => x.Steps).Any(GeneratedScenarioValidator.IsRequiredCheckpoint);
                 if (scenario.Readiness is ScenarioReadiness.PendingApproval or ScenarioReadiness.ManualReview or ScenarioReadiness.Rejected)
                 {
                     status = "PENDING_APPROVAL";
                 }
-                else if (!hasExecutableEvidence)
+                else if (!hasRequiredCheckpoint)
                 {
-                    reasons.Add("조작 또는 양성 결과 검증 단계가 없어 실행 PASS 판정을 차단했습니다.");
+                    reasons.Add("required Checkpoint가 없어 실행 PASS 판정을 차단했습니다.");
                 }
                 else
                 {
@@ -782,7 +784,9 @@ public sealed class GeneratedScenarioValidator
     private static readonly HashSet<string> SupportedActions = new(StringComparer.OrdinalIgnoreCase)
     {
         "Focus", "Observe", "Input", "Select", "Toggle", "Click", "DoubleClick", "Query", "Restore",
-        "AssertVisible", "AssertEnabled", "AssertSelected", "AssertGrid", "AssertPopup", "AssertNoTransmission"
+        "AssertValue", "AssertState", "AssertMessage", "AssertFocus", "AssertPopup", "AssertGrid",
+        "AssertLogDelta", "AssertTransmissionCount", "AssertOrderReceipt",
+        "AssertVisible", "AssertEnabled", "AssertSelected", "AssertNoTransmission"
     };
 
     public ScenarioValidationReport Validate(GeneratedScenarioDocument source, RuleTestDataset dataset, string sourceSha256)
@@ -822,8 +826,8 @@ public sealed class GeneratedScenarioValidator
                     Error("SCENARIO.DOUBLE_CLICK_REQUIRED", $"{scenario.ScenarioId}의 원본 절차에 이중 클릭이 있지만 DoubleClick 단계가 없습니다.", scenario.ScenarioId);
                 if (scenario.Objective.Contains("원상복구", StringComparison.OrdinalIgnoreCase) && !scenarioActions.Contains("Restore"))
                     Error("SCENARIO.RESTORE_REQUIRED", $"{scenario.ScenarioId}의 원본 절차에 원상복구가 있지만 Restore 단계가 없습니다.", scenario.ScenarioId);
-                if (!scenarioActions.Any(ProvidesExecutableEvidence))
-                    Warn("SCENARIO.NO_EFFECT_STEP", $"{scenario.ScenarioId}에는 조작 또는 양성 결과 검증 단계가 없어 실행 PASS로 판정할 수 없습니다.", scenario.ScenarioId);
+                if (!scenario.Steps.Any(IsRequiredCheckpoint))
+                    Warn("SCENARIO.REQUIRED_CHECKPOINT_MISSING", $"{scenario.ScenarioId}에는 required Checkpoint가 없어 실행 PASS로 판정할 수 없습니다.", scenario.ScenarioId);
                 var expectedSequence = 1;
                 foreach (var step in scenario.Steps.OrderBy(x => x.Sequence))
                 {
@@ -911,22 +915,46 @@ public sealed class GeneratedScenarioValidator
         action.Equals("Click", StringComparison.OrdinalIgnoreCase) ||
         action.Equals("DoubleClick", StringComparison.OrdinalIgnoreCase) ||
         action.Equals("Query", StringComparison.OrdinalIgnoreCase) ||
+        action.Equals("AssertValue", StringComparison.OrdinalIgnoreCase) ||
+        action.Equals("AssertState", StringComparison.OrdinalIgnoreCase) ||
+        action.Equals("AssertFocus", StringComparison.OrdinalIgnoreCase) ||
         action.Equals("AssertVisible", StringComparison.OrdinalIgnoreCase) ||
         action.Equals("AssertEnabled", StringComparison.OrdinalIgnoreCase) ||
         action.Equals("AssertSelected", StringComparison.OrdinalIgnoreCase) ||
         action.Equals("AssertGrid", StringComparison.OrdinalIgnoreCase);
 
-    internal static bool ProvidesExecutableEvidence(string action) =>
+    internal static bool IsAction(string action) =>
+        action.Equals("Focus", StringComparison.OrdinalIgnoreCase) ||
         action.Equals("Input", StringComparison.OrdinalIgnoreCase) ||
         action.Equals("Select", StringComparison.OrdinalIgnoreCase) ||
         action.Equals("Toggle", StringComparison.OrdinalIgnoreCase) ||
         action.Equals("Click", StringComparison.OrdinalIgnoreCase) ||
         action.Equals("DoubleClick", StringComparison.OrdinalIgnoreCase) ||
         action.Equals("Query", StringComparison.OrdinalIgnoreCase) ||
+        action.Equals("Restore", StringComparison.OrdinalIgnoreCase);
+
+    internal static bool IsCheckpoint(string action) =>
+        action.Equals("AssertValue", StringComparison.OrdinalIgnoreCase) ||
+        action.Equals("AssertState", StringComparison.OrdinalIgnoreCase) ||
+        action.Equals("AssertMessage", StringComparison.OrdinalIgnoreCase) ||
+        action.Equals("AssertFocus", StringComparison.OrdinalIgnoreCase) ||
+        action.Equals("AssertPopup", StringComparison.OrdinalIgnoreCase) ||
+        action.Equals("AssertGrid", StringComparison.OrdinalIgnoreCase) ||
+        action.Equals("AssertLogDelta", StringComparison.OrdinalIgnoreCase) ||
+        action.Equals("AssertTransmissionCount", StringComparison.OrdinalIgnoreCase) ||
+        action.Equals("AssertOrderReceipt", StringComparison.OrdinalIgnoreCase) ||
         action.Equals("AssertVisible", StringComparison.OrdinalIgnoreCase) ||
         action.Equals("AssertEnabled", StringComparison.OrdinalIgnoreCase) ||
         action.Equals("AssertSelected", StringComparison.OrdinalIgnoreCase) ||
-        action.Equals("AssertGrid", StringComparison.OrdinalIgnoreCase);
+        action.Equals("AssertNoTransmission", StringComparison.OrdinalIgnoreCase);
+
+    internal static bool ProvidesExecutableEvidence(string action) => IsCheckpoint(action);
+
+    internal static bool IsRequiredCheckpoint(GeneratedScenarioStep step) =>
+        IsCheckpoint(step.Action) && step.CheckpointRequired != false;
+
+    internal static bool IsRequiredCheckpoint(CompiledScenarioStep step) =>
+        IsCheckpoint(step.Action) && step.CheckpointRequired != false;
 }
 
 /// <summary>검증된 생성 원본과 승인 결정을 계정별 논리 테스트 사례로 컴파일한다.</summary>
@@ -1057,6 +1085,7 @@ public sealed class ScenarioPlanCompiler
                             ValueRef = step.ValueRef,
                             SelectedValue = !string.IsNullOrWhiteSpace(step.ValueRef) ? selectedValues.GetValueOrDefault(step.ValueRef) : null,
                             ExpectedObservation = step.ExpectedObservation,
+                            CheckpointRequired = step.CheckpointRequired,
                             ExecutionPhase = Phase(step.Action),
                             RuntimeTabOrderEligible = step.Action is "Input" or "Select" or "Toggle"
                         }).ToArray()
@@ -1321,7 +1350,9 @@ public sealed class ScenarioPlanCompiler
         "input" or "select" or "toggle" => "Arrange",
         "query" => "Query",
         "observe" => "Observe",
-        "assertvisible" or "assertenabled" or "assertselected" or "assertgrid" or "assertpopup" or "assertnotransmission" => "Assert",
+        "assertvalue" or "assertstate" or "assertmessage" or "assertfocus" or "assertpopup" or "assertgrid"
+            or "assertlogdelta" or "asserttransmissioncount" or "assertorderreceipt"
+            or "assertvisible" or "assertenabled" or "assertselected" or "assertnotransmission" => "Assert",
         "restore" => "Restore",
         _ => "Action"
     };

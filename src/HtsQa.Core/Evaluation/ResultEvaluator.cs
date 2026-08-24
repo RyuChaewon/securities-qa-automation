@@ -19,6 +19,14 @@ public enum ObservationKind
     InfrastructureError
 }
 
+/// <summary>관측이 Action 전달 사실인지 제품 결과 Checkpoint인지 구분한다.</summary>
+public enum ObservationEvidenceRole
+{
+    Unspecified,
+    Action,
+    Checkpoint
+}
+
 public sealed record Observation
 {
     public string ObservationId { get; init; } = "";
@@ -28,6 +36,8 @@ public sealed record Observation
     public string Message { get; init; } = "";
     public string SourceCode { get; init; } = "";
     public string Source { get; init; } = "";
+    public ObservationEvidenceRole EvidenceRole { get; init; } = ObservationEvidenceRole.Checkpoint;
+    public bool CheckpointRequired { get; init; } = true;
 }
 
 public sealed record ExpectedResult
@@ -92,6 +102,10 @@ public sealed record TestResult
     public bool ExpectationSatisfied { get; init; }
     public bool ProductDefectDetected { get; init; }
     public bool RequiresReview { get; init; }
+    public ObservationEvidenceRole EvidenceRole { get; init; } = ObservationEvidenceRole.Checkpoint;
+    public bool CheckpointRequired { get; init; } = true;
+    public bool ActionSent { get; init; }
+    public bool ActionVerified { get; init; }
     public string[] ObservationIds { get; init; } = [];
 }
 
@@ -134,11 +148,48 @@ public sealed class ResultEvaluator
             return Result(input, TestStatus.ERROR, RuleOutcomeDisposition.Unexpected, "INFRASTRUCTURE_ERROR", MessageOr(infrastructure, "실행 인프라 오류가 관찰되었습니다."), false, false, false, infrastructure);
 
         if (!input.Executed)
-            return Pending(input, policy.NotExecutedStatus, RuleOutcomeDisposition.Review, "NOT_EXECUTED", "실행되지 않은 케이스는 PASS로 판정할 수 없습니다.", false);
+            return Pending(input, policy.NotExecutedStatus, RuleOutcomeDisposition.Review, "NOT_EXECUTED", "실행되지 않은 케이스는 PASS로 판정할 수 없습니다.", false, observations);
 
-        var evidence = executed.Where(item => item.EvidencePresent && item.Kind != ObservationKind.EvidenceMissing).ToArray();
-        if (evidence.Length == 0)
+        if (observations.Length == 0)
             return Pending(input, policy.MissingEvidenceStatus, RuleOutcomeDisposition.Review, "EVIDENCE_MISSING", "실행 증거가 없어 결과를 확정할 수 없습니다.", false);
+
+        var unresolvedRoles = observations.Where(item => item.EvidenceRole == ObservationEvidenceRole.Unspecified).ToArray();
+        if (unresolvedRoles.Length > 0)
+            return Pending(input, policy.MissingEvidenceStatus, RuleOutcomeDisposition.Review, "EVIDENCE_ROLE_REQUIRED", "Action 전달 증거와 Checkpoint 제품 증거의 역할이 지정되지 않았습니다.", false, unresolvedRoles);
+
+        var actions = observations.Where(item => item.EvidenceRole == ObservationEvidenceRole.Action).ToArray();
+        if (actions.Any(item => !item.Executed))
+            return Pending(input, policy.NotExecutedStatus, RuleOutcomeDisposition.Review, "ACTION_NOT_SENT", "Action이 제품에 전달되지 않아 결과를 검증할 수 없습니다.", false, actions);
+        if (actions.Any(item => !item.EvidencePresent || item.Kind == ObservationKind.EvidenceMissing))
+            return Pending(input, policy.MissingEvidenceStatus, RuleOutcomeDisposition.Review, "ACTION_NOT_VERIFIED", "Action 전달 결과를 확인하지 못해 제품 결과를 확정할 수 없습니다.", false, actions);
+
+        var checkpoints = observations.Where(item => item.EvidenceRole == ObservationEvidenceRole.Checkpoint).ToArray();
+        var requiredCheckpoints = checkpoints.Where(item => item.CheckpointRequired).ToArray();
+        var onlyOptionalCheckpoints = requiredCheckpoints.Length == 0 && checkpoints.Length > 0;
+        if (requiredCheckpoints.Length == 0 && checkpoints.Length == 0)
+        {
+            if (checkpoints.Length == 0 && actions.Length > 0
+                && expected.Type is RuleExpectedOutcomeType.ValidationRequired or RuleExpectedOutcomeType.FailureRequired)
+            {
+                return expected.Type == RuleExpectedOutcomeType.ValidationRequired
+                    ? EvaluateRequired(input, [], [ObservationKind.InputValidation, ObservationKind.GenericError], "EXPECTED_VALIDATION_OBSERVED", "입력값에 정의한 검증 반응과 일치합니다.")
+                    : EvaluateRequired(input, [], [ObservationKind.GenericError], "EXPECTED_FAILURE_OBSERVED", "지정한 실패 반응이 관찰되었습니다.");
+            }
+
+            if (checkpoints.Length == 0 && actions.Length > 0)
+                return Pending(input, policy.MissingEvidenceStatus, RuleOutcomeDisposition.Observed, "ACTION_DELIVERED", "Action 전달은 확인했지만 required Checkpoint가 없어 PASS로 판정하지 않습니다.", false, actions);
+
+            return Pending(input, policy.MissingEvidenceStatus, RuleOutcomeDisposition.Review, "REQUIRED_CHECKPOINT_MISSING", "시나리오에 required Checkpoint가 없어 PASS로 판정할 수 없습니다.", false, observations);
+        }
+
+        if (requiredCheckpoints.Any(item => !item.Executed))
+            return Pending(input, policy.NotExecutedStatus, RuleOutcomeDisposition.Review, "REQUIRED_CHECKPOINT_NOT_EXECUTED", "required Checkpoint 일부가 실행되지 않았습니다.", false, requiredCheckpoints);
+        if (requiredCheckpoints.Any(item => !item.EvidencePresent || item.Kind == ObservationKind.EvidenceMissing))
+            return Pending(input, policy.MissingEvidenceStatus, RuleOutcomeDisposition.Review, "REQUIRED_CHECKPOINT_EVIDENCE_MISSING", "required Checkpoint 일부에 제품 증거가 없습니다.", false, requiredCheckpoints);
+
+        var evidence = checkpoints.Where(item => item.Executed && item.EvidencePresent && item.Kind != ObservationKind.EvidenceMissing).ToArray();
+        if (onlyOptionalCheckpoints && evidence.Length == 0)
+            return Pending(input, policy.MissingEvidenceStatus, RuleOutcomeDisposition.Observed, "OPTIONAL_CHECKPOINT_NOT_OBSERVED", "optional Checkpoint가 실행되지 않았거나 증거가 없어 verdict에 반영하지 않습니다.", false, checkpoints);
 
         var productFailures = evidence.Where(item => item.Kind == ObservationKind.ProductFailure).ToArray();
         if (productFailures.Length > 0)
@@ -146,13 +197,10 @@ public sealed class ResultEvaluator
             if (expected.Type == RuleExpectedOutcomeType.FailureRequired
                 && HasMatchers(expected)
                 && productFailures.All(item => MatchesExpectedSignal(expected, item.Message, item.SourceCode)))
-                return Pass(input, "EXPECTED_FAILURE_OBSERVED", "지정한 실패 반응이 관찰되었습니다.", productFailures);
+                return PreventOptionalCheckpointPass(Pass(input, "EXPECTED_FAILURE_OBSERVED", "지정한 실패 반응이 관찰되었습니다.", productFailures), onlyOptionalCheckpoints);
 
             return Result(input, TestStatus.FAIL, RuleOutcomeDisposition.Defect, "PRODUCT_FAILURE_DETECTED", "시스템·통신·인증·프로그램 실패는 허용 규칙으로 제외하지 않습니다.", false, true, false, productFailures);
         }
-
-        if (executed.Any(item => !item.EvidencePresent || item.Kind == ObservationKind.EvidenceMissing))
-            return Pending(input, policy.MissingEvidenceStatus, RuleOutcomeDisposition.Review, "EVIDENCE_MISSING", "필수 실행 증거 일부가 없어 결과를 확정할 수 없습니다.", false, evidence);
 
         if (ContainsUnresolvedMarker(expected))
             return Pending(input, policy.UnresolvedExpectationStatus, RuleOutcomeDisposition.Review, "UNRESOLVED_EXPECTATION", "기대값이 TODO_INTERNAL 또는 UNRESOLVED 상태여서 성공을 확정하지 않습니다.", false, evidence);
@@ -163,7 +211,7 @@ public sealed class ResultEvaluator
         if (expected.Type == RuleExpectedOutcomeType.Unspecified)
             return Pending(input, policy.UnresolvedExpectationStatus, RuleOutcomeDisposition.Review, "OUTCOME_EXPECTATION_REQUIRED", "입력 의도가 없어 정상 검증과 결함을 자동 구분할 수 없습니다.", false, evidence);
 
-        return expected.Type switch
+        var evaluated = expected.Type switch
         {
             RuleExpectedOutcomeType.Success => EvaluateSuccess(input, evidence),
             RuleExpectedOutcomeType.ValidationAllowed => EvaluateAllowed(input, evidence, ObservationKind.InputValidation, "EXPECTED_VALIDATION_OBSERVED", "입력값에 정의한 검증 반응과 일치합니다."),
@@ -173,15 +221,19 @@ public sealed class ResultEvaluator
             RuleExpectedOutcomeType.WarningAllowed => EvaluateAllowed(input, evidence, ObservationKind.Warning, "EXPECTED_WARNING", "정의한 경고 반응과 일치합니다."),
             _ => Pending(input, policy.UnresolvedExpectationStatus, RuleOutcomeDisposition.Review, "OUTCOME_EXPECTATION_REQUIRED", "지원되지 않는 기대 결과 유형입니다.", false, evidence)
         };
+
+        return PreventOptionalCheckpointPass(evaluated, onlyOptionalCheckpoints);
     }
 
     /// <summary>여러 TestResult를 ERROR, FAIL, PENDING, PASS 순서로 요약한다.</summary>
     public TestResultSummary Summarize(IEnumerable<TestResult> results)
     {
         var rows = results?.ToArray() ?? [];
-        var status = rows.Any(item => item.Status == TestStatus.ERROR) ? TestStatus.ERROR
-            : rows.Any(item => item.Status == TestStatus.FAIL) ? TestStatus.FAIL
-            : rows.Any(item => item.Status == TestStatus.PENDING) || rows.Length == 0 ? TestStatus.PENDING
+        var verdictRows = VerdictRows(rows);
+        var hasRequiredCheckpoint = rows.Any(IsRequiredCheckpoint);
+        var status = verdictRows.Any(item => item.Status == TestStatus.ERROR) ? TestStatus.ERROR
+            : verdictRows.Any(item => item.Status == TestStatus.FAIL) ? TestStatus.FAIL
+            : !hasRequiredCheckpoint || verdictRows.Any(item => item.Status == TestStatus.PENDING) || verdictRows.Length == 0 ? TestStatus.PENDING
             : TestStatus.PASS;
         return new TestResultSummary
         {
@@ -200,7 +252,8 @@ public sealed class ResultEvaluator
         var rows = results?.ToArray() ?? [];
         if (rows.Any(item => item.Status == TestStatus.PASS && (!item.Executed || !item.EvidencePresent)))
             throw new InvalidDataException("PASS TestResult에는 executed=true와 evidencePresent=true가 필요합니다.");
-        var summary = Summarize(rows);
+        if (rows.Any(item => item.EvidenceRole == ObservationEvidenceRole.Action && item.Status == TestStatus.PASS))
+            throw new InvalidDataException("Action 전달 결과는 PASS TestResult가 될 수 없습니다.");
         if (rows.Length == 0)
             return new TestResult
             {
@@ -211,8 +264,30 @@ public sealed class ResultEvaluator
                 Reason = "완성된 하위 TestResult가 없어 전체 결과를 확정할 수 없습니다.",
                 RequiresReview = true
             };
+        var actionRows = rows.Where(item => item.EvidenceRole == ObservationEvidenceRole.Action).ToArray();
 
-        var primary = rows.First(item => item.Status == summary.Status);
+        var requiredCheckpoints = rows.Where(IsRequiredCheckpoint).ToArray();
+        var summary = Summarize(rows);
+        var verdictRows = VerdictRows(rows);
+        if (requiredCheckpoints.Length == 0 && summary.Status == TestStatus.PENDING)
+            return new TestResult
+            {
+                CaseId = caseId,
+                Status = TestStatus.PENDING,
+                Disposition = RuleOutcomeDisposition.Review,
+                Code = "REQUIRED_CHECKPOINT_MISSING",
+                Reason = "PASS에 필요한 required Checkpoint TestResult가 없습니다.",
+                Executed = false,
+                EvidencePresent = false,
+                RequiresReview = true,
+                EvidenceRole = ObservationEvidenceRole.Checkpoint,
+                CheckpointRequired = true,
+                ActionSent = actionRows.Length > 0 && actionRows.All(item => item.ActionSent),
+                ActionVerified = actionRows.Length > 0 && actionRows.All(item => item.ActionVerified),
+                ObservationIds = rows.SelectMany(item => item.ObservationIds).Distinct(StringComparer.OrdinalIgnoreCase).ToArray()
+            };
+
+        var primary = verdictRows.First(item => item.Status == summary.Status);
         return new TestResult
         {
             CaseId = caseId,
@@ -220,22 +295,56 @@ public sealed class ResultEvaluator
             Disposition = summary.Status switch
             {
                 TestStatus.PASS => RuleOutcomeDisposition.Expected,
-                TestStatus.FAIL when rows.Any(item => item.Status == TestStatus.FAIL && item.ProductDefectDetected) => RuleOutcomeDisposition.Defect,
+                TestStatus.FAIL when verdictRows.Any(item => item.Status == TestStatus.FAIL && item.ProductDefectDetected) => RuleOutcomeDisposition.Defect,
                 TestStatus.FAIL => RuleOutcomeDisposition.Unexpected,
                 TestStatus.ERROR => RuleOutcomeDisposition.Unexpected,
-                _ when rows.Where(item => item.Status == TestStatus.PENDING).All(item => item.Disposition == RuleOutcomeDisposition.Observed) => RuleOutcomeDisposition.Observed,
+                _ when verdictRows.Where(item => item.Status == TestStatus.PENDING).All(item => item.Disposition == RuleOutcomeDisposition.Observed) => RuleOutcomeDisposition.Observed,
                 _ => RuleOutcomeDisposition.Review
             },
-            Code = rows.Length == 1 ? primary.Code : $"AGGREGATE_{summary.Status}",
-            Reason = rows.Length == 1
+            Code = verdictRows.Length == 1 && rows.Length == 1 ? primary.Code : $"AGGREGATE_{summary.Status}",
+            Reason = verdictRows.Length == 1 && rows.Length == 1
                 ? primary.Reason
                 : $"하위 TestResult {summary.Total}개: PASS={summary.Pass}, FAIL={summary.Fail}, ERROR={summary.Error}, PENDING={summary.Pending}",
-            Executed = rows.All(item => item.Executed),
-            EvidencePresent = rows.All(item => item.EvidencePresent),
-            ExpectationSatisfied = rows.All(item => item.ExpectationSatisfied),
-            ProductDefectDetected = rows.Any(item => item.ProductDefectDetected),
-            RequiresReview = rows.Any(item => item.RequiresReview),
+            Executed = verdictRows.Length > 0 && verdictRows.All(item => item.Executed),
+            EvidencePresent = verdictRows.Length > 0 && verdictRows.All(item => item.EvidencePresent),
+            ExpectationSatisfied = summary.Status == TestStatus.PASS,
+            ProductDefectDetected = verdictRows.Any(item => item.ProductDefectDetected),
+            RequiresReview = summary.Status == TestStatus.PENDING || verdictRows.Any(item => item.RequiresReview),
+            EvidenceRole = ObservationEvidenceRole.Checkpoint,
+            CheckpointRequired = true,
+            ActionSent = actionRows.Length > 0 && actionRows.All(item => item.ActionSent),
+            ActionVerified = actionRows.Length > 0 && actionRows.All(item => item.ActionVerified),
             ObservationIds = rows.SelectMany(item => item.ObservationIds).Distinct(StringComparer.OrdinalIgnoreCase).ToArray()
+        };
+    }
+
+    private static bool IsRequiredCheckpoint(TestResult item) =>
+        item.EvidenceRole == ObservationEvidenceRole.Checkpoint && item.CheckpointRequired;
+
+    private static bool IsSuccessfulActionDelivery(TestResult item) =>
+        item.EvidenceRole == ObservationEvidenceRole.Action
+        && item.Status == TestStatus.PENDING
+        && item.ActionSent
+        && item.ActionVerified;
+
+    private static TestResult[] VerdictRows(TestResult[] rows) =>
+        rows.Where(item => !IsSuccessfulActionDelivery(item))
+            .Where(item => item.EvidenceRole != ObservationEvidenceRole.Checkpoint
+                || item.CheckpointRequired
+                || item.Status is TestStatus.FAIL or TestStatus.ERROR)
+            .ToArray();
+
+    private static TestResult PreventOptionalCheckpointPass(TestResult result, bool onlyOptionalCheckpoints)
+    {
+        if (!onlyOptionalCheckpoints || result.Status != TestStatus.PASS)
+            return result;
+
+        return result with
+        {
+            Status = TestStatus.PENDING,
+            Disposition = RuleOutcomeDisposition.Observed,
+            Code = "OPTIONAL_CHECKPOINT_OBSERVED",
+            Reason = "optional Checkpoint는 충족되었지만 required Checkpoint를 대신해 PASS를 만들지 않습니다."
         };
     }
 
@@ -325,7 +434,11 @@ public sealed class ResultEvaluator
         bool expectationSatisfied,
         bool productDefect,
         bool requiresReview,
-        params Observation[] evidence) => new()
+        params Observation[] evidence)
+    {
+        var actionEvidence = evidence.Where(item => item.EvidenceRole == ObservationEvidenceRole.Action).ToArray();
+        var checkpointEvidence = evidence.Where(item => item.EvidenceRole == ObservationEvidenceRole.Checkpoint).ToArray();
+        return new TestResult
         {
             CaseId = input.CaseId,
             Status = status,
@@ -333,10 +446,19 @@ public sealed class ResultEvaluator
             Code = code,
             Reason = reason,
             Executed = input.Executed,
-            EvidencePresent = evidence.Length > 0,
+            EvidencePresent = evidence.Any(item => item.Executed && item.EvidencePresent && item.Kind != ObservationKind.EvidenceMissing)
+                && (input.Executed || status == TestStatus.ERROR),
             ExpectationSatisfied = expectationSatisfied,
             ProductDefectDetected = productDefect,
             RequiresReview = requiresReview,
+            EvidenceRole = checkpointEvidence.Length > 0
+                ? ObservationEvidenceRole.Checkpoint
+                : actionEvidence.Length > 0 ? ObservationEvidenceRole.Action : ObservationEvidenceRole.Unspecified,
+            CheckpointRequired = checkpointEvidence.Any(item => item.CheckpointRequired),
+            ActionSent = actionEvidence.Length > 0 && actionEvidence.All(item => item.Executed),
+            ActionVerified = actionEvidence.Length > 0
+                && actionEvidence.All(item => item.Executed && item.EvidencePresent && item.Kind != ObservationKind.EvidenceMissing),
             ObservationIds = evidence.Select(item => item.ObservationId).Where(id => !string.IsNullOrWhiteSpace(id)).Distinct(StringComparer.OrdinalIgnoreCase).ToArray()
         };
+    }
 }

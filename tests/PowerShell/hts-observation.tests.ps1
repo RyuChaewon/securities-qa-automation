@@ -19,11 +19,11 @@ $fakeChildren=@(
 )
 $dependencies=[pscustomobject]@{
     CreateSignalEvaluationCase={
-        param([string]$CaseId,[string]$EventType,[string]$Text,[string]$SourceCode,[string]$Source,$ExpectedOutcome)
+        param([string]$CaseId,[string]$EventType,[string]$Text,[string]$SourceCode,[string]$Source,$ExpectedOutcome,[string]$EvidenceRole,[bool]$CheckpointRequired)
         [pscustomobject]@{
             caseId=$CaseId;executed=$true
             expectedResult=[pscustomobject]@{type=[string]$ExpectedOutcome.type;expectationId=[string]$ExpectedOutcome.expectationId}
-            observations=@([pscustomobject]@{kind=$EventType;message=$Text;sourceCode=$SourceCode;source=$Source;executed=$true;evidencePresent=$true})
+            observations=@([pscustomobject]@{kind=$EventType;message=$Text;sourceCode=$SourceCode;source=$Source;executed=$true;evidencePresent=$true;evidenceRole=$EvidenceRole;checkpointRequired=$CheckpointRequired})
         }
     }
     GetNow={ [datetime]'2026-08-20T12:00:00Z' }
@@ -64,6 +64,8 @@ Assert-Equal 'InputValidation' $validation.eventType 'input validation language 
 $generic=New-HtsSignalObservation -Context $context -Text '기타 오류' -MapOracle $null -ExpectedOutcome $expected -ErrorRegex ([regex]'기타 오류')
 Assert-Equal 'GenericError' $generic.eventType 'configured generic error remains an unjudged raw event'
 Assert-Equal 'signal-000004' $generic.evaluationCase.caseId 'observation ids use the explicit monotonic context sequence'
+Assert-Equal 'Checkpoint' $generic.evaluationCase.observations[0].evidenceRole 'product signal is explicitly checkpoint evidence'
+Assert-True ([bool]$generic.evaluationCase.observations[0].checkpointRequired) 'product signal checkpoint is required by default'
 
 $results=New-Object Collections.Generic.List[object]
 $groups=@{}

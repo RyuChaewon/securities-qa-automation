@@ -67,6 +67,34 @@
 
 `ValidationRequired`와 허용 계약의 validation 경로는 `messagePatterns` 또는 `errorCodes`가 반드시 있어야 하며, 수집된 관련 업무 이벤트가 모두 그중 하나와 일치해야 기대 반응으로 인정한다. 일부 이벤트만 일치하거나 matcher가 없거나 다른 이벤트가 불일치하면 PASS로 승격하지 않는다. 시스템 실패는 `ValidationAllowed`, `NoDataAllowed`, `WarningAllowed`, `ObservationOnly`로 숨길 수 없다.
 
+## Action과 Checkpoint 증거 경계
+
+Action 전달과 제품 결과 확인은 서로 다른 증거 역할이다.
+
+| 역할 | 단계 | verdict 의미 |
+|---|---|---|
+| `Action` | `Focus`, `Input`, `Select`, `Toggle`, `Click`, `DoubleClick`, `Query`, `Restore` | 제품에 동작이나 요청을 전달했다는 증거이며 자체로 PASS를 만들지 않음 |
+| `Checkpoint` | `AssertValue`, `AssertState`, `AssertMessage`, `AssertFocus`, `AssertPopup`, `AssertGrid`, `AssertLogDelta`, `AssertTransmissionCount`, `AssertOrderReceipt`와 기존 assert 단계 | 제품의 실제 반응을 기대 계약과 비교하는 verdict 증거 |
+
+Action이 성공하면 `actionSent=true`이고 Action 자체의 readback이나 상태 확인까지 성공한 경우만 `actionVerified=true`다. 두 값은 action delivery 품질을 나타낼 뿐 제품 업무 결과의 성공을 뜻하지 않는다.
+Checkpoint는 `checkpointRequired`가 생략되면 기존 schema 호환을 위해 required로 해석한다.
+
+`PASS`에는 시나리오에 정의된 required Checkpoint가 1개 이상 있어야 하고, 모두 실행되어 증거가 존재하며 기대 계약을 충족해야 한다. required Checkpoint가 없거나 일부 미실행·무증거이면 `PENDING`이고, 실행한 required Checkpoint가 기대와 다르면 `FAIL` 또는 인프라 계약에 따른 `ERROR`다.
+
+optional Checkpoint의 충족·미실행·무증거는 단독 PASS를 만들지 않고 required Checkpoint가 충족된 verdict를 차단하지 않는다. 다만 실제 실행되어 제품 실패나 기대 불일치를 관찰한 optional Checkpoint는 `FAIL` 또는 `ERROR`로 최종 verdict를 차단한다.
+
+`SetText`의 전달·검증 계약은 다음과 같다.
+
+| 결과 | `actionSent` | `actionVerified` |
+|---|---:|---:|
+| 일반 필드 exact readback 일치 | `true` | `true` |
+| 일반 필드 mismatch | `true` | `false` |
+| 빈 값 또는 readback 불가 | `true` | `false` |
+| Action 자체 실패 | `false` | `false` |
+| 비밀번호·민감 입력 전달 | `true` | `false` |
+
+민감 입력은 응답, 로그, snapshot과 screenshot metadata에 평문을 저장하지 않는다. 마스킹 길이, 컨트롤 상태, 포커스 이동, 후속 메시지 같은 승인된 대체 Checkpoint가 별도로 없으면 검증 완료로 승격하지 않는다.
+
 ## 최종 판정표
 
 | 관찰 결과 | 입력 계약 | 판정 | 결과 코드 |
@@ -78,14 +106,14 @@
 | 정상값이 입력 검증·경고·자료 없음으로 거부됨 | `Success` | `FAIL` | `UNEXPECTED_APPLICATION_EVENT` |
 | 지정 유형이나 문구와 다른 반응 | 명시 계약 | `FAIL` | `UNEXPECTED_APPLICATION_EVENT` |
 | 입력 검증·경고·자료 없음·일반 오류 | `Unspecified` | `PENDING` | `OUTCOME_EXPECTATION_REQUIRED` |
-| 컨트롤 조작·조회·선택 검증 미완료 | 모든 계약 | `PENDING` | 기존 자동화 미완료 코드 |
+| Action만 성공하고 required Checkpoint 없음 | 모든 계약 | `PENDING` | `ACTION_DELIVERED` / `REQUIRED_CHECKPOINT_MISSING` |
 | 물리계획 고정 후보 재식별 실패·모호·identity 변경 | 승인된 물리 시나리오 | `ERROR` | `CONTROL_STALE` / `CONTROL_AMBIGUOUS` / `PHYSICAL_BINDING_DRIFT` |
 | 체크 상태를 읽어 검증할 수 없음 | 승인된 물리 시나리오 | `ERROR` | `CHECK_STATE_UNVERIFIABLE` |
 | 접속 해제·재접속 선택이 필요한 연결 장애 | 모든 계약 | `ERROR` | `HTS_CONNECTION_LOST` |
 | `queryShouldComplete: true`이나 조회 미실행 | 모든 계약 | `PENDING` | `QUERY_EXPECTATION_NOT_EXECUTED` |
 | 실행기 내부 예외 | 모든 계약 | `ERROR` | `EXECUTOR_EXCEPTION` |
-| 오류 신호 없음과 필수 조작 완료 | `Success` | `PASS` | `EXPECTED_SUCCESS` |
-| 명시적인 성공 Observation | 허용 계약 | `PASS` | `EXPECTED_SUCCESS` |
+| required Checkpoint가 모두 실행되고 성공 증거와 일치 | `Success` | `PASS` | `EXPECTED_SUCCESS` |
+| required Checkpoint의 명시적인 성공 증거 | 허용 계약 | `PASS` | `EXPECTED_SUCCESS` |
 | Info/관찰 증거만 존재 | 허용 계약 | `PENDING` | `EXPECTED_SUCCESS_OR_ALLOWED_EVIDENCE_REQUIRED` |
 | 허용 반응이 있으나 matcher 없음 | 허용 계약 | `PENDING` | `EXPECTED_MATCHER_REQUIRED` |
 | 실제 조작 미실행 | 모든 계약 | `PENDING` | `NOT_EXECUTED` |
@@ -93,7 +121,7 @@
 | 관찰 전용 결과 | `ObservationOnly` | `PENDING` | `OBSERVATION_RECORDED` |
 | 내부 미정 기대값 | `TODO_INTERNAL` / `UNRESOLVED` | `PENDING` | `UNRESOLVED_EXPECTATION` |
 
-`PASS`는 실행한 조작과 정의된 반응 계약의 충족만 뜻한다. 조회 결과 금액·수량 등 업무 값의 정합성은 별도 오라클 없이는 보증하지 않는다.
+`PASS`는 required Checkpoint의 제품 증거가 정의된 반응 계약을 충족했다는 뜻이다. Action 전달 성공만으로는 PASS가 아니며, 조회 결과 금액·수량 등 업무 값의 정합성은 해당 값을 확인하는 별도 Checkpoint 오라클 없이는 보증하지 않는다.
 
 ## 호환 필드와 canonical 필드
 
@@ -106,7 +134,9 @@
 | `test-results.json` | 전체 하위 결과, `summary`, `overallResult` |
 | `actualScenarioActionsExecuted` | 실제 FlaUI 동작 또는 관찰이 있었는지 나타내며 예외가 발생해도 앞선 실행 기록을 보존 |
 
-액션 배열의 `status`는 클릭·복원·수집 같은 원시 실행 단계 상태다. 테스트 판정 계약은 `testResult.status`다.
+액션 배열의 `status`는 클릭·복원·수집 같은 원시 실행 단계 상태다. 테스트 판정 계약은 `testResult.status`다. reporter는 canonical verdict를 재판정하지 않는다.
+
+`test-results.json` schema version은 `1.0`을 유지하고 `evidenceRole`, `checkpointRequired`, `actionSent`, `actionVerified`를 additive 필드로 추가한다. 기존 `Observation`/`TestResult` 소비자가 필드를 보내지 않으면 과거 의미와 동일하게 required Checkpoint로 읽고, 기존 결과의 action flag 기본값은 `false`다. 신규 실행 경로는 Action과 Checkpoint 역할을 명시하며, 명시적인 `Unspecified`는 `PENDING/EVIDENCE_ROLE_REQUIRED`로 차단한다.
 
 ## 기존 운영 판정과 변경점
 

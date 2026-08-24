@@ -38,6 +38,12 @@ try {
             [pscustomobject]@{caseId='infrastructure';executed=$false;expectedResult=@{type='Success';messagePatterns=@();errorCodes=@()};observations=@(@{observationId='infra-1';kind='InfrastructureError';executed=$true;evidencePresent=$true;message='process start failed';sourceCode='PROCESS_START_FAILED'})}
         )
     }
+    foreach ($evaluationCase in @($document.cases)) {
+        foreach ($observation in @($evaluationCase.observations)) {
+            $observation.evidenceRole = 'Checkpoint'
+            $observation.checkpointRequired = $true
+        }
+    }
     ConvertTo-Json -InputObject $document -Depth 20 | Set-Content -LiteralPath $observationsPath -Encoding UTF8
 
     & dotnet run --project $cliProject -c Release --no-build -- evaluate-results --test-pack $testPackPath --observations $observationsPath --output $directOutputPath | Out-Null

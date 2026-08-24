@@ -108,6 +108,11 @@ $notExecutedIndex = $evaluatorSource.IndexOf('if (!input.Executed)', [StringComp
 $passSafetyIndex = $evaluatorSource.IndexOf('item.Status == TestStatus.PASS && (!item.Executed || !item.EvidencePresent)', [StringComparison]::Ordinal)
 Assert-RefactoringInvariant ($notExecutedIndex -ge 0) 'ResultEvaluator must explicitly guard unexecuted cases.'
 Assert-RefactoringInvariant ($passSafetyIndex -gt $notExecutedIndex) 'ResultEvaluator must reject unsafe completed PASS results.'
+$scenarioSource = Get-Content -LiteralPath (Join-Path $root 'src\HtsQa.Core\Scenarios\ScenarioPlanning.cs') -Raw -Encoding UTF8
+Assert-RefactoringInvariant ($scenarioSource -match 'ProvidesExecutableEvidence\(string action\) => IsCheckpoint\(action\)') 'Scenario action delivery must not provide executable PASS evidence.'
+Assert-RefactoringInvariant ($scenarioSource -match 'hasRequiredCheckpoint') 'Physical plan must require a Checkpoint before execution can be READY.'
+Assert-RefactoringInvariant ($evaluatorSource -match 'item\.EvidenceRole == ObservationEvidenceRole\.Action && item\.Status == TestStatus\.PASS') 'ResultEvaluator must reject externally completed Action PASS results.'
+Assert-RefactoringInvariant ($evaluatorSource -match 'REQUIRED_CHECKPOINT_MISSING') 'ResultEvaluator must fail closed when a required Checkpoint is absent.'
 
 $reportLoader = Get-Content -LiteralPath (Join-Path $root 'tools\reporting\rule-results-loader.mjs') -Raw -Encoding UTF8
 $reportView = Get-Content -LiteralPath (Join-Path $root 'tools\reporting\rule-results-view-model.mjs') -Raw -Encoding UTF8

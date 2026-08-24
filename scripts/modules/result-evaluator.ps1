@@ -32,7 +32,9 @@ function Invoke-HtsRawObservationEvaluation {
         $ExpectedOutcome,
         [bool]$Executed = $true,
         [bool]$EvidencePresent = $true,
-        [string]$Prefix = 'control'
+        [string]$Prefix = 'control',
+        [ValidateSet('Action','Checkpoint')][string]$EvidenceRole = 'Checkpoint',
+        [bool]$CheckpointRequired = $true
     )
 
     $evaluationSequence = Get-HtsNextObservationSequence -Context $Context.ObservationContext
@@ -47,7 +49,9 @@ function Invoke-HtsRawObservationEvaluation {
         -Source 'PowerShell raw observation' `
         -Executed $Executed `
         -EvidencePresent $EvidencePresent `
-        -ExpectedOutcome $ExpectedOutcome
+        -ExpectedOutcome $ExpectedOutcome `
+        -EvidenceRole $EvidenceRole `
+        -CheckpointRequired $CheckpointRequired
     if ($Context.ObservationContext.CurrentResultEvaluationCases) {
         $Context.ObservationContext.CurrentResultEvaluationCases.Add($evaluation.evaluationCase)
     }
@@ -101,7 +105,9 @@ function New-RuleSignalEvaluationCase {
         [bool]$Executed = $true,
         [bool]$EvidencePresent = $true,
         [bool]$ObservationExecuted = $true,
-        $ExpectedOutcome
+        $ExpectedOutcome,
+        [ValidateSet('Action','Checkpoint')][string]$EvidenceRole = 'Checkpoint',
+        [bool]$CheckpointRequired = $true
     )
 
     $expectedType = if ($ExpectedOutcome -and [string]$ExpectedOutcome.type) { [string]$ExpectedOutcome.type } else { 'Unspecified' }
@@ -120,6 +126,8 @@ function New-RuleSignalEvaluationCase {
             kind = $EventType
             executed = $ObservationExecuted
             evidencePresent = $EvidencePresent
+            evidenceRole = $EvidenceRole
+            checkpointRequired = $CheckpointRequired
             message = $Text
             sourceCode = $SourceCode
             source = $Source
@@ -142,10 +150,12 @@ function Invoke-RuleSignalEvaluation {
         [bool]$Executed = $true,
         [bool]$EvidencePresent = $true,
         [bool]$ObservationExecuted = $true,
-        $ExpectedOutcome
+        $ExpectedOutcome,
+        [ValidateSet('Action','Checkpoint')][string]$EvidenceRole = 'Checkpoint',
+        [bool]$CheckpointRequired = $true
     )
 
-    $evaluationCase = New-RuleSignalEvaluationCase -CaseId $CaseId -EventType $EventType -Text $Text -SourceCode $SourceCode -Source $Source -Executed $Executed -EvidencePresent $EvidencePresent -ObservationExecuted $ObservationExecuted -ExpectedOutcome $ExpectedOutcome
+    $evaluationCase = New-RuleSignalEvaluationCase -CaseId $CaseId -EventType $EventType -Text $Text -SourceCode $SourceCode -Source $Source -Executed $Executed -EvidencePresent $EvidencePresent -ObservationExecuted $ObservationExecuted -ExpectedOutcome $ExpectedOutcome -EvidenceRole $EvidenceRole -CheckpointRequired $CheckpointRequired
     $document = [pscustomobject]@{ schemaVersion = '1.0'; testPackId = [IO.Path]::GetFileNameWithoutExtension($TestPackPath); aggregateId = $CaseId; cases = @($evaluationCase) }
     $output = Invoke-RuleResultEvaluation -CliProject $CliProject -TestPackPath $TestPackPath -EvaluationDocument $document -WorkingDirectory $WorkingDirectory -InvocationId $CaseId
     [pscustomobject]@{ evaluationCase = $evaluationCase; testResult = @($output.results)[0]; output = $output }

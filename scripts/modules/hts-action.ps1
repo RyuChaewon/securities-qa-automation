@@ -80,11 +80,12 @@ function Invoke-HtsFlaUiControlAction {
         [string]$Value = '',
         [Nullable[int]]$Index = $null,
         [Nullable[bool]]$Checked = $null,
-        [string]$Key = ''
+        [string]$Key = '',
+        [switch]$Sensitive
     )
 
     if (-not $Window -or [string]$Window.className -eq 'ConfiguredVisualHotspot') {
-        return [pscustomobject]@{success=$false;verified=$false;fallbackRequired=$true;errorCode='VISUAL_HOTSPOT_REQUIRES_COORDINATE';message='시각 핫스팟은 UIA 요소가 아니므로 좌표 fallback이 필요합니다.';engine='FlaUI.UIA3'}
+        return [pscustomobject]@{success=$false;verified=$false;actionSent=$false;actionVerified=$false;fallbackRequired=$true;errorCode='VISUAL_HOTSPOT_REQUIRES_COORDINATE';message='시각 핫스팟은 UIA 요소가 아니므로 좌표 fallback이 필요합니다.';engine='FlaUI.UIA3'}
     }
 
     $centerX = [int](($Window.rect.left+$Window.rect.right)/2)
@@ -94,7 +95,7 @@ function Invoke-HtsFlaUiControlAction {
         $root = Invoke-HtsActionDependency -Context $Context -Name 'GetActiveInputSurface'
         $request = [ordered]@{
             requestId=[Guid]::NewGuid().ToString('N');operation='action';rootHwnd=[Int64]$root.hwnd
-            selector=New-HtsFlaUiSelector $Window;action=$Action;value=$Value;key=$Key
+            selector=New-HtsFlaUiSelector $Window;action=$Action;value=$Value;key=$Key;sensitive=[bool]$Sensitive
         }
         if ($null -ne $Index) { $request.index=[int]$Index }
         if ($null -ne $Checked) { $request.checked=[bool]$Checked }
@@ -113,7 +114,7 @@ function Invoke-HtsFlaUiControlAction {
     } catch {
         Add-HtsActionFallbackReason -Context $Context -Reason "${Action}:UIA3_BRIDGE_EXCEPTION"
         [void](Invoke-HtsActionDependency -Context $Context -Name 'WriteInputAudit' -Arguments @('FlaUIAction','FALLBACK',$centerX,$centerY,$_.Exception.Message))
-        [pscustomobject]@{success=$false;verified=$false;fallbackRequired=$true;errorCode='UIA3_BRIDGE_EXCEPTION';message=$_.Exception.Message;engine='FlaUI.UIA3'}
+        [pscustomobject]@{success=$false;verified=$false;actionSent=$false;actionVerified=$false;fallbackRequired=$true;errorCode='UIA3_BRIDGE_EXCEPTION';message=$_.Exception.Message;engine='FlaUI.UIA3'}
     }
 }
 
@@ -151,8 +152,9 @@ function Invoke-FlaUiControlAction(
     [string]$Value = '',
     [Nullable[int]]$Index = $null,
     [Nullable[bool]]$Checked = $null,
-    [string]$Key = '') {
-    Invoke-HtsFlaUiControlAction -Context $ActionContext -Window $Window -Action $Action -Value $Value -Index $Index -Checked $Checked -Key $Key
+    [string]$Key = '',
+    [switch]$Sensitive) {
+    Invoke-HtsFlaUiControlAction -Context $ActionContext -Window $Window -Action $Action -Value $Value -Index $Index -Checked $Checked -Key $Key -Sensitive:$Sensitive
 }
 
 # 키보드나 마우스 입력 전에 허용된 HTS 프로세스가 전경인지 검증한다.
@@ -385,7 +387,7 @@ function Set-AutomationText($ActionContext, $Window, [string]$Value, [switch]$Se
     $scopeY=[int](($scopeWindow.rect.top+$scopeWindow.rect.bottom)/2)
     Assert-HtsSafetyClickScope -Context $ActionContext.SafetyContext -Window $scopeWindow -X $scopeX -Y $scopeY
     if (-not ([Int64]$Window.hwnd -eq 0 -and $Window.className -eq "ConfiguredVisualHotspot")) {
-        $flaUiResult = Invoke-FlaUiControlAction $ActionContext $Window 'setText' -Value $Value
+        $flaUiResult = Invoke-FlaUiControlAction $ActionContext $Window 'setText' -Value $Value -Sensitive:$Sensitive
         if ([bool]$flaUiResult.success -and [bool]$flaUiResult.verified) {
             $ActionContext.RuntimeContext.LastTextAutomationEngine = 'FlaUI.UIA3'
             return $true
@@ -402,7 +404,7 @@ function Set-AutomationText($ActionContext, $Window, [string]$Value, [switch]$Se
         Assert-HtsSafetyKeyboardScope -Context $ActionContext.SafetyContext
         [Windows.Forms.SendKeys]::SendWait($Value)
         Start-Sleep -Milliseconds 200
-        return $true
+        return $false
     }
     [void][TargetRuleNative]::SendMessage([IntPtr][Int64]$Window.hwnd, 0x000C, [IntPtr]::Zero, $Value)
     Start-Sleep -Milliseconds 150
@@ -446,7 +448,7 @@ function Set-AutomationText($ActionContext, $Window, [string]$Value, [switch]$Se
         }
         $length = [TargetRuleNative]::SendMessage([IntPtr][Int64]$Window.hwnd, 0x000E, [IntPtr]::Zero, [IntPtr]::Zero).ToInt64()
     }
-    return $(if ($Sensitive) { $length -gt 0 -or $sentByVirtualKeys } elseif ([string]$current.rawTitle -eq $Value) { $true } else { $sentByVirtualKeys })
+    return $(if ($Sensitive) { $false } else { [string]$current.rawTitle -eq $Value })
 }
 
 # 대화상자가 승인된 상태 변경 확인 창인지 보수적으로 식별한다.
