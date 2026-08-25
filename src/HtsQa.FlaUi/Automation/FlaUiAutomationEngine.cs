@@ -20,7 +20,7 @@ namespace HtsQa.FlaUi;
 /// FlaUI UIA3를 유일한 의미 기반 탐색·조작 엔진으로 제공한다.
 /// 엔진은 요청마다 HWND에서 루트를 다시 얻어 HTS의 동적 화면 재생성에 대응한다.
 /// </summary>
-public sealed class FlaUiAutomationEngine : IDisposable
+public sealed partial class FlaUiAutomationEngine : IDisposable
 {
     public const string EngineName = "FlaUI.UIA3";
     public const string EngineVersion = "5.0.0";
@@ -46,6 +46,7 @@ public sealed class FlaUiAutomationEngine : IDisposable
             "capturecandidate" => CaptureCandidate(request),
             "controlrepositorypreflight" => ObserveControlRepositoryPoint(request),
             "discover" => Discover(request),
+            "discoverlayout" => DiscoverLayout(request),
             "action" => Act(request),
             _ => BridgeResponse.Failure(request, "UNKNOWN_OPERATION", $"지원하지 않는 연산입니다: {request.Operation}")
         };

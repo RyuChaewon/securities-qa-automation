@@ -57,6 +57,17 @@ public sealed class BridgeRequest
     /// <summary>controlRepositoryPreflight에서 현재 client rect에 다시 적용할 승인 normalized 좌표다.</summary>
     public double? RelativeX { get; set; }
     public double? RelativeY { get; set; }
+    public int TimeoutMs { get; set; } = 10000;
+    public int MaxDepth { get; set; } = 16;
+    public int MaxElements { get; set; } = 5000;
+    public bool IncludeCurrentValues { get; set; }
+    public bool IncludeValueMetadata { get; set; } = true;
+    public bool IncludeOffscreen { get; set; }
+    public bool IncludeInvisible { get; set; }
+    public bool IncludeContainers { get; set; } = true;
+    public IReadOnlyList<LayoutRegionHint> RegionHints { get; set; } = Array.Empty<LayoutRegionHint>();
+    public IReadOnlyList<SensitiveControlHint> SensitiveControlHints { get; set; } = Array.Empty<SensitiveControlHint>();
+
 }
 
 /// <summary>
@@ -221,6 +232,7 @@ public sealed class BridgeResponse
     public StateWindowSnapshot? StateObservation { get; set; }
     public ControlCaptureSnapshot? CaptureCandidate { get; set; }
     public ControlRepositoryPreflightSnapshot? ControlRepositoryPreflight { get; set; }
+    public LayoutDiscoverySnapshot? LayoutDiscovery { get; set; }
 
     /// <summary>프로토콜 수준 예외를 일관된 실패 응답으로 변환한다.</summary>
     public static BridgeResponse Failure(BridgeRequest request, string code, string message, bool fallback = false) => new()

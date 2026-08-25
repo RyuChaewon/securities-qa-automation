@@ -108,6 +108,65 @@ public sealed class FlaUiAutomationEngineTests : IDisposable
         Assert.NotEqual(default, observation.ObservedAt);
     }
 
+    [Fact]
+    public void DiscoverLayout_Returns_Redacted_Relationships_And_No_Verdict_Or_Action()
+    {
+        using var engine = new FlaUiAutomationEngine();
+        var request = Request("discoverLayout");
+        request.RegionHints = new[] { new LayoutRegionHint { Region = "WholeFixture", Left = 0, Top = 0, Right = 1, Bottom = 1, Priority = 100 } };
+        request.SensitiveControlHints = new[] { new SensitiveControlHint { AutomationId = "accountText", SensitiveKind = "Account" } };
+        var response = engine.Execute(request);
+        Assert.True(response.Success, response.Message);
+        Assert.False(response.ActionSent);
+        Assert.False(response.ActionVerified);
+        var layout = Assert.IsType<LayoutDiscoverySnapshot>(response.LayoutDiscovery);
+        Assert.Equal("Discovery", layout.ArtifactRole);
+        Assert.False(layout.VerdictEligible);
+        Assert.False(layout.TestExecution);
+        Assert.False(layout.ResultEvaluatorInvoked);
+        Assert.Null(layout.CanonicalVerdict);
+        Assert.Equal("NotExecuted", layout.ExecutionStatus);
+        Assert.Equal(0, layout.ActionSentCount);
+        Assert.Equal(0, layout.TransactionalActionCount);
+        Assert.NotEmpty(layout.Elements);
+        Assert.All(layout.Elements, element => Assert.Equal("WholeFixture", element.SpatialRegion));
+        Assert.Contains(layout.Elements, element => element.Depth > 0 && element.AncestorElementIds.Count > 0);
+        Assert.All(layout.Elements.Where(element => element.ParentElementId.Length > 0), element => Assert.Contains(layout.Elements, parent => parent.ElementId == element.ParentElementId));
+        var account = Assert.Single(layout.Elements, element => element.AutomationId == "accountText");
+        Assert.Equal("Account", account.SensitiveKind);
+        Assert.True(account.ValueMasked);
+        Assert.Null(account.ObservedValue);
+        var password = Assert.Single(layout.Elements, element => element.AutomationId == "passwordText");
+        Assert.True(password.IsPassword);
+        Assert.True(password.ValueMasked);
+        Assert.Null(password.ObservedValue);
+        Assert.DoesNotContain("fixture-password", JsonSerializer.Serialize(response), StringComparison.Ordinal);
+    }
+
+    [Fact]
+    public void DiscoverLayout_Stops_At_Bounded_Element_Limit()
+    {
+        using var engine = new FlaUiAutomationEngine();
+        var request = Request("discoverLayout");
+        request.MaxElements = 2;
+        var response = engine.Execute(request);
+        Assert.True(response.Success, response.Message);
+        var layout = Assert.IsType<LayoutDiscoverySnapshot>(response.LayoutDiscovery);
+        Assert.True(layout.Truncated);
+        Assert.Equal("MaxElements", layout.TruncationReason);
+        Assert.Equal(2, layout.VisitedCount);
+        Assert.True(layout.IncludedCount <= 2);
+        Assert.Equal(0, layout.ActionSentCount);
+
+        var depthRequest = Request("discoverLayout");
+        depthRequest.MaxDepth = 0;
+        var depthResponse = engine.Execute(depthRequest);
+        Assert.True(depthResponse.Success, depthResponse.Message);
+        var depthLayout = Assert.IsType<LayoutDiscoverySnapshot>(depthResponse.LayoutDiscovery);
+        Assert.True(depthLayout.Truncated);
+        Assert.Equal("MaxDepth", depthLayout.TruncationReason);
+    }
+
     /// <summary>테스트용 화면 HWND를 사용하는 공통 요청을 만든다.</summary>
     private BridgeRequest Request(string operation) => new()
     {

@@ -51,6 +51,7 @@
 | `HtsQa.FlaUi` | UIA3 발견·조작 결과 NDJSON | `run-target-rule-suite.ps1` |
 | `HtsQa.Core` | 데이터 검증, 조합·CaseId·TestPack, MAP·설치 해석, 판정 정책 | `HtsQa.Cli`, 단위 테스트 |
 | `targets` | 대상별 화면·control·업무 의미와 import 도구 | generic Target Adapter 계약 |
+| `targets/*/scripts/inspect-order-screen.ps1` | target별 정확한 HWND 선택과 read-only `discoverLayout` | 로컬 Discovery 산출물; Scenario/TestResult와 분리 |
 | `tools/reporting` | canonical TestResult 로드, 표시 모델, Excel 렌더링 | `reports`; TestResult 상태는 읽기 전용 |
 | `tools` | 영상, 요청 패키지, Reporter 진입점 | `reports`, `exports` |
 | `tests`와 `scripts/dev` | 회귀 결과 | 개발자와 CI |
