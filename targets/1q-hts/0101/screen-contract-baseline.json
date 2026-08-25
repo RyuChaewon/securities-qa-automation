@@ -1,0 +1,26 @@
+{
+  "schemaVersion": "1.0",
+  "screenId": "0101",
+  "contractKind": "ProvisionalScreenBaseline",
+  "source": "LiveDiscovery",
+  "approvalStatus": "UserApprovedForSmoke",
+  "permanentLocatorApproval": false,
+  "businessRuleApproval": false,
+  "evidenceNote": "2026-08-25 현장 observation: native element 74개, UIA identity 0개, native fallback 74개, provider error 0, truncation 없음, 동일 상태 반복 시 구조 74/74 일치.",
+  "ranges": {
+    "totalNativeElements": { "min": 60, "max": 100 },
+    "GlobalHeader": { "min": 8, "max": 20 },
+    "QuotePanel": { "min": 10, "max": 25 },
+    "OrderEntryPanel": { "min": 25, "max": 45 },
+    "TradeInfoPanel": { "min": 5, "max": 20 },
+    "Edit": { "min": 4, "max": null },
+    "AfxWnd140": { "min": 50, "max": null },
+    "AfxFrameOrView140": { "min": 3, "max": null },
+    "Button": { "min": 1, "max": null },
+    "SysTabControl32": { "min": 1, "max": null },
+    "msctls_updown32": { "min": 1, "max": null }
+  },
+  "stability": { "snapshotCount": 3, "minimumSignatureSimilarity": 0.95 },
+  "redaction": { "currentValueStored": 0, "sensitivePatternCount": 0 }
+}
+
