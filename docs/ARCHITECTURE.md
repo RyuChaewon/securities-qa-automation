@@ -44,12 +44,24 @@
 | CaseId | dataset/screen/account/canonical variables | SHA-256 기반 CaseId | `CaseIdFactory` |
 | TestPack compile/approval | Dataset hash, cases, approval overlay | 불변 `RuleTestPack` | `TestPackCompiler`, `TestPackValidator` |
 | Discovery | target window와 adapter | `RuleDiscoveredControl[]` | `hts-discovery.ps1` |
-| TargetSnapshot | 화면별 발견 control | `RuntimeControlPlanRow[]`/`control-plan.json` | `ScenarioPlanning.cs` 계약, Runner writer |
+| TargetSnapshot | 화면별 발견 control | `RuntimeControlPlanRow[]`/`control-plan.json` | `Scenarios/Contracts/ScenarioBindingContracts.cs` 계약, Runner writer |
 | Observation | 실제 action과 수집 증거 | `Observation[]` | `hts-observation.ps1`, `ResultEvaluator.cs` 계약 |
 | Result evaluation | Observation + ExpectedResult + EvaluationPolicy | 완성 `TestResult` | `ResultEvaluator` |
 | Reporting | canonical `TestResultDocument` | XLSX/preview | `tools/reporting/*` |
 
 `RuleCaseExpander`와 `RuleOutcomePolicy`는 각각 `CombinationGenerator`와 `ResultEvaluator`로 위임하는 호환 adapter다. PowerShell에 조합·CaseId·판정 분기는 없다.
+
+Scenario planning은 같은 `HtsQa.Core` namespace와 기존 public API를 유지하면서 다음 단방향 책임으로 분리한다.
+
+| 단계 | 소유 파일 | 담당 책임 | 담당하지 않는 책임 |
+|---|---|---|---|
+| Generated contracts | `Scenarios/Contracts/GeneratedScenarioContracts.cs` | 생성 원본, dataset patch, review·approval·validation report 계약 | 검증, 컴파일, runtime binding |
+| Validation | `Scenarios/Validation/GeneratedScenarioValidator.cs` | source 구조와 dataset·단계·approval 참조 검증 | logical/physical plan 생성 |
+| Compiled contracts | `Scenarios/Contracts/CompiledScenarioContracts.cs` | logical plan, case, step, requirement, import 계약 | runtime candidate 결합 |
+| Compilation | `Scenarios/Compilation/ScenarioPlanCompiler.cs` | 변수 조합, CaseId, approval 적용, planHash | UI binding, verdict |
+| Binding contracts | `Scenarios/Contracts/ScenarioBindingContracts.cs` | catalog, candidate, runtime snapshot, physical plan 계약 | source validation |
+| Binding | `Scenarios/Binding/ScenarioBindingMaterializer.cs` | runtime 후보 결합과 physical READY/partial 판정 | TestResult 판정 |
+| IDs | `Scenarios/ScenarioIds.cs` | canonical scenario helper hash | validation, compilation, binding |
 
 ## 전체 호출 순서
 

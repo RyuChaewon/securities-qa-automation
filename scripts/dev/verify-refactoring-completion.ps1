@@ -47,7 +47,11 @@ $owners = @(
     @('CaseIdFactory', '^public static class CaseIdFactory$', 'src/HtsQa.Core/TestPacks/TestPack.cs'),
     @('TestPackCompiler', '^public sealed class TestPackCompiler$', 'src/HtsQa.Core/TestPacks/TestPack.cs'),
     @('ApprovedTestPackRunnerContract', '^public sealed class TestPackRunnerContract$', 'src/HtsQa.Core/TestPacks/TestPack.cs'),
-    @('TargetSnapshotContract', '^public sealed record RuntimeControlPlanRow$', 'src/HtsQa.Core/Scenarios/ScenarioPlanning.cs'),
+    @('TargetSnapshotContract', '^public sealed record RuntimeControlPlanRow$', 'src/HtsQa.Core/Scenarios/Contracts/ScenarioBindingContracts.cs'),
+    @('GeneratedScenarioValidator', '^public sealed class GeneratedScenarioValidator$', 'src/HtsQa.Core/Scenarios/Validation/GeneratedScenarioValidator.cs'),
+    @('ScenarioPlanCompiler', '^public sealed class ScenarioPlanCompiler$', 'src/HtsQa.Core/Scenarios/Compilation/ScenarioPlanCompiler.cs'),
+    @('ScenarioBindingMaterializer', '^public sealed class ScenarioBindingMaterializer$', 'src/HtsQa.Core/Scenarios/Binding/ScenarioBindingMaterializer.cs'),
+    @('ScenarioIds', '^public static class ScenarioIds$', 'src/HtsQa.Core/Scenarios/ScenarioIds.cs'),
     @('Observation', '^public sealed record Observation$', 'src/HtsQa.Core/Evaluation/ResultEvaluator.cs'),
     @('ExpectedResult', '^public sealed record ExpectedResult$', 'src/HtsQa.Core/Evaluation/ResultEvaluator.cs'),
     @('ResultEvaluator', '^public sealed class ResultEvaluator$', 'src/HtsQa.Core/Evaluation/ResultEvaluator.cs'),
@@ -113,9 +117,16 @@ $notExecutedIndex = $evaluatorSource.IndexOf('if (!input.Executed)', [StringComp
 $passSafetyIndex = $evaluatorSource.IndexOf('item.Status == TestStatus.PASS && (!item.Executed || !item.EvidencePresent)', [StringComparison]::Ordinal)
 Assert-RefactoringInvariant ($notExecutedIndex -ge 0) 'ResultEvaluator must explicitly guard unexecuted cases.'
 Assert-RefactoringInvariant ($passSafetyIndex -gt $notExecutedIndex) 'ResultEvaluator must reject unsafe completed PASS results.'
-$scenarioSource = Get-Content -LiteralPath (Join-Path $root 'src\HtsQa.Core\Scenarios\ScenarioPlanning.cs') -Raw -Encoding UTF8
-Assert-RefactoringInvariant ($scenarioSource -match 'ProvidesExecutableEvidence\(string action\) => IsCheckpoint\(action\)') 'Scenario action delivery must not provide executable PASS evidence.'
-Assert-RefactoringInvariant ($scenarioSource -match 'hasRequiredCheckpoint') 'Physical plan must require a Checkpoint before execution can be READY.'
+$scenarioRoot = Join-Path $root 'src\HtsQa.Core\Scenarios'
+$scenarioValidatorSource = Get-Content -LiteralPath (Join-Path $scenarioRoot 'Validation\GeneratedScenarioValidator.cs') -Raw -Encoding UTF8
+$scenarioCompilerSource = Get-Content -LiteralPath (Join-Path $scenarioRoot 'Compilation\ScenarioPlanCompiler.cs') -Raw -Encoding UTF8
+$scenarioBindingSource = Get-Content -LiteralPath (Join-Path $scenarioRoot 'Binding\ScenarioBindingMaterializer.cs') -Raw -Encoding UTF8
+Assert-RefactoringInvariant (-not (Test-Path -LiteralPath (Join-Path $scenarioRoot 'ScenarioPlanning.cs'))) 'Legacy ScenarioPlanning.cs must not duplicate split declarations.'
+Assert-RefactoringInvariant ($scenarioValidatorSource -match 'ProvidesExecutableEvidence\(string action\) => IsCheckpoint\(action\)') 'Scenario action delivery must not provide executable PASS evidence.'
+Assert-RefactoringInvariant ($scenarioBindingSource -match 'hasRequiredCheckpoint') 'Physical plan must require a Checkpoint before execution can be READY.'
+Assert-RefactoringInvariant ($scenarioValidatorSource -notmatch 'BuildPhysicalPlan|ScenarioBindingCatalog Materialize') 'GeneratedScenarioValidator must not own compilation or physical binding.'
+Assert-RefactoringInvariant ($scenarioCompilerSource -notmatch 'RuleDiscoveredControl|BuildPhysicalPlan|ResultEvaluator') 'ScenarioPlanCompiler must not own runtime binding or verdict.'
+Assert-RefactoringInvariant ($scenarioBindingSource -notmatch 'ScenarioValidationReport Validate|ResultEvaluator') 'ScenarioBindingMaterializer must not own source validation or verdict.'
 Assert-RefactoringInvariant ($evaluatorSource -match 'item\.EvidenceRole == ObservationEvidenceRole\.Action && item\.Status == TestStatus\.PASS') 'ResultEvaluator must reject externally completed Action PASS results.'
 Assert-RefactoringInvariant ($evaluatorSource -match 'REQUIRED_CHECKPOINT_MISSING') 'ResultEvaluator must fail closed when a required Checkpoint is absent.'
 

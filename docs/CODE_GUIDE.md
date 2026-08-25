@@ -9,7 +9,9 @@
 - `scripts/run-target-rule-suite.ps1`: 실제 실행과 오류 관찰
 - `scripts/modules/rule-control-exploration.ps1`: 컨트롤 발견·계획·조작
 - `src/HtsQa.Core/Scenarios/RuleScenarioGeneration.cs`: 자동 시나리오 생성
-- `src/HtsQa.Core/Scenarios/ScenarioPlanning.cs`: 승인·컴파일·바인딩
+- `src/HtsQa.Core/Scenarios/Validation/GeneratedScenarioValidator.cs`: 생성 시나리오 검증
+- `src/HtsQa.Core/Scenarios/Compilation/ScenarioPlanCompiler.cs`: 승인 적용과 logical plan 컴파일
+- `src/HtsQa.Core/Scenarios/Binding/ScenarioBindingMaterializer.cs`: runtime binding과 physical plan 생성
 - `tools/build-rule-results-workbook.mjs`: Excel 생성
 
 ## 연결 변경

@@ -92,12 +92,26 @@ Runner는 `RuleTestPack.cases`만 소비한다. `datasetSnapshot`은 대상 prof
 | `Installation` | HTS 설치 자료 카탈로그 | `HtsInstallation.cs` |
 | `Maps` | MAP 파싱·화면 모델·동작/오류 오라클 | `HtsMap.cs` |
 | `Outcomes` | legacy signal 계약을 ResultEvaluator에 연결하는 호환 adapter | `RuleOutcomePolicy.cs` |
-| `Scenarios` | 자동 생성·승인·컴파일·물리 계획과 승인 key 기반 주문 authoring/validator/DryRun 계획 | `RuleScenarioGeneration.cs`, `ScenarioPlanning.cs`, `OrderScenarioAuthoring.cs` |
+| `Scenarios` | 자동 생성·승인·컴파일·물리 계획과 승인 key 기반 주문 authoring/validator/DryRun 계획 | `RuleScenarioGeneration.cs`, `Contracts/*`, `Validation/GeneratedScenarioValidator.cs`, `Compilation/ScenarioPlanCompiler.cs`, `Binding/ScenarioBindingMaterializer.cs`, `ScenarioIds.cs`, `OrderScenarioAuthoring.cs` |
 | `Serialization` | JSON 입출력과 해시 | `JsonFile.cs` |
 | `Targets` | generic TargetProfile/TargetAdapter schema 검증 | `TargetAdapter.cs` |
 | `TestPacks` | CombinationPolicy, 조합, CaseId, 기대 해석, compile/approval/runner gate | `TestPack.cs` |
 
 폴더는 책임을 구분하지만 namespace는 기존 JSON·CLI 소비 코드와의 호환성을 위해 `HtsQa.Core`로 유지한다. 새 타입은 가장 가까운 책임 폴더에 추가하고 두 책임을 직접 결합해야 한다면 상위 오케스트레이터에서 조합한다.
+
+### Scenario planning 파일 책임
+
+| 파일 | 입력 | 출력 | 금지 책임 |
+|---|---|---|---|
+| `Contracts/GeneratedScenarioContracts.cs` | JSON source와 approval 입력 형태 | generated/review/validation 계약 | 검증·컴파일·binding |
+| `Contracts/CompiledScenarioContracts.cs` | compiler 출력 형태 | logical plan/case/step 계약 | runtime resolution |
+| `Contracts/ScenarioBindingContracts.cs` | runtime snapshot과 binding 출력 형태 | catalog/physical plan 계약 | source validation·verdict |
+| `Validation/GeneratedScenarioValidator.cs` | generated source, Dataset, source hash | 기존 issue code·target·message의 validation report | case·physical plan 생성 |
+| `Compilation/ScenarioPlanCompiler.cs` | 검증된 source, Dataset, approval hash | 동일 ScenarioId·CaseId·planHash의 logical plan | runtime UI binding |
+| `Binding/ScenarioBindingMaterializer.cs` | compiled requirement, runtime control 후보 | binding catalog와 physical disposition | scenario validation·TestResult 판정 |
+| `ScenarioIds.cs` | canonical 문자열 | 기존 fingerprint 기반 ID hash | 정책·I/O |
+
+`RuleScenarioGeneration.cs`와 `OrderScenarioAuthoring.cs`는 이 분리에서 변경하지 않는다. compiler와 binding은 `ResultEvaluator`를 호출하지 않으며, PowerShell과 reporter는 기존 JSON을 그대로 소비한다.
 
 ## FlaUI 책임
 
@@ -220,7 +234,7 @@ powershell -NoProfile -ExecutionPolicy Bypass `
   -File .\scripts\dev\verify-refactoring-completion.ps1
 ```
 
-첫 검사는 manifest 경로, 내부 모듈 위치, 파일 헤더와 모든 PowerShell 파일의 구문을 확인한다. 두 번째 검사는 11개 핵심 계약의 단일 선언, Runner 승인 경계, 중복 제거, Reporter 상태 불변과 미실행 PASS 차단을 확인한다.
+첫 검사는 manifest 경로, 내부 모듈 위치, 파일 헤더와 모든 PowerShell 파일의 구문을 확인한다. 두 번째 검사는 15개 핵심 계약의 단일 선언, Scenario planning 책임 경계, Runner 승인 경계, 중복 제거, Reporter 상태 불변과 미실행 PASS 차단을 확인한다.
 
 ## 실제 HTS PENDING 경계
 
