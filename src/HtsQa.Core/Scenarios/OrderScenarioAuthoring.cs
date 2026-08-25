@@ -67,6 +67,7 @@ public sealed record OrderScenarioStep
     public bool ExecutionAllowed { get; init; }
     public bool ReadbackRequired { get; init; }
     public bool TransactionalAllowlisted { get; init; }
+    public string OrderType { get; init; } = "";
 }
 
 public sealed record OrderScenarioDocument
@@ -108,6 +109,13 @@ public sealed record OrderScenarioValidationInput
     public OrderScenarioRuntimeContext RuntimeContext { get; init; } = new();
     public bool TransactionalExecutionApproved { get; init; }
     public string[] TransactionalScenarioAllowlist { get; init; } = [];
+    public EnvironmentFingerprintInput? CurrentEnvironment { get; init; }
+    public ExecutionAuthorizationDocument? ExecutionAuthorization { get; init; }
+    public ControlContractObservation[] ControlPreflightObservations { get; init; } = [];
+    public DateTimeOffset AuthorizationCheckedAt { get; init; }
+    public int RequestedCaseCount { get; init; } = 1;
+    public decimal? RequestedQuantity { get; init; }
+    public decimal? RequestedAmount { get; init; }
 }
 
 public sealed record OrderScenarioResolvedControl
@@ -116,6 +124,7 @@ public sealed record OrderScenarioResolvedControl
     public required string RepositoryKey { get; init; }
     public LocatorTrustTier TrustTier { get; init; }
     public required string ApprovalHash { get; init; }
+    public string ControlContractHash { get; init; } = "";
     public string LocatorSource { get; init; } = "";
 }
 
@@ -127,6 +136,7 @@ public sealed record OrderScenarioValidationReport
     public bool IsValid { get; init; }
     public ValidationIssue[] Issues { get; init; } = [];
     public OrderScenarioResolvedControl[] ResolvedControls { get; init; } = [];
+    public ExecutionAuthorizationDecision? Authorization { get; init; }
 }
 
 public static class OrderScenarioValidator
@@ -209,14 +219,22 @@ public static class OrderScenarioValidator
                 RepositoryKey = entry.Key.Canonical,
                 TrustTier = TrustTier(entry),
                 ApprovalHash = entry.ApprovalPayloadHash,
+                ControlContractHash = entry.ControlContractHash,
                 LocatorSource = LocatorSource(entry)
             });
         }
+        var authorization = AuthorizeExecution(input);
+        foreach (var issue in authorization.Issues)
+            issues.Add(new(issue.Code, issue.Message, Field: issue.Target, Remediation: issue.Remediation));
+
 
         var status = issues.Count == 0 ? OrderScenarioValidationStatus.Ready :
             scenario.Status == OrderScenarioConfigurationStatus.ConfigurationRequired ||
             input.Repository.Status == ControlRepositoryStatus.ConfigurationRequired ||
             input.StateGraph.ConfigurationStatus == StateGraphConfigurationStatus.ConfigurationRequired
+            || authorization.Status is ExecutionAuthorizationStatus.ConfigurationRequired
+                or ExecutionAuthorizationStatus.ControlApprovalRequired
+                or ExecutionAuthorizationStatus.EnvironmentApprovalRequired
                 ? OrderScenarioValidationStatus.ConfigurationRequired
                 : scenario.Status == OrderScenarioConfigurationStatus.ReviewRequired ||
                   input.Repository.Entries.Any(x => x.Status is ControlRepositoryEntryStatus.ReviewRequired or ControlRepositoryEntryStatus.Draft)
@@ -228,8 +246,53 @@ public static class OrderScenarioValidator
             Status = status,
             IsValid = issues.Count == 0,
             Issues = issues.ToArray(),
-            ResolvedControls = resolved.ToArray()
+            ResolvedControls = resolved.ToArray(),
+            Authorization = authorization
         };
+    }
+
+    private static ExecutionAuthorizationDecision AuthorizeExecution(OrderScenarioValidationInput input)
+    {
+        if (input.CurrentEnvironment is null || input.AuthorizationCheckedAt == default)
+            return new()
+            {
+                Status = ExecutionAuthorizationStatus.ConfigurationRequired,
+                Issues = [new()
+                {
+                    Code = "AUTH.CONFIGURATION_REQUIRED",
+                    Message = "Current environment fingerprint and authorization check time are required.",
+                    Remediation = "Supply classified, redacted environment inputs and a deterministic check time."
+                }],
+                ActualActionCallCount = 0
+            };
+        var requirements = input.Scenario.Steps.Where(step => step.RepositoryKey is not null).Select(step =>
+        {
+            var key = step.RepositoryKey!.Canonical;
+            var entry = input.Repository.Entries.FirstOrDefault(candidate => candidate.Key.Canonical.Equals(key, StringComparison.Ordinal));
+            var transactional = TransactionalActions.Contains(step.RepositoryAction) || step.RiskClass == ControlRiskClass.Transactional ||
+                step.Operation == OrderScenarioOperation.PressKey && step.KeyInput.Equals("ENTER", StringComparison.OrdinalIgnoreCase);
+            return new ExecutionControlRequirement
+            {
+                RepositoryKey = key,
+                ControlContractHash = entry?.ControlContractHash ?? "",
+                Action = step.RepositoryAction,
+                RiskClass = step.RiskClass,
+                PhysicalAction = step.PhysicalAction,
+                TransactionalAction = transactional,
+                OrderType = step.OrderType
+            };
+        }).ToArray();
+        return new ExecutionAuthorizationService().Authorize(new()
+        {
+            CurrentEnvironment = input.CurrentEnvironment,
+            Authorization = input.ExecutionAuthorization,
+            Repository = input.Repository,
+            Requirements = requirements,
+            ControlObservations = input.ControlPreflightObservations,
+            RequestedCaseCount = input.RequestedCaseCount,
+            RequestedQuantity = input.RequestedQuantity,
+            RequestedAmount = input.RequestedAmount
+        }, input.AuthorizationCheckedAt);
     }
 
     private static void ValidateStateAndRestore(OrderScenarioValidationInput input, List<ValidationIssue> issues)
@@ -332,7 +395,7 @@ public static class OrderScenarioValidator
         void Add(string code, string message, string remediation) => issues.Add(new(code, message, step.StepId, Remediation: remediation));
         if (entry.Status != ControlRepositoryEntryStatus.Approved || entry.Approval.Status != TestPackApprovalStatus.Approved)
             Add("ORDER_SCENARIO.REPOSITORY_ENTRY_NOT_APPROVED", $"Repository entry status is {entry.Status}.", "Complete human approval before authoring an executable scenario.");
-        var expectedHash = ControlRepositoryApprovalPayload.ComputeHash(entry);
+        var expectedHash = ControlContractHasher.ComputeApprovalHash(entry);
         if (!entry.ApprovalPayloadHash.Equals(expectedHash, StringComparison.OrdinalIgnoreCase) ||
             !entry.Approval.ApprovedContentHash.Equals(expectedHash, StringComparison.OrdinalIgnoreCase))
             Add("ORDER_SCENARIO.APPROVAL_HASH_MISMATCH", "Canonical repository approval hash does not match.", "Review and approve the unchanged canonical payload again.");
@@ -343,15 +406,13 @@ public static class OrderScenarioValidator
 
         var runtime = input.RuntimeContext;
         var host = entry.HostFingerprint;
-        if (host is null || string.IsNullOrWhiteSpace(runtime.ProcessName) || runtime.DpiScale <= 0)
+        if (host is null || string.IsNullOrWhiteSpace(runtime.ProcessName) || runtime.WindowWidth <= 0 || runtime.WindowHeight <= 0 ||
+            runtime.ClientWidth <= 0 || runtime.ClientHeight <= 0 || runtime.DpiScale <= 0)
             Add("ORDER_SCENARIO.PREFLIGHT_REQUIRED", "Current process, fingerprint, bounds and DPI preflight evidence is required.", "Capture read-only preflight evidence immediately before compilation.");
         else if (!host.ProcessName.Equals(runtime.ProcessName, StringComparison.OrdinalIgnoreCase) ||
                  !host.ProcessFingerprint.Equals(runtime.ProcessFingerprint, StringComparison.Ordinal) ||
-                 !host.HostFingerprint.Equals(runtime.HostFingerprint, StringComparison.Ordinal) ||
-                 host.CapturedWindowWidth != runtime.WindowWidth || host.CapturedWindowHeight != runtime.WindowHeight ||
-                 host.CapturedClientWidth != runtime.ClientWidth || host.CapturedClientHeight != runtime.ClientHeight ||
-                 host.CapturedDpiScale != runtime.DpiScale)
-            Add("ORDER_SCENARIO.RUNTIME_DRIFT", "Current DPI, bounds or process/host fingerprint differs from approval evidence.", "Stop and recapture/review; never self-heal the repository.");
+                 !host.HostFingerprint.Equals(runtime.HostFingerprint, StringComparison.Ordinal))
+            Add("ORDER_SCENARIO.RUNTIME_DRIFT", "Current process or host fingerprint differs from approval evidence.", "Stop and recapture/review; never self-heal the repository.");
 
         var tier = TrustTier(entry);
         var transactional = TransactionalActions.Contains(step.RepositoryAction) || entry.RiskClass == ControlRiskClass.Transactional ||
@@ -369,9 +430,6 @@ public static class OrderScenarioValidator
             Add("ORDER_SCENARIO.COORDINATE_TRANSACTION_FORBIDDEN", "Transactional action cannot use a relative coordinate.", "Use a verified stable UIA/native identity and separate approval.");
         if (transactional && tier != LocatorTrustTier.StableIdentity)
             Add("ORDER_SCENARIO.TRANSACTION_STABLE_IDENTITY_REQUIRED", "Transactional action requires a verified stable UIA/native locator.", "Approve a stable identity; MAP, coordinate and visual-only locators are insufficient.");
-        if (transactional && (!step.TransactionalAllowlisted || !input.TransactionalExecutionApproved ||
-                              !input.TransactionalScenarioAllowlist.Contains(scenario.ScenarioId, StringComparer.Ordinal)))
-            Add("ORDER_SCENARIO.TRANSACTION_ALLOWLIST_REQUIRED", "Transactional action lacks separate user approval and allowlist.", "Obtain explicit approval and add only this scenario to the transactional allowlist.");
 
         if (step.Role == OrderScenarioStepRole.Transition)
         {
@@ -383,11 +441,7 @@ public static class OrderScenarioValidator
         }
     }
 
-    internal static LocatorTrustTier TrustTier(ControlRepositoryEntry entry) =>
-        entry.StableIdentity?.IsConfigured == true ? LocatorTrustTier.StableIdentity :
-        entry.MapRuntimeBinding?.IsConfigured == true ? LocatorTrustTier.MapRuntimeBinding :
-        entry.AnchoredRelativeCoordinate?.IsConfigured == true ? LocatorTrustTier.ApprovedAnchoredRelative :
-        entry.VisualSignature?.IsConfigured == true ? LocatorTrustTier.VisualObservationOnly : LocatorTrustTier.Unresolved;
+    internal static LocatorTrustTier TrustTier(ControlRepositoryEntry entry) => ControlContractHasher.TrustTier(entry);
 
     internal static string LocatorSource(ControlRepositoryEntry entry) => TrustTier(entry) switch
     {
@@ -406,6 +460,7 @@ public sealed record OrderScenarioRunPlanStep
     public required string RepositoryKey { get; init; }
     public LocatorTrustTier ResolvedLocatorTier { get; init; }
     public required string ApprovalHash { get; init; }
+    public string ControlContractHash { get; init; } = "";
     public OrderScenarioStepRole Role { get; init; }
     public OrderScenarioOperation Operation { get; init; }
     public ControlRepositoryAction RepositoryAction { get; init; }
@@ -421,6 +476,7 @@ public sealed record OrderScenarioRunPlanStep
     public int TimeoutMs { get; init; }
     public ControlRiskClass RiskClass { get; init; }
     public bool ApprovedForSeparateExecution { get; init; }
+    public string OrderType { get; init; } = "";
 }
 
 public sealed record OrderScenarioRunPlanVariable
@@ -443,6 +499,9 @@ public sealed record OrderScenarioRunPlan
     public DateTimeOffset CompiledAt { get; init; }
     public OrderRunPlanExecutionMode ExecutionMode { get; init; } = OrderRunPlanExecutionMode.DryRun;
     public bool ActualExecutionAllowed { get; init; }
+    public ExecutionAuthorizationStatus AuthorizationStatus { get; init; } = ExecutionAuthorizationStatus.ConfigurationRequired;
+    public string EnvironmentFingerprintHash { get; init; } = "";
+    public string ExecutionAuthorizationHash { get; init; } = "";
     public OrderScenarioRunPlanVariable[] Variables { get; init; } = [];
     public OrderScenarioRunPlanStep[] Steps { get; init; } = [];
     public string[] RestoreSequence { get; init; } = [];
@@ -473,6 +532,9 @@ public static class OrderScenarioRunPlanCompiler
             StateGraphId = input.StateGraph.GraphId,
             CompiledAt = compiledAt,
             ActualExecutionAllowed = false,
+            AuthorizationStatus = validation.Authorization!.Status,
+            EnvironmentFingerprintHash = validation.Authorization.EnvironmentFingerprintHash,
+            ExecutionAuthorizationHash = validation.Authorization.ExecutionAuthorizationHash,
             Variables = input.Scenario.Variables.Select(variable => new OrderScenarioRunPlanVariable
             {
                 Name = variable.Name,
@@ -486,6 +548,7 @@ public static class OrderScenarioRunPlanCompiler
                 RepositoryKey = step.RepositoryKey!.Canonical,
                 ResolvedLocatorTier = resolved[step.StepId].TrustTier,
                 ApprovalHash = resolved[step.StepId].ApprovalHash,
+                ControlContractHash = resolved[step.StepId].ControlContractHash,
                 Role = step.Role,
                 Operation = step.Operation,
                 RepositoryAction = step.RepositoryAction,
@@ -500,7 +563,8 @@ public static class OrderScenarioRunPlanCompiler
                 RequiredForPass = step.Role == OrderScenarioStepRole.Checkpoint && step.CheckpointRequirement == OrderCheckpointRequirement.Required,
                 TimeoutMs = step.TimeoutMs,
                 RiskClass = step.RiskClass,
-                ApprovedForSeparateExecution = step.ExecutionAllowed
+                ApprovedForSeparateExecution = step.ExecutionAllowed,
+                OrderType = step.OrderType
             }).ToArray(),
             RestoreSequence = input.Scenario.Steps.Where(x => x.Role == OrderScenarioStepRole.Restore).OrderBy(x => x.Sequence).Select(x => x.StepId).ToArray()
         };
@@ -523,6 +587,7 @@ public sealed record OrderScenarioDryRunResult
     public bool ExpectedOutcomeChecked { get; init; }
     public bool VariableBindingChecked { get; init; }
     public bool RiskPolicyChecked { get; init; }
+    public bool AuthorizationChecked { get; init; }
     public bool RestorePlanChecked { get; init; }
     public bool ResultAndEvidenceSchemaChecked { get; init; }
     public int ActualUiActionCount { get; init; }
@@ -539,14 +604,15 @@ public static class OrderScenarioDryRun
         {
             PlanId = plan.PlanId,
             PlanHashValid = hashValid,
-            RepositoryResolutionChecked = plan.Steps.All(x => x.ResolvedLocatorTier != LocatorTrustTier.Unresolved && !string.IsNullOrWhiteSpace(x.ApprovalHash)),
+            RepositoryResolutionChecked = plan.Steps.All(x => x.ResolvedLocatorTier != LocatorTrustTier.Unresolved && !string.IsNullOrWhiteSpace(x.ApprovalHash) && !string.IsNullOrWhiteSpace(x.ControlContractHash)),
             StateOrderChecked = StateOrderValid(plan.Steps),
             RequiredCheckpointChecked = plan.Steps.Any(x => x.Role == OrderScenarioStepRole.Checkpoint && x.CheckpointRequirement == OrderCheckpointRequirement.Required),
             ExpectedOutcomeChecked = plan.Steps.Where(x => x.RequiredForPass)
                 .All(x => x.ExpectedMode is not RuleExpectedOutcomeType.Unspecified and not RuleExpectedOutcomeType.ObservationOnly),
             VariableBindingChecked = plan.Steps.Where(x => !string.IsNullOrWhiteSpace(x.VariableRef))
                 .All(step => plan.Variables.Count(variable => variable.Name.Equals(step.VariableRef, StringComparison.Ordinal)) == 1),
-            RiskPolicyChecked = !plan.ActualExecutionAllowed && plan.ExecutionMode == OrderRunPlanExecutionMode.DryRun,
+            RiskPolicyChecked = !plan.ActualExecutionAllowed && plan.ExecutionMode == OrderRunPlanExecutionMode.DryRun && plan.AuthorizationStatus == ExecutionAuthorizationStatus.Authorized,
+            AuthorizationChecked = plan.AuthorizationStatus == ExecutionAuthorizationStatus.Authorized && !string.IsNullOrWhiteSpace(plan.EnvironmentFingerprintHash) && !string.IsNullOrWhiteSpace(plan.ExecutionAuthorizationHash),
             RestorePlanChecked = plan.RestoreSequence.Length > 0,
             ResultAndEvidenceSchemaChecked = !string.IsNullOrWhiteSpace(plan.ResultSchema) && !string.IsNullOrWhiteSpace(plan.EvidenceSchema),
             ActualUiActionCount = 0,

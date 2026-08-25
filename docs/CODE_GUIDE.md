@@ -36,6 +36,7 @@ CLI process entrypoint는 `src/HtsQa.Cli/Program.cs`이며 새 command body를 �
 | generated/compiled/physical Scenario | `ScenarioCommands.cs` |
 | Control Repository | `ControlRepositoryCommands.cs` |
 | Calibration | `CalibrationCommands.cs` |
+| Execution Authorization | `AuthorizationCommands.cs` |
 | Order Scenario | `OrderScenarioCommands.cs` |
 | canonical evaluation | `EvaluationCommands.cs` |
 | existing run display | `RunAnalysisCommands.cs` |

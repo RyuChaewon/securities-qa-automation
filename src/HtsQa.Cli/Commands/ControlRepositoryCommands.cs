@@ -67,6 +67,9 @@ internal static class ControlRepositoryCommands
         var entry = new ControlRepositoryEntry
         {
             Key = new() { Screen = screen, Map = map, LogicalName = Required(argv, "--logical-name"), StateContext = state },
+            TargetProfileId = GetOpt(argv, "--target-profile-id", capture.TargetProfileId),
+            BusinessRole = GetOpt(argv, "--business-role", ""),
+            TransactionalRole = ParseTransactionalRole(argv),
             Status = ControlRepositoryEntryStatus.ReviewRequired,
             AnchoredRelativeCoordinate = new()
             {
@@ -100,6 +103,14 @@ internal static class ControlRepositoryCommands
         JsonFile.Write(outPath, entry);
         Console.WriteLine(outPath);
         return 0;
+    }
+
+    private static ControlTransactionalRole ParseTransactionalRole(string[] argv)
+    {
+        var value = GetOpt(argv, "--transactional-role", nameof(ControlTransactionalRole.None));
+        return Enum.TryParse<ControlTransactionalRole>(value, true, out var role)
+            ? role
+            : throw new ArgumentException("--transactional-role 값이 유효하지 않습니다.");
     }
 
     // 기존 TestPack approval overlay 형식으로 PendingApproval template만 만들며 승인자를 대신하지 않는다.

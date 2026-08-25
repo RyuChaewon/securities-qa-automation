@@ -16,7 +16,7 @@ public static class OrderCalibrationSessionLifecycle
         var matches = repository.Entries.Where(x => x.Key.Canonical.Equals(key, StringComparison.Ordinal)).ToArray();
         if (matches.Length != 1) throw new InvalidDataException("Exactly one registered repository entry must match the calibration key.");
         var entry = matches[0];
-        var hash = ControlRepositoryApprovalPayload.ComputeHash(entry);
+        var hash = ControlContractHasher.ComputeApprovalHash(entry);
         if (entry.Status != ControlRepositoryEntryStatus.Approved || entry.Approval.Status != TestPackApprovalStatus.Approved ||
             !entry.ApprovalPayloadHash.Equals(hash, StringComparison.OrdinalIgnoreCase) ||
             !entry.Approval.ApprovedContentHash.Equals(hash, StringComparison.OrdinalIgnoreCase))

@@ -110,6 +110,29 @@ public sealed class TargetAdapterTests
         Assert.Contains(issues, issue => issue.Code == "RULE.ADAPTER_STATE_TRANSACTION_TARGET");
     }
 
+    [Fact]
+    public void Target_Execution_Profile_Cannot_Allow_Production_Or_Real_Transactional_Automation()
+    {
+        var valid = FakeProfile() with
+        {
+            Adapter = FakeProfile().Adapter! with { ExecutionAuthorization = new()
+            {
+                AdapterVersion = "fixture-adapter/1.0", ExecutionPolicyVersion = "fixture-policy/1.0",
+                MaximumRiskClasses = [ControlRiskClass.General]
+            } }
+        };
+        var unsafeProfile = valid with
+        {
+            Adapter = valid.Adapter! with { ExecutionAuthorization = valid.Adapter.ExecutionAuthorization! with
+            {
+                ProductionTransactionalActionsForbidden = false
+            } }
+        };
+
+        Assert.DoesNotContain(RuleTargetAdapterValidator.Validate(valid, ["F001"]), issue => issue.Code.StartsWith("RULE.ADAPTER_EXECUTION", StringComparison.Ordinal));
+        Assert.Contains(RuleTargetAdapterValidator.Validate(unsafeProfile, ["F001"]), issue => issue.Code == "RULE.ADAPTER_EXECUTION_PRODUCTION_POLICY");
+    }
+
     private static StateGraph FakeStateGraph(string targetControlId) => new()
     {
         GraphId = "fake-state-graph",

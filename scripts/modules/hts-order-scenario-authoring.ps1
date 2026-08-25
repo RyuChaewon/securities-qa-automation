@@ -53,19 +53,49 @@ function New-HtsOrderCalibrationReview {
         [Parameter(Mandatory = $true)][string]$LogicalName,[string]$Anchor='',
         [Parameter(Mandatory = $true)][string]$RiskClass,[Parameter(Mandatory = $true)][string[]]$AllowedActions,
         [Parameter(Mandatory = $true)][string[]]$ForbiddenActions,[Parameter(Mandatory = $true)][string]$Source,
-        [Parameter(Mandatory = $true)][string[]]$Evidence,[string]$Out=''
+        [Parameter(Mandatory = $true)][string[]]$Evidence,[string]$BusinessRole='',
+        [string]$TransactionalRole='None',[string]$Out=''
     )
     $arguments=@('create-calibration-review','--session',$Session,'--logical-name',$LogicalName,'--anchor',$Anchor,
         '--risk-class',$RiskClass,'--allowed-actions',($AllowedActions -join ','),'--forbidden-actions',($ForbiddenActions -join ','),
         '--source',$Source,'--evidence',($Evidence -join ','))
     if ($Out) { $arguments += @('--out',$Out) }
+    if ($BusinessRole) { $arguments += @('--business-role',$BusinessRole) }
+    if ($TransactionalRole) { $arguments += @('--transactional-role',$TransactionalRole) }
     Invoke-HtsOrderAuthoringCli -Context $Context -Arguments $arguments
 }
 
 # Core static validator 결과를 요청하며 PowerShell에서 상태를 바꾸지 않는다.
 function Test-HtsOrderScenario {
     param([Parameter(Mandatory = $true)]$Context,[Parameter(Mandatory = $true)][string]$InputPath,[string]$Out='')
+
     $arguments=@('validate-order-scenario','--input',$InputPath)
+    if ($Out) { $arguments += @('--out',$Out) }
+    Invoke-HtsOrderAuthoringCli -Context $Context -Arguments $arguments
+}
+
+# Core가 생성한 environment authorization approval template만 요청한다.
+function New-HtsExecutionAuthorizationApproval {
+    param([Parameter(Mandatory = $true)]$Context,[Parameter(Mandatory = $true)][string]$Request,[string]$Out='')
+    $arguments=@('create-execution-authorization-approval','--request',$Request)
+    if ($Out) { $arguments += @('--out',$Out) }
+    Invoke-HtsOrderAuthoringCli -Context $Context -Arguments $arguments
+}
+
+# 사람이 편집한 기존 approval overlay를 Core 검증에 전달한다.
+function Set-HtsExecutionAuthorizationApproval {
+    param([Parameter(Mandatory = $true)]$Context,[Parameter(Mandatory = $true)][string]$Request,
+        [Parameter(Mandatory = $true)][string]$Approval,[string]$Out='')
+    $arguments=@('apply-execution-authorization-approval','--request',$Request,'--approval',$Approval)
+    if ($Out) { $arguments += @('--out',$Out) }
+    Invoke-HtsOrderAuthoringCli -Context $Context -Arguments $arguments
+}
+
+# 현재 fingerprint, scope, control contract를 Core 단일 authorization service로 확인한다.
+function Test-HtsExecutionAuthorization {
+    param([Parameter(Mandatory = $true)]$Context,[Parameter(Mandatory = $true)][string]$Request,
+        [Parameter(Mandatory = $true)][string]$CheckedAt,[string]$Out='')
+    $arguments=@('check-execution-authorization','--request',$Request,'--checked-at',$CheckedAt)
     if ($Out) { $arguments += @('--out',$Out) }
     Invoke-HtsOrderAuthoringCli -Context $Context -Arguments $arguments
 }

@@ -43,6 +43,7 @@
 | Combination generation | 검증된 Dataset, policy, maxCases | 결정론적 `RuleTestCase[]` | `CombinationGenerator` |
 | CaseId | dataset/screen/account/canonical variables | SHA-256 기반 CaseId | `CaseIdFactory` |
 | TestPack compile/approval | Dataset hash, cases, approval overlay | 불변 `RuleTestPack` | `TestPackCompiler`, `TestPackValidator` |
+| Control/environment authorization | repository contract, redacted environment, approved scope | canonical pre-action decision, action count 0 | `ExecutionAuthorizationService` |
 | Discovery | target window와 adapter | `RuleDiscoveredControl[]` | `hts-discovery.ps1` |
 | TargetSnapshot | 화면별 발견 control | `RuntimeControlPlanRow[]`/`control-plan.json` | `Scenarios/Contracts/ScenarioBindingContracts.cs` 계약, Runner writer |
 | Observation | 실제 action과 수집 증거 | `Observation[]` | `hts-observation.ps1`, `ResultEvaluator.cs` 계약 |
@@ -75,7 +76,19 @@ Scenario planning은 같은 `HtsQa.Core` namespace와 기존 public API를 유�
 | `Commands/*Commands.cs` | command context와 argv | 기존 stdout/stderr·JSON·exit code | HTS/FlaUI 실행, verdict 재판정 |
 | `CliApplication` | argv | 정확한 handler 반환 code | 업무 JSON·hash 계산 |
 
-기능별 handler는 Dataset, TestPack, MAP, Scenario, Control Repository, Calibration, Order Scenario, Evaluation, Run Analysis의 아홉 파일로 나뉜다. `FindRoot`·`Full`은 context, `Required`·`GetOpt`·enum list·optional JSON output은 arguments가 단독 소유한다. 이 분리는 command 문자열, 인자, schema, CaseId·ScenarioId·planHash·approval hash, stdout/stderr와 exit code를 변경하지 않는다.
+기능별 handler는 Dataset, TestPack, MAP, Scenario, Control Repository, Calibration, Execution Authorization, Order Scenario, Evaluation, Run Analysis의 열 파일로 나뉜다. `FindRoot`·`Full`은 context, `Required`·`GetOpt`·enum list·optional JSON output은 arguments가 단독 소유한다. 이 분리는 기존 command 문자열, 인자, schema, CaseId·ScenarioId·planHash·approval hash, stdout/stderr와 exit code를 변경하지 않는다.
+
+## 실행 승인 생명주기
+
+Control approval은 하나의 control 안정 계약을 최초 1회 승인하고, environment execution authorization은 분류된 비운영 환경과 실행 scope를 최초 1회 승인한다. 둘 다 기존 `TestPackApprovalOverlay`의 사람 승인 provenance를 재사용하며 hash와 scope 판정은 Core만 소유한다.
+
+```text
+Control Repository -> ControlContractHash --+
+                                           +-> ExecutionAuthorizationService -> canonical pre-action decision
+TargetAdapter/current environment -> EnvironmentFingerprint -> approved scope --+
+```
+
+Order validator와 DryRun은 decision을 포함·표시하지만 action이나 verdict를 만들지 않는다. PowerShell과 reporter는 hash를 계산하지 않는다. 상세 hash 입력·제외 항목, 재승인 truth table, code와 현재 0101 blocker는 [EXECUTION_AUTHORIZATION.md](EXECUTION_AUTHORIZATION.md)에 있다.
 
 ## 전체 호출 순서
 

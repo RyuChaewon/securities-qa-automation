@@ -82,7 +82,7 @@ public static class OrderCalibrationReviewFactory
 
     public static ControlRepositoryEntry Create(OrderCalibrationSession session, string logicalName, string selectedAnchor,
         ControlRiskClass riskClass, ControlRepositoryAction[] allowedActions, ControlRepositoryAction[] forbiddenActions,
-        string source, string[] evidenceRefs, DateTimeOffset createdAt)
+        string source, string[] evidenceRefs, DateTimeOffset createdAt, string businessRole = "", ControlTransactionalRole transactionalRole = ControlTransactionalRole.None)
     {
         var report = OrderCalibrationSessionAnalyzer.Analyze(session);
         if (report.Issues.Length > 0 || report.ObservationCount < 2 || report.Drift.IsUnstable)
@@ -108,6 +108,9 @@ public static class OrderCalibrationReviewFactory
         return new()
         {
             Key = new() { Screen = session.Screen, Map = session.Map, LogicalName = logicalName, StateContext = session.StateContext },
+            TargetProfileId = session.TargetProfileId,
+            BusinessRole = businessRole,
+            TransactionalRole = transactionalRole,
             Status = ControlRepositoryEntryStatus.ReviewRequired,
             StableIdentity = observation.StableIdentity,
             MapRuntimeBinding = observation.MapRuntimeBinding,

@@ -28,11 +28,14 @@ internal static class CliHelp
           create-control-repository-approval --review PATH [--out PATH]
           apply-control-repository-approval --review PATH --approval PATH [--out PATH]
           validate-control-repository --file PATH
-          create-control-repository-review --capture PATH --screen ID --logical-name NAME --state-context CONTEXT --risk-class CLASS --allowed-actions A,B --anchor ID [--map ID] [--source REF] [--evidence REF1,REF2] [--out PATH]
+          create-control-repository-review --capture PATH --screen ID --logical-name NAME --state-context CONTEXT --risk-class CLASS --allowed-actions A,B --anchor ID [--target-profile-id ID] [--business-role ROLE] [--transactional-role ROLE] [--map ID] [--source REF] [--evidence REF1,REF2] [--out PATH]
           resolve-control-repository --repository PATH --request PATH [--out PATH]
           create-calibration-session --captures PATH1,PATH2 --session-id ID --target-profile-id ID --repository-id ID --screen ID --state-context CONTEXT --reviewer NAME [--map ID] [--out PATH]
           validate-calibration-session --file PATH [--out PATH]
-          create-calibration-review --session PATH --logical-name NAME --risk-class CLASS --allowed-actions A,B --forbidden-actions A,B --source REF --evidence REF1,REF2 [--anchor ID] [--out PATH]
+          create-execution-authorization-approval --request PATH [--out PATH]
+          apply-execution-authorization-approval --request PATH --approval PATH [--out PATH]
+          check-execution-authorization --request PATH --checked-at ISO8601 [--out PATH]
+          create-calibration-review --session PATH --logical-name NAME --risk-class CLASS --allowed-actions A,B --forbidden-actions A,B --source REF --evidence REF1,REF2 [--business-role ROLE] [--transactional-role ROLE] [--anchor ID] [--out PATH]
           register-control-repository-entry --repository PATH --entry PATH --out PATH
           finalize-calibration-session --session PATH --repository PATH --logical-name NAME --out PATH
           validate-order-scenario --input PATH [--out PATH]

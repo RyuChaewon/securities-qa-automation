@@ -54,6 +54,10 @@ internal static class CalibrationCommands
         var allowed = ParseEnumList<ControlRepositoryAction>(Required(argv, "--allowed-actions"), "--allowed-actions");
         var forbidden = ParseEnumList<ControlRepositoryAction>(GetOpt(argv, "--forbidden-actions", ""), "--forbidden-actions");
         var evidence = Required(argv, "--evidence").Split(',', StringSplitOptions.TrimEntries | StringSplitOptions.RemoveEmptyEntries);
+        var transactionalRoleText = GetOpt(argv, "--transactional-role", nameof(ControlTransactionalRole.None));
+        if (!Enum.TryParse<ControlTransactionalRole>(transactionalRoleText, true, out var transactionalRole))
+            throw new ArgumentException("--transactional-role 값이 유효하지 않습니다.");
+
         var entry = OrderCalibrationReviewFactory.Create(
             session,
             Required(argv, "--logical-name"),
@@ -63,7 +67,9 @@ internal static class CalibrationCommands
             forbidden,
             Required(argv, "--source"),
             evidence,
-            DateTimeOffset.Now);
+            DateTimeOffset.Now,
+            GetOpt(argv, "--business-role", ""),
+            transactionalRole);
         var outPath = context.Full(GetOpt(argv, "--out", Path.ChangeExtension(sessionPath, ".review.json")));
         if (File.Exists(outPath)) throw new IOException($"검토 payload가 이미 존재합니다: {outPath}");
         JsonFile.Write(outPath, entry);

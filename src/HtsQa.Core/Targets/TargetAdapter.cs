@@ -101,6 +101,15 @@ public sealed record RuleTargetScenarioAuthoringProfile
     public bool ActualExecutionRequiresSeparateApproval { get; init; } = true;
 }
 
+public sealed record RuleTargetExecutionAuthorizationProfile
+{
+    public string AdapterVersion { get; init; } = "";
+    public string ExecutionPolicyVersion { get; init; } = "";
+    public ControlRiskClass[] MaximumRiskClasses { get; init; } = [];
+    public bool ProductionTransactionalActionsForbidden { get; init; } = true;
+    public bool RealAccountTransactionalActionsForbidden { get; init; } = true;
+}
+
 
 
 /// <summary>대상별 업무 의미를 generic engine에 전달하는 versioned adapter 계약이다.</summary>
@@ -119,6 +128,7 @@ public sealed record RuleTargetAdapterProfile
     public RuleTargetImportProfile? Import { get; init; }
     public RuleTargetControlRepositoryProfile? ControlRepository { get; init; }
     public RuleTargetScenarioAuthoringProfile? ScenarioAuthoring { get; init; }
+    public RuleTargetExecutionAuthorizationProfile? ExecutionAuthorization { get; init; }
 }
 
 /// <summary>Core 계획기가 adapter의 map alias와 state-context 의미를 동일하게 적용하게 한다.</summary>
@@ -258,6 +268,16 @@ public static class RuleTargetAdapterValidator
                 issues.Add(new("RULE.ADAPTER_SCENARIO_TEMPLATE_REFERENCE", "Scenario template references must be non-empty, non-traversing relative paths.", Field: "targetProfile.adapter.scenarioAuthoring.templateReferences"));
             if (!authoring.ActualExecutionRequiresSeparateApproval)
                 issues.Add(new("RULE.ADAPTER_SCENARIO_EXECUTION_APPROVAL", "Order scenario actual execution must require separate approval.", Field: "targetProfile.adapter.scenarioAuthoring.actualExecutionRequiresSeparateApproval"));
+        }
+
+        if (adapter.ExecutionAuthorization is { } executionAuthorization)
+        {
+            if (string.IsNullOrWhiteSpace(executionAuthorization.AdapterVersion) ||
+                string.IsNullOrWhiteSpace(executionAuthorization.ExecutionPolicyVersion) ||
+                executionAuthorization.MaximumRiskClasses.Length == 0)
+                issues.Add(new("RULE.ADAPTER_EXECUTION_AUTHORIZATION", "Execution authorization requires adapter/policy versions and maximum risk classes.", Field: "targetProfile.adapter.executionAuthorization"));
+            if (!executionAuthorization.ProductionTransactionalActionsForbidden || !executionAuthorization.RealAccountTransactionalActionsForbidden)
+                issues.Add(new("RULE.ADAPTER_EXECUTION_PRODUCTION_POLICY", "Production and real-account transactional automation must remain forbidden.", Field: "targetProfile.adapter.executionAuthorization"));
         }
 
 

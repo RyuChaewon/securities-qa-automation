@@ -140,6 +140,9 @@ public sealed record ControlVisualSignature
 public sealed record ControlRepositoryEntry
 {
     public required ControlRepositoryKey Key { get; init; }
+    public string TargetProfileId { get; init; } = "";
+    public string BusinessRole { get; init; } = "";
+    public ControlTransactionalRole TransactionalRole { get; init; }
     public ControlRepositoryEntryStatus Status { get; init; } = ControlRepositoryEntryStatus.ConfigurationRequired;
     public ControlStableIdentity? StableIdentity { get; init; }
     public ControlMapRuntimeBinding? MapRuntimeBinding { get; init; }
@@ -152,6 +155,7 @@ public sealed record ControlRepositoryEntry
     public ControlRepositoryAction[] ForbiddenActions { get; init; } = [];
     public TestPackApprovalInfo Approval { get; init; } = new();
     public string ApprovalPayloadHash { get; init; } = "";
+    public string ControlContractHash { get; init; } = "";
     public DateTimeOffset CreatedAt { get; init; }
     public DateTimeOffset? ReviewedAt { get; init; }
     public string Source { get; init; } = "";
@@ -216,7 +220,7 @@ public static class ControlRepositoryApprovalWorkflow
         RequireReview(review);
         return new()
         {
-            TestPackContentHash = ControlRepositoryApprovalPayload.ComputeHash(review),
+            TestPackContentHash = ControlContractHasher.ComputeApprovalHash(review),
             Status = TestPackApprovalStatus.PendingApproval
         };
     }
@@ -226,7 +230,7 @@ public static class ControlRepositoryApprovalWorkflow
         RequireReview(review);
         if (overlay.SchemaVersion != TestPackVersions.ApprovalSchema)
             throw new InvalidDataException($"Unsupported approval schemaVersion: {overlay.SchemaVersion}.");
-        var contentHash = ControlRepositoryApprovalPayload.ComputeHash(review);
+        var contentHash = ControlContractHasher.ComputeApprovalHash(review);
         if (!overlay.TestPackContentHash.Equals(contentHash, StringComparison.OrdinalIgnoreCase))
             throw new InvalidDataException("Approval content hash does not match the reviewed control payload.");
         if (overlay.Status == TestPackApprovalStatus.Approved &&
@@ -240,6 +244,7 @@ public static class ControlRepositoryApprovalWorkflow
                 overlay.Status == TestPackApprovalStatus.Rejected ? ControlRepositoryEntryStatus.Rejected : ControlRepositoryEntryStatus.ReviewRequired,
             ReviewedAt = overlay.Status == TestPackApprovalStatus.PendingApproval ? review.ReviewedAt : overlay.ApprovedAt,
             ApprovalPayloadHash = approved ? contentHash : "",
+            ControlContractHash = approved && ControlContractHasher.IsContractReady(review) ? ControlContractHasher.Compute(review) : "",
             Approval = new()
             {
                 Status = overlay.Status,
@@ -307,11 +312,19 @@ public static class ControlRepositoryValidator
             entry.HostFingerprint.CapturedClientWidth <= 0 || entry.HostFingerprint.CapturedClientHeight <= 0 || entry.HostFingerprint.CapturedDpiScale <= 0)
             issues.Add(new("CONTROL_REPOSITORY.HOST_EVIDENCE", $"Approved entry {key} requires process, host, client bounds, and DPI evidence."));
 
-        var expectedHash = ControlRepositoryApprovalPayload.ComputeHash(entry);
+        var expectedHash = ControlContractHasher.ComputeApprovalHash(entry);
         if (string.IsNullOrWhiteSpace(entry.ApprovalPayloadHash) ||
             !entry.ApprovalPayloadHash.Equals(expectedHash, StringComparison.OrdinalIgnoreCase) ||
             !entry.Approval.ApprovedContentHash.Equals(expectedHash, StringComparison.OrdinalIgnoreCase))
             issues.Add(new("CONTROL_REPOSITORY.APPROVAL_HASH", $"Approval hash does not match the canonical locator payload for {key}."));
+
+        if (!string.IsNullOrWhiteSpace(entry.ControlContractHash) &&
+            (!ControlContractHasher.IsContractReady(entry) ||
+             !entry.ControlContractHash.Equals(ControlContractHasher.Compute(entry), StringComparison.OrdinalIgnoreCase)))
+            issues.Add(new("CONTROL_REPOSITORY.CONTROL_CONTRACT_HASH", $"ControlContractHash does not match the stable control contract for {key}."));
+
+        if (entry.TransactionalRole != ControlTransactionalRole.None && entry.RiskClass != ControlRiskClass.Transactional)
+            issues.Add(new("CONTROL_REPOSITORY.TRANSACTIONAL_ROLE_RISK", $"Transactional role for {key} requires Transactional risk classification."));
 
         if (relative?.IsConfigured == true)
         {
@@ -585,6 +598,7 @@ public sealed record ControlCaptureCandidate
 {
     public DateTimeOffset CapturedAt { get; init; }
     public string SchemaVersion { get; init; } = ControlRepositoryVersions.CaptureSchema;
+    public string TargetProfileId { get; init; } = "";
     public ControlRepositoryEntryStatus Status { get; init; } = ControlRepositoryEntryStatus.ReviewRequired;
     public string ProcessName { get; init; } = "";
     public string ProcessFingerprint { get; init; } = "";

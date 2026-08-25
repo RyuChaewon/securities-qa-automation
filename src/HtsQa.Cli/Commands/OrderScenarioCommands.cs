@@ -49,7 +49,7 @@ internal static class OrderScenarioCommands
         {
             result.PlanHashValid, result.RepositoryResolutionChecked, result.StateOrderChecked,
             result.RequiredCheckpointChecked, result.ExpectedOutcomeChecked, result.VariableBindingChecked,
-            result.RiskPolicyChecked, result.RestorePlanChecked, result.ResultAndEvidenceSchemaChecked,
+            result.RiskPolicyChecked, result.AuthorizationChecked, result.RestorePlanChecked, result.ResultAndEvidenceSchemaChecked,
             result.ActualUiActionCount == 0, result.TransactionalActionCount == 0
         };
         return checks.All(x => x) ? 0 : 3;

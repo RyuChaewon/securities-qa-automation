@@ -22,6 +22,7 @@ $expectedCommands = @(
     'import-generated-scenarios', 'create-scenario-approval', 'compile-scenarios', 'plan-scenarios',
     'validate-control-repository', 'create-control-repository-approval', 'apply-control-repository-approval',
     'create-control-repository-review', 'resolve-control-repository',
+    'create-execution-authorization-approval', 'apply-execution-authorization-approval', 'check-execution-authorization',
     'create-calibration-session', 'validate-calibration-session', 'create-calibration-review',
     'register-control-repository-entry', 'finalize-calibration-session',
     'validate-order-scenario', 'compile-order-scenario', 'dry-run-order-scenario',
@@ -37,7 +38,8 @@ $expectedHelpCommands = @(
     'import-generated-scenarios', 'create-scenario-approval', 'compile-scenarios', 'plan-scenarios',
     'materialize-scenario-bindings', 'create-control-repository-approval', 'apply-control-repository-approval',
     'validate-control-repository', 'create-control-repository-review', 'resolve-control-repository',
-    'create-calibration-session', 'validate-calibration-session', 'create-calibration-review',
+    'create-calibration-session', 'validate-calibration-session',
+    'create-execution-authorization-approval', 'apply-execution-authorization-approval', 'check-execution-authorization', 'create-calibration-review',
     'register-control-repository-entry', 'finalize-calibration-session', 'validate-order-scenario',
     'compile-order-scenario', 'dry-run-order-scenario', 'build-physical-scenario-plan', 'evaluate-results', 'analyze-run'
 )
@@ -67,6 +69,9 @@ $expectedHandlers = [ordered]@{
     'resolve-control-repository' = 'ControlRepositoryCommands'
     'create-calibration-session' = 'CalibrationCommands'
     'validate-calibration-session' = 'CalibrationCommands'
+    'create-execution-authorization-approval' = 'AuthorizationCommands'
+    'apply-execution-authorization-approval' = 'AuthorizationCommands'
+    'check-execution-authorization' = 'AuthorizationCommands'
     'create-calibration-review' = 'CalibrationCommands'
     'register-control-repository-entry' = 'CalibrationCommands'
     'finalize-calibration-session' = 'CalibrationCommands'
@@ -120,7 +125,7 @@ Assert-Equal 0 $help.ExitCode 'help exit code'
 Assert-Equal '' $help.StdErr 'help stderr'
 $helpHashBytes = [Security.Cryptography.SHA256]::HashData([Text.Encoding]::UTF8.GetBytes($help.StdOut))
 $helpHash = ([BitConverter]::ToString($helpHashBytes)).Replace('-', '').ToLowerInvariant()
-Assert-Equal '1974ae002e6be75c706339af644cc286184b20cd67890ee76f87b1869d6929cc' $helpHash 'help stdout bytes'
+Assert-Equal 'aa8a2048e7e245af5645be2572443bd016a49b13bc97700c7966dfdbc73e5b27' $helpHash 'help stdout bytes'
 $helpCommands = @([regex]::Matches($help.StdOut, '(?m)^  ([a-z][a-z0-9-]+)(?:\s|$)') | ForEach-Object { $_.Groups[1].Value })
 Assert-Equal ($expectedHelpCommands -join '|') ($helpCommands -join '|') 'Help command list and order'
 

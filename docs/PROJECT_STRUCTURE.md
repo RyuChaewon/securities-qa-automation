@@ -93,6 +93,7 @@ Runner는 `RuleTestPack.cases`만 소비한다. `datasetSnapshot`은 대상 prof
 | `Contracts` | 공통 상태와 JSON 계약 | `RuleCommon.cs` |
 | `Datasets` | 데이터셋 모델·검증과 legacy sanitize/secret 호환 helper | `RuleBased.cs` |
 | `Calibration` | 반복 read-only 관측, drift, human review, 승인 repository 적용 provenance | `OrderCalibration.cs`, `OrderCalibrationWorkflow.cs`, `OrderCalibrationLifecycle.cs` |
+| `Authorization` | stable ControlContractHash, redacted EnvironmentFingerprint, execution scope 승인·drift·만료·preflight 판정 | `ExecutionAuthorization.cs` |
 | `Controls` | Control Repository schema, logical key, 승인 hash, locator trust/risk와 canonical resolution | `ControlRepository.cs` |
 | `Evaluation` | Observation + ExpectedResult + EvaluationPolicy를 완성 TestResult로 변환 | `ResultEvaluator.cs` |
 | `Installation` | HTS 설치 자료 카탈로그 | `HtsInstallation.cs` |
@@ -134,6 +135,7 @@ Runner는 `RuleTestPack.cases`만 소비한다. `datasetSnapshot`은 대상 prof
 | `Commands/MapCommands.cs` | `extract-map-models` | runtime discovery |
 | `Commands/ScenarioCommands.cs` | generated scenario, approval, logical/physical plan·binding command | Core compiler 정책 재구현 |
 | `Commands/ControlRepositoryCommands.cs` | repository review·approval·validation·resolution adapter | locator 자동 승인 |
+| `Commands/AuthorizationCommands.cs` | environment approval template·apply와 canonical authorization status adapter | hash·scope·risk 재판정 |
 | `Commands/CalibrationCommands.cs` | read-only calibration session·review·registration adapter | UI capture 실행·자동 병합 |
 | `Commands/OrderScenarioCommands.cs` | order scenario validation·compile·DryRun adapter | UI action·risk verdict 재구현 |
 | `Commands/EvaluationCommands.cs` | Observation을 canonical `ResultEvaluator`에 전달 | 독자 verdict |

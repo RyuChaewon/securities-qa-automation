@@ -16,8 +16,12 @@ public sealed class OrderScenarioAuthoringTests
         Assert.False(plan.ActualExecutionAllowed);
         Assert.Equal(OrderRunPlanExecutionMode.DryRun, plan.ExecutionMode);
         Assert.Equal(OrderScenarioRunPlanCompiler.ComputeHash(plan), plan.PlanHash, ignoreCase: true);
+        Assert.Equal(ExecutionAuthorizationStatus.Authorized, plan.AuthorizationStatus);
+        Assert.False(string.IsNullOrWhiteSpace(plan.EnvironmentFingerprintHash));
+        Assert.False(string.IsNullOrWhiteSpace(plan.ExecutionAuthorizationHash));
         Assert.All(plan.Steps, step => Assert.False(string.IsNullOrWhiteSpace(step.ApprovalHash)));
         Assert.Empty(plan.Variables);
+        Assert.All(plan.Steps, step => Assert.False(string.IsNullOrWhiteSpace(step.ControlContractHash)));
         Assert.True(plan.Steps.Single(x => x.StepId == "required-checkpoint").RequiredForPass);
         Assert.False(plan.Steps.Single(x => x.StepId == "action").AffectsVerdict);
     }
@@ -124,10 +128,10 @@ public sealed class OrderScenarioAuthoringTests
     }
 
     [Fact]
-    public void Transactional_Action_Without_Separate_Allowlist_Is_Blocked()
+    public void Transactional_Action_Without_Environment_Scope_Is_Blocked()
     {
         var transaction = StableEntry(ControlRepositoryAction.FinalSubmit, ControlRiskClass.Transactional, "TRANSACTION_CONTROL");
-        AssertIssue(TransactionInput(transaction, ControlRepositoryAction.FinalSubmit, OrderScenarioOperation.Click), "ORDER_SCENARIO.TRANSACTION_ALLOWLIST_REQUIRED");
+        AssertIssue(TransactionInput(transaction, ControlRepositoryAction.FinalSubmit, OrderScenarioOperation.Click), "AUTH.TRANSACTION_SCOPE_REQUIRED");
     }
 
     [Fact]
@@ -174,10 +178,13 @@ public sealed class OrderScenarioAuthoringTests
     }
 
     [Fact]
-    public void Dpi_Bounds_Or_Fingerprint_Drift_Is_Blocked()
+    public void Dpi_And_Bounds_Transform_Do_Not_Reapprove_But_Fingerprint_Drift_Is_Blocked()
     {
-        var input = Input() with { RuntimeContext = Runtime() with { DpiScale = 1.25, ClientWidth = 801 } };
-        AssertIssue(input, "ORDER_SCENARIO.RUNTIME_DRIFT");
+        var transformed = Input() with { RuntimeContext = Runtime() with { DpiScale = 1.25, ClientWidth = 801, WindowWidth = 1201 } };
+        var drifted = Input() with { RuntimeContext = Runtime() with { HostFingerprint = "changed-host" } };
+
+        Assert.True(OrderScenarioValidator.Validate(transformed).IsValid);
+        AssertIssue(drifted, "ORDER_SCENARIO.RUNTIME_DRIFT");
     }
 
     [Fact]
@@ -202,6 +209,7 @@ public sealed class OrderScenarioAuthoringTests
         Assert.True(result.PlanHashValid);
         Assert.True(result.RequiredCheckpointChecked);
         Assert.True(result.RestorePlanChecked);
+        Assert.True(result.AuthorizationChecked);
         Assert.True(result.VariableBindingChecked);
     }
 
@@ -282,10 +290,16 @@ public sealed class OrderScenarioAuthoringTests
     private static void AssertIssue(OrderScenarioValidationInput input, string code) =>
         Assert.Contains(OrderScenarioValidator.Validate(input).Issues, issue => issue.Code == code);
 
-    private static OrderScenarioValidationInput Input() => new()
+    private static OrderScenarioValidationInput Input()
     {
-        Scenario = Scenario(), Repository = Repository(StableEntry()), StateGraph = Graph(), RuntimeContext = Runtime()
-    };
+        var entry = StableEntry();
+        return new()
+        {
+            Scenario = Scenario(), Repository = Repository(entry), StateGraph = Graph(), RuntimeContext = Runtime(),
+            CurrentEnvironment = Environment(), ExecutionAuthorization = Authorization(DefaultScope()),
+            AuthorizationCheckedAt = At, ControlPreflightObservations = [Observation(entry)]
+        };
+    }
 
     private static OrderScenarioDocument Scenario() => new()
     {
@@ -325,14 +339,23 @@ public sealed class OrderScenarioAuthoringTests
         ControlRepositoryAction action, OrderScenarioOperation operation, ControlRiskClass risk) => scenario with
     {
         Steps = scenario.Steps.Select(x => x.StepId == "action"
-            ? x with { RepositoryKey = key, RepositoryAction = action, Operation = operation, RiskClass = risk, TransactionalAllowlisted = true }
+            ? x with { RepositoryKey = key, RepositoryAction = action, Operation = operation, RiskClass = risk, TransactionalAllowlisted = true, OrderType = risk == ControlRiskClass.Transactional ? "LIMIT" : "" }
             : x).ToArray()
     };
 
     private static OrderScenarioValidationInput TransactionInput(ControlRepositoryEntry transaction, ControlRepositoryAction action, OrderScenarioOperation operation)
     {
         var scenario = ReplaceActionKey(Scenario(), transaction.Key, action, operation, transaction.RiskClass);
-        return Input() with { Scenario = scenario, Repository = Repository(StableEntry(), transaction) };
+        var stable = StableEntry();
+        var scope = DefaultScope() with
+        {
+            AllowedActions = [ControlRepositoryAction.Input, ControlRepositoryAction.Assert, ControlRepositoryAction.Select, action],
+            AllowedRiskClasses = [ControlRiskClass.General, transaction.RiskClass],
+            TransactionalActionsAllowed = false,
+            AllowedOrderTypes = ["LIMIT"]
+        };
+        return Input() with { Scenario = scenario, Repository = Repository(stable, transaction),
+            ExecutionAuthorization = Authorization(scope), ControlPreflightObservations = [Observation(stable), Observation(transaction)] };
     }
 
     private static ControlRepositoryKey Key(string logical = "FIXTURE_CONTROL") => new()
@@ -346,7 +369,11 @@ public sealed class OrderScenarioAuthoringTests
         var allowed = new[] { ControlRepositoryAction.Input, ControlRepositoryAction.Assert, ControlRepositoryAction.Select, extra }.Distinct().ToArray();
         var entry = new ControlRepositoryEntry
         {
-            Key = Key(logical), Status = ControlRepositoryEntryStatus.Approved,
+            Key = Key(logical), TargetProfileId = "fixture-target", BusinessRole = logical,
+            TransactionalRole = extra switch { ControlRepositoryAction.FinalSubmit => ControlTransactionalRole.FinalSubmit,
+                ControlRepositoryAction.AmendSubmit => ControlTransactionalRole.AmendSubmit,
+                ControlRepositoryAction.CancelSubmit => ControlTransactionalRole.CancelSubmit, _ => ControlTransactionalRole.None },
+            Status = ControlRepositoryEntryStatus.ReviewRequired,
             StableIdentity = new() { AutomationId = "fixture-" + logical.ToLowerInvariant() }, HostFingerprint = Host(),
             ExpectedControlKind = "Edit", RiskClass = risk, AllowedActions = allowed,
             ForbiddenActions = (extra is ControlRepositoryAction.FinalSubmit or ControlRepositoryAction.AmendSubmit or ControlRepositoryAction.CancelSubmit) ? [] :
@@ -360,7 +387,11 @@ public sealed class OrderScenarioAuthoringTests
     {
         var entry = new ControlRepositoryEntry
         {
-            Key = Key(logical), Status = ControlRepositoryEntryStatus.Approved,
+            Key = Key(logical), TargetProfileId = "fixture-target", BusinessRole = logical,
+            TransactionalRole = action switch { ControlRepositoryAction.FinalSubmit => ControlTransactionalRole.FinalSubmit,
+                ControlRepositoryAction.AmendSubmit => ControlTransactionalRole.AmendSubmit,
+                ControlRepositoryAction.CancelSubmit => ControlTransactionalRole.CancelSubmit, _ => ControlTransactionalRole.None },
+            Status = ControlRepositoryEntryStatus.ReviewRequired,
             AnchoredRelativeCoordinate = new() { RelativeX = 0.25, RelativeY = 0.5, RelativeWidth = 0.1, RelativeHeight = 0.1, AnchorId = "fixture-anchor" },
             HostFingerprint = Host(), ExpectedControlKind = "Button",
             VisualSignature = new() { Algorithm = "fixture", SignatureHash = "redacted-signature" },
@@ -374,7 +405,7 @@ public sealed class OrderScenarioAuthoringTests
     {
         var entry = new ControlRepositoryEntry
         {
-            Key = Key("VISUAL_CONTROL"), Status = ControlRepositoryEntryStatus.Approved,
+            Key = Key("VISUAL_CONTROL"), TargetProfileId = "fixture-target", BusinessRole = "visual-observation", Status = ControlRepositoryEntryStatus.ReviewRequired,
             HostFingerprint = Host(), ExpectedControlKind = "Button",
             VisualSignature = new() { Algorithm = "fixture", SignatureHash = "redacted-signature" },
             RiskClass = ControlRiskClass.General, AllowedActions = [ControlRepositoryAction.Click],
@@ -385,21 +416,55 @@ public sealed class OrderScenarioAuthoringTests
 
     private static ControlRepositoryEntry Approve(ControlRepositoryEntry entry)
     {
-        var hash = ControlRepositoryApprovalPayload.ComputeHash(entry);
-        return entry with
+        var template = ControlRepositoryApprovalWorkflow.CreateTemplate(entry);
+        return ControlRepositoryApprovalWorkflow.Apply(entry, template with
         {
-            ApprovalPayloadHash = hash,
-            Approval = new()
-            {
-                Status = TestPackApprovalStatus.Approved, ApprovedBy = "fixture-reviewer", ApprovedAt = At,
-                EvidenceRefs = ["fixture:approval"], ApprovedContentHash = hash
-            }
-        };
+            Status = TestPackApprovalStatus.Approved, ApprovedBy = "fixture-reviewer", ApprovedAt = At,
+            EvidenceRefs = ["fixture:approval"]
+        });
     }
 
     private static ControlRepositoryDocument Repository(params ControlRepositoryEntry[] entries) => new()
     {
         RepositoryId = "fixture-repository", TargetProfileId = "fixture-target", Status = ControlRepositoryStatus.Ready, Entries = entries
+    };
+
+    private static ExecutionAuthorizationDocument Authorization(ExecutionAuthorizationScope scope)
+    {
+        var draft = new ExecutionAuthorizationDraft { Environment = Environment(), Scope = scope };
+        var template = ExecutionAuthorizationWorkflow.CreateTemplate(draft);
+        return ExecutionAuthorizationWorkflow.Apply(draft, template with
+        {
+            Status = TestPackApprovalStatus.Approved, ApprovedBy = "fixture-environment-reviewer",
+            ApprovedAt = At, EvidenceRefs = ["fixture:environment-approval"]
+        });
+    }
+
+    private static ExecutionAuthorizationScope DefaultScope() => new()
+    {
+        PolicyVersion = "fixture-policy/1.0", TargetIds = ["fixture-target"], Screens = ["F001"], Maps = ["FAKE-MAP"],
+        AllowedActions = [ControlRepositoryAction.Input, ControlRepositoryAction.Assert, ControlRepositoryAction.Select],
+        AllowedRiskClasses = [ControlRiskClass.General], ExpiresAt = At.AddDays(30)
+    };
+
+    private static EnvironmentFingerprintInput Environment() => new()
+    {
+        TargetId = "fixture-target", ProductClassification = "synthetic-hts",
+        ExecutableFingerprint = "fixture-exe-hash", InstallationFingerprint = "fixture-install-hash", VersionFingerprint = "1.0",
+        HostClassification = "isolated-test-host", MachineFingerprint = "fixture-machine-hash",
+        EnvironmentClassification = ExecutionEnvironmentClassification.Test, RoutingClassification = "simulation-routing",
+        AccountClassification = ExecutionAccountClassification.Test, AdapterVersion = "fixture-adapter/1.0",
+        ExecutionPolicyVersion = "fixture-policy/1.0"
+    };
+
+    private static ControlContractObservation Observation(ControlRepositoryEntry entry) => new()
+    {
+        Key = entry.Key, StateContext = entry.Key.StateContext, StableIdentity = entry.StableIdentity,
+        MapRuntimeBinding = entry.MapRuntimeBinding, AnchoredRelativeCoordinate = entry.AnchoredRelativeCoordinate,
+        ExpectedControlKind = entry.ExpectedControlKind, VisualSignatureMatched = true,
+        ProcessName = entry.HostFingerprint!.ProcessName, ProcessFingerprint = entry.HostFingerprint.ProcessFingerprint,
+        HostFingerprint = entry.HostFingerprint.HostFingerprint,
+        WindowWidth = 1000, WindowHeight = 700, ClientWidth = 800, ClientHeight = 600, DpiScale = 1
     };
 
     private static ControlHostFingerprint Host() => new()

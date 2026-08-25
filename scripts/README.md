@@ -63,7 +63,7 @@
 | `modules/hts-run-cleanup.ps1` | runtime resources, `RunState` | cleanup 사실 | evidence 삭제·상태 변경 |
 | `modules/pipeline-common.ps1` | manifest, 경로 | 공통 target context | UI 실행 |
 | `modules/rule-control-exploration.ps1` | 기존 import 호출 | 호환 함수 | 새 lifecycle 소유 |
-| `modules/hts-order-scenario-authoring.ps1` | 캘리브레이션·authoring 입력 | Core CLI 결과 | UI Action·verdict |
+| `modules/hts-order-scenario-authoring.ps1` | 캘리브레이션·authoring·environment authorization 입력 | canonical Core CLI 결과 | hash·scope·risk 판정, UI Action·verdict |
 | `modules/report-sanitization.ps1` | result object | 마스킹된 표시 값 | canonical 상태 변경 |
 
 공개 명령을 추가할 때는 파일 헤더에 역할·입출력·부작용을 적고 manifest에 논리 진입점이 필요한지 먼저 판단한다. 공통 함수가 두 명령 이상에서 사용될 때만 `modules`로 이동한다.
