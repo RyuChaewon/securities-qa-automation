@@ -15,8 +15,13 @@ $orchestrationPath=Join-Path $root 'scripts\modules\hts-rule-suite-orchestration
 $orchestrationText=Get-Content -LiteralPath $orchestrationPath -Raw
 Assert-True ($orchestrationText-notmatch'Add-Type') 'orchestration does not declare native APIs'
 Assert-True ($orchestrationText-notmatch'(?m)^\$(VK_|KEYEVENT|SWP_|HWND_|WM_)') 'orchestration has no mutable Win32 constant state'
-$dryRunIndex=$orchestrationText.IndexOf('if ($DryRun)',[StringComparison]::Ordinal)
-$nativeIndex=$orchestrationText.IndexOf('Initialize-HtsNativeInterop',[StringComparison]::Ordinal)
-Assert-True ($dryRunIndex-ge0-and$nativeIndex-gt$dryRunIndex) 'native initialization stays after the dry-run return path'
+$modeRouterText=Get-Content -LiteralPath (Join-Path $root 'scripts\modules\hts-rule-suite-mode-router.ps1') -Raw
+$contextFactoryText=Get-Content -LiteralPath (Join-Path $root 'scripts\modules\hts-rule-suite-context-factory.ps1') -Raw
+$dryRunIndex=$orchestrationText.IndexOf('-DryRunCoordinator',[StringComparison]::Ordinal)
+$runtimeIndex=$orchestrationText.IndexOf('-InitializeRuntime',[StringComparison]::Ordinal)
+Assert-True ($dryRunIndex-ge0-and$runtimeIndex-gt$dryRunIndex) 'composition root routes DryRun before deferred runtime initialization'
+Assert-True ($modeRouterText.Contains("'DryRun' { & `$DryRunCoordinator")) 'DryRun route bypasses runtime initialization'
+Assert-True ($contextFactoryText-match'Initialize-HtsNativeInterop') 'runtime context factory owns explicit native initialization'
+Assert-True ($orchestrationText-notmatch'Initialize-HtsNativeInterop') 'composition root does not initialize native APIs directly'
 
 Write-Output "HTS_NATIVE_TESTS=PASS assertions=$script:assertions"

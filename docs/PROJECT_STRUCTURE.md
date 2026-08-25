@@ -130,11 +130,33 @@ FlaUI 객체는 `Automation` 밖으로 내보내지 않는다. PowerShell에는 
 | `hts-control-repository.ps1` | hover capture와 Core canonical resolution의 무판정 adapter; 승인·risk 판정 금지 |
 | `hts-order-scenario-authoring.ps1` | 캘리브레이션·검증·compile·DryRun Core CLI 연결; UI·risk·verdict 금지 |
 | `hts-reporting.ps1` | 완성된 TestResult와 raw evidence 직렬화 보조 |
-| `hts-rule-suite-orchestration.ps1` | 승인 이후 모듈 호출 순서와 결과 전달 |
+| `hts-rule-suite-orchestration.ps1` | 공개 인자와 lifecycle 모듈 조립만 담당하는 composition root |
 | `hts-target-adapter.ps1` | TestPack target profile을 generic context로 정규화 |
 | `hts-target-rule-*.ps1` | target profile이 제공한 규칙의 discovery/binding/action adapter |
 | `rule-control-exploration.ps1` | 이전 import 경로를 보존하는 얇은 호환 wrapper |
 | `report-sanitization.ps1` | 저장 전 민감정보 마스킹 |
+
+### Rule Suite lifecycle 모듈
+
+| 모듈 | 명시 입력 | 출력 | 담당하지 않는 책임 |
+|---|---|---|---|
+| `hts-rule-suite-bootstrap.ps1` | 공개 인자, 저장소 root | 승인된 TestPack·target context가 포함된 `RunSpec`, 출력 경로 | UI 초기화, 판정, report 렌더링 |
+| `hts-rule-suite-plan-loader.ps1` | `RunSpec`, compiled/physical plan, binding catalog | schema·planHash·file hash·실행 범위가 검증된 plan 속성 | plan 실행, fallback, binding 자동 수정 |
+| `hts-rule-suite-context-factory.ps1` | 검증 완료 `RunSpec` | `RunServices`, 초기 `RunState` | mode routing, 화면·case 루프, verdict |
+| `hts-rule-suite-mode-router.ps1` | `RunSpec`, 주입 coordinator | DryRun·PlanOnly·Execute 중 하나의 호출 결과 | 세부 UI 동작, TestStatus 계산 |
+| `hts-screen-runner.ps1` | 승인 case 순서, `RunServices`, `RunState` | 화면 사전점검·순서·종료 사실과 case 호출 결과 | 개별 값 판정, canonical verdict |
+| `hts-case-runner.ps1` | 단일 case와 세 lifecycle 객체 | action/checkpoint raw evidence를 담은 case frame | PASS/FAIL 할당, run summary |
+| `hts-case-action-runner.ps1`, `hts-case-legacy-runner.ps1` | 승인 physical step 또는 legacy query와 case frame | 기존 action·observation 사실 | screen 순서, self-healing, verdict |
+| `hts-run-result-finalizer.ps1` | raw Observation, evaluator adapter, 기존 result schema | canonical `case-results.json`, `test-results.json`, `summary.json` | 독자 판정, reporter 재판정 |
+| `hts-run-cleanup.ps1` | 주입 cleanup dependency, `RunState` | cleanup 성공·오류 사실 | evidence 삭제, 업무 성공·실패 변경 |
+
+상태 전달은 세 객체로 제한한다.
+
+| 객체 | 수명 | 대표 값 |
+|---|---|---|
+| `RunSpec` | run 동안 불변 | target context, TestPack/Dataset, mode, plan·approval/hash, 선택 범위, 출력 경로, risk 정책 |
+| `RunServices` | bootstrap 이후 주입 | Session, Navigation, Discovery, Binding, Action, Observation, Safety, Evaluation, Reporting, TargetAdapter |
+| `RunState` | run 동안 변경 | 현재 화면·case, action/checkpoint evidence, UI·transactional action 수, 오류/PENDING, cleanup와 산출물 경로 |
 
 UI 모듈은 ResultEvaluator나 XLSX renderer를 호출하지 않는다. orchestration은 raw Observation을 `result-evaluator.ps1`에 넘긴 뒤 반환된 TestResult 상태를 복사한다.
 

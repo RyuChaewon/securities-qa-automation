@@ -73,6 +73,30 @@ execution lane
   recorded wrapper -> video/cursor audit 증거
 ```
 
+## Rule Suite 생명주기
+
+`run-target-rule-suite.ps1`의 공개 인자와 `run-target-rule-suite.ps1 -> hts-rule-suite-orchestration.ps1` 경로는 그대로 유지한다. orchestration은 다음 순서만 조립한다.
+
+```text
+input validation
+  -> bootstrap (approved TestPack and target context)
+  -> plan loader (schema, planHash, file hash, binding scope)
+  -> RunServices / RunState factory
+  -> mode router
+       DryRun   -> offline CLI only; UI action 0
+       PlanOnly -> runtime observation; scenario action 0
+       Execute  -> approved screen/case runner
+  -> ResultEvaluator adapter
+  -> canonical result finalizer
+  -> failure-safe cleanup
+```
+
+`RunSpec`은 실행 중 바뀌지 않는 승인·plan·선택·경로 계약이다. `RunServices`는 Session부터 Reporting까지의 주입 의존성을 소유한다. `RunState`는 현재 화면·case, action과 checkpoint evidence, action counter, 오류, cleanup 대상과 산출물을 보존한다. cleanup은 예외 이후에도 evidence와 action count를 지우지 않는다.
+
+plan loader는 compiled plan, physical plan, binding catalog의 기존 schemaVersion, `planHash`, 파일 SHA-256, 설치 fingerprint, 유일 실행 후보 및 READY/partial 정책을 검증한다. mode router는 coordinator만 고르며 DryRun에서는 native/FlaUI runtime context를 만들지 않는다.
+
+case runner는 action delivery와 checkpoint observation을 분리해 finalizer에 넘긴다. finalizer는 `Invoke-RuleResultEvaluation` 반환 상태만 복사한다. 따라서 UI action 성공, PipelineStatus, report rendering은 TestStatus를 만들 수 없다. 기존 JSON schema와 CaseId, approval hash, plan hash 계산은 이 분리에서 변경되지 않는다.
+
 `run-auto-scenario-pipeline.ps1`은 두 lane과 MAP·시나리오 계획을 연결한다. 먼저 Dataset hash와 Approved TestPack을 검증하고, 그 뒤에만 PlanOnly Discovery 또는 실제 runner를 시작한다. 따라서 사용자가 제시한 `Discovery -> TargetSnapshot -> DatasetValidator` 표기는 산출물 이름을 나열한 개념도이며 실제 호출 순서가 아니다. `TargetSnapshot`은 DatasetValidator가 아니라 scenario generation과 binding이 소비한다.
 
 실제 전체 오케스트레이션은 다음 구성요소를 추가로 조합한다.

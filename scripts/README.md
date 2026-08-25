@@ -49,9 +49,21 @@
 
 `modules`의 파일은 직접 실행하지 않는다. 공개 명령이 dot-source하며 경로는 `config/pipeline.manifest.json`에 기록한다.
 
-- `modules/pipeline-common.ps1`
-- `modules/rule-control-exploration.ps1`
-- `modules/hts-order-scenario-authoring.ps1`: Core CLI의 캘리브레이션 세션·사람 검토·정적 검증·compile·DryRun을 연결하며 UI Action과 verdict를 수행하지 않는다.
-- `modules/report-sanitization.ps1`
+| 모듈 | 입력 | 출력 | 금지 책임 |
+|---|---|---|---|
+| `modules/hts-rule-suite-bootstrap.ps1` | 공개 인자, root | 승인된 `RunSpec`, output path | UI·판정·report 렌더링 |
+| `modules/hts-rule-suite-plan-loader.ps1` | compiled/physical plan, catalog | hash·scope 검증 plan | 실행·fallback |
+| `modules/hts-rule-suite-context-factory.ps1` | `RunSpec` | `RunServices`, `RunState` | mode·case·verdict |
+| `modules/hts-rule-suite-mode-router.ps1` | 세 lifecycle 객체, coordinator | 선택된 mode 결과 | 세부 UI 동작 |
+| `modules/hts-screen-runner.ps1` | 승인 case 순서 | screen lifecycle 사실 | 개별 verdict |
+| `modules/hts-case-runner.ps1` | 단일 case | raw action/checkpoint frame | PASS/FAIL |
+| `modules/hts-case-action-runner.ps1` | 승인 control plan | action·observation evidence | screen 순서·판정 |
+| `modules/hts-case-legacy-runner.ps1` | legacy query case | 호환 query evidence | plan·판정 |
+| `modules/hts-run-result-finalizer.ps1` | raw evidence, evaluator | 기존 canonical JSON | 독자 verdict |
+| `modules/hts-run-cleanup.ps1` | runtime resources, `RunState` | cleanup 사실 | evidence 삭제·상태 변경 |
+| `modules/pipeline-common.ps1` | manifest, 경로 | 공통 target context | UI 실행 |
+| `modules/rule-control-exploration.ps1` | 기존 import 호출 | 호환 함수 | 새 lifecycle 소유 |
+| `modules/hts-order-scenario-authoring.ps1` | 캘리브레이션·authoring 입력 | Core CLI 결과 | UI Action·verdict |
+| `modules/report-sanitization.ps1` | result object | 마스킹된 표시 값 | canonical 상태 변경 |
 
 공개 명령을 추가할 때는 파일 헤더에 역할·입출력·부작용을 적고 manifest에 논리 진입점이 필요한지 먼저 판단한다. 공통 함수가 두 명령 이상에서 사용될 때만 `modules`로 이동한다.

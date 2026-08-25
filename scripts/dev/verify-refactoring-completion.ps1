@@ -70,10 +70,15 @@ Assert-RefactoringInvariant ($entryText -notmatch 'CombinationGenerator|RuleCase
 
 $orchestrationPath = Join-Path $root 'scripts\modules\hts-rule-suite-orchestration.ps1'
 $orchestrationText = Get-Content -LiteralPath $orchestrationPath -Raw -Encoding UTF8
-$validationIndex = $orchestrationText.IndexOf('validate-test-pack', [StringComparison]::Ordinal)
-$sessionIndex = $orchestrationText.IndexOf('Start-FlaUiBridge', [StringComparison]::Ordinal)
-Assert-RefactoringInvariant ($validationIndex -ge 0) 'Orchestration must validate the approved TestPack.'
-Assert-RefactoringInvariant ($sessionIndex -gt $validationIndex) 'Approved TestPack validation must precede FlaUI session startup.'
+$bootstrapText = Get-Content -LiteralPath (Join-Path $root 'scripts\modules\hts-rule-suite-bootstrap.ps1') -Raw -Encoding UTF8
+$contextFactoryText = Get-Content -LiteralPath (Join-Path $root 'scripts\modules\hts-rule-suite-context-factory.ps1') -Raw -Encoding UTF8
+$screenRunnerText = Get-Content -LiteralPath (Join-Path $root 'scripts\modules\hts-screen-runner.ps1') -Raw -Encoding UTF8
+$bootstrapIndex = $orchestrationText.IndexOf('Initialize-HtsRuleSuiteBootstrap', [StringComparison]::Ordinal)
+$modeIndex = $orchestrationText.IndexOf('Invoke-HtsRuleSuiteMode', [StringComparison]::Ordinal)
+Assert-RefactoringInvariant ($bootstrapText -match 'validate-test-pack') 'Bootstrap must validate the approved TestPack.'
+Assert-RefactoringInvariant ($contextFactoryText -match 'Initialize-HtsNativeInterop') 'Context factory must own deferred native initialization.'
+Assert-RefactoringInvariant ($screenRunnerText -match 'Start-FlaUiBridge') 'Screen runner must own session startup.'
+Assert-RefactoringInvariant ($bootstrapIndex -ge 0 -and $modeIndex -gt $bootstrapIndex) 'Approved TestPack bootstrap must precede mode routing and session startup.'
 Assert-RefactoringInvariant ($orchestrationText -notmatch 'Get-VariableCombinations|Get-RuleCases|Get-HtsSignalJudgment') 'Orchestration must not contain legacy generation or judgment functions.'
 
 $programPath = Join-Path $root 'src\HtsQa.Cli\Program.cs'

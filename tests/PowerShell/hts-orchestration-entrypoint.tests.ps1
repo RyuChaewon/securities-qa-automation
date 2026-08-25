@@ -26,11 +26,17 @@ Assert-True ($entryText-match'@PSBoundParameters') 'entrypoint forwards only the
 $orchestrationText=Get-Content -LiteralPath $orchestrationPath -Raw
 $orchestrationFunctions=@($orchestrationAst.FindAll({param($node)$node-is[System.Management.Automation.Language.FunctionDefinitionAst]},$true))
 Assert-Equal 0 $orchestrationFunctions.Count 'orchestration defines no responsibility implementation functions'
-$validationIndex=$orchestrationText.IndexOf('validate-test-pack',[StringComparison]::Ordinal)
-$sessionIndex=$orchestrationText.IndexOf('Start-FlaUiBridge',[StringComparison]::Ordinal)
-Assert-True ($validationIndex-ge0) 'orchestration retains approved TestPack validation'
-Assert-True ($sessionIndex-gt$validationIndex) 'TestPack validation remains before any FlaUI session start'
-foreach($module in @('hts-native.ps1','hts-session.ps1','hts-navigation.ps1','hts-discovery.ps1','hts-state-discovery.ps1','hts-binding.ps1','hts-action.ps1','hts-observation.ps1','hts-safety.ps1','hts-reporting.ps1','hts-runtime-context.ps1')){
+Assert-True (@(Get-Content -LiteralPath $orchestrationPath).Count-le140) 'orchestration stays a small composition root'
+$bootstrapText=Get-Content -LiteralPath (Join-Path $root 'scripts\modules\hts-rule-suite-bootstrap.ps1') -Raw
+$contextFactoryText=Get-Content -LiteralPath (Join-Path $root 'scripts\modules\hts-rule-suite-context-factory.ps1') -Raw
+$screenRunnerText=Get-Content -LiteralPath (Join-Path $root 'scripts\modules\hts-screen-runner.ps1') -Raw
+Assert-True ($bootstrapText-match'validate-test-pack') 'bootstrap retains approved TestPack validation'
+Assert-True ($contextFactoryText-match'Initialize-HtsNativeInterop') 'context factory owns deferred native initialization'
+Assert-True ($screenRunnerText-match'Start-FlaUiBridge') 'screen runner owns session startup'
+$bootstrapIndex=$orchestrationText.IndexOf('Initialize-HtsRuleSuiteBootstrap',[StringComparison]::Ordinal)
+$modeIndex=$orchestrationText.IndexOf('Invoke-HtsRuleSuiteMode',[StringComparison]::Ordinal)
+Assert-True ($bootstrapIndex-ge0-and$modeIndex-gt$bootstrapIndex) 'approved TestPack bootstrap precedes mode routing and session startup'
+foreach($module in @('hts-native.ps1','hts-session.ps1','hts-navigation.ps1','hts-discovery.ps1','hts-state-discovery.ps1','hts-binding.ps1','hts-action.ps1','hts-observation.ps1','hts-safety.ps1','hts-reporting.ps1','hts-runtime-context.ps1','hts-rule-suite-bootstrap.ps1','hts-rule-suite-plan-loader.ps1','hts-rule-suite-context-factory.ps1','hts-rule-suite-mode-router.ps1','hts-screen-runner.ps1','hts-case-runner.ps1','hts-run-result-finalizer.ps1','hts-run-cleanup.ps1')){
     Assert-True ($orchestrationText.Contains($module)) "orchestration composes $module"
 }
 

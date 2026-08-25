@@ -92,7 +92,10 @@ Assert-True ($moduleText -notmatch '\$script:|\$global:') 'observation module ha
 Assert-True ($moduleText -notmatch 'Invoke-RuleResultEvaluation|Invoke-RuleSignalEvaluation|Set-Content|Add-Content') 'observation module cannot evaluate or report results'
 $orchestrationText=Get-Content -LiteralPath (Join-Path $root 'scripts\modules\hts-rule-suite-orchestration.ps1') -Raw
 Assert-True ($orchestrationText-notmatch'function (Get-MapOracleMessageMatch|Get-InstallationErrorCodeMatch|Get-RuleExpectedOutcome|Test-SystemFailureSignal|Test-InputValidationSignal|Get-HtsSignalObservation|Get-HtsDialogObservation|Add-OracleObservation|Get-MapOracleErrorRegex)') 'orchestration no longer owns observation normalization adapters'
-Assert-True ($orchestrationText-match'New-HtsSignalObservation -Context \$observationContext') 'orchestration passes explicit observation context to normalization'
+$caseModuleText=@('hts-case-action-runner.ps1','hts-case-legacy-runner.ps1','hts-case-runner.ps1') | ForEach-Object {
+    Get-Content -LiteralPath (Join-Path $root "scripts\modules\$_") -Raw
+}
+Assert-True (($caseModuleText -join "`n")-match'New-HtsSignalObservation -Context \$observationContext') 'case lifecycle passes explicit observation context to normalization'
 Assert-True ($orchestrationText-notmatch'function (Get-HtsDialogs|Add-LinkedScreenObservations|Add-UnnumberedTransitionObservation|Test-HtsConnectionDialog|Get-HtsConnectionDialogs|Add-PopupObservations|Capture-HtsScreenshot|Get-LogState|Get-TransmissionDelta|Get-LogErrors|Get-ErrorWindowTexts|Get-ExplicitWindowErrors)') 'orchestration no longer owns observation collection implementations'
 
 Write-Output "HTS_OBSERVATION_TESTS=PASS assertions=$script:assertions"
