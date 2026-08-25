@@ -1,0 +1,19 @@
+{
+  "schemaVersion": "1.0",
+  "scenarioKind": "ScreenContract",
+  "suite": "0101 Screen Contract Smoke",
+  "scope": "Window/Layout/Native Structure",
+  "businessTransactionCoverage": "None",
+  "physicalActionCount": 0,
+  "transactionalActionCount": 0,
+  "screenId": "0101",
+  "executionMode": "ObservationOnly",
+  "cases": [
+    { "scenarioId": "SC-0101-SCREEN-001", "caseId": "SC-0101-SCREEN-001", "title": "Window Attachment", "checkpointId": "CP-WINDOW-ATTACHED" },
+    { "scenarioId": "SC-0101-SCREEN-002", "caseId": "SC-0101-SCREEN-002", "title": "Layout Discovery Health", "checkpointId": "CP-LAYOUT-HEALTH" },
+    { "scenarioId": "SC-0101-SCREEN-003", "caseId": "SC-0101-SCREEN-003", "title": "Three-region Layout", "checkpointId": "CP-THREE-REGION" },
+    { "scenarioId": "SC-0101-SCREEN-004", "caseId": "SC-0101-SCREEN-004", "title": "Native Control Baseline", "checkpointId": "CP-NATIVE-BASELINE" },
+    { "scenarioId": "SC-0101-SCREEN-005", "caseId": "SC-0101-SCREEN-005", "title": "Snapshot Stability and Redaction", "checkpointId": "CP-STABILITY-REDACTION" }
+  ]
+}
+
