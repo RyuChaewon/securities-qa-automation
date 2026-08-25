@@ -1,0 +1,31 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "type": "object",
+  "required": ["schemaVersion", "scenarioKind", "suite", "scope", "cases"],
+  "properties": {
+    "schemaVersion": { "const": "1.0" },
+    "scenarioKind": { "const": "ScreenContract" },
+    "suite": { "type": "string" },
+    "scope": { "type": "string" },
+    "businessTransactionCoverage": { "const": "None" },
+    "physicalActionCount": { "const": 0 },
+    "transactionalActionCount": { "const": 0 },
+    "cases": {
+      "type": "array",
+      "minItems": 5,
+      "items": {
+        "type": "object",
+        "required": ["scenarioId", "caseId", "title", "checkpointId"],
+        "properties": {
+          "scenarioId": { "type": "string" },
+          "caseId": { "type": "string" },
+          "title": { "type": "string" },
+          "checkpointId": { "type": "string" }
+        },
+        "additionalProperties": false
+      }
+    }
+  },
+  "additionalProperties": true
+}
+
