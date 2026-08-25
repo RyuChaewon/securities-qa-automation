@@ -63,6 +63,20 @@ Scenario planning은 같은 `HtsQa.Core` namespace와 기존 public API를 유�
 | Binding | `Scenarios/Binding/ScenarioBindingMaterializer.cs` | runtime 후보 결합과 physical READY/partial 판정 | TestResult 판정 |
 | IDs | `Scenarios/ScenarioIds.cs` | canonical scenario helper hash | validation, compilation, binding |
 
+## CLI command routing
+
+`src/HtsQa.Cli/Program.cs`는 `CliApplication.Run(args)`에만 위임한다. `CliApplication`은 repository context 생성, command 정규화, 명시적 switch routing, unknown command와 top-level 예외의 기존 exit code만 소유한다.
+
+| 계층 | 입력 | 출력 | 금지 책임 |
+|---|---|---|---|
+| `CliCommandContext` | current directory, caller path | repository root, normalized full path | command·업무 validation |
+| `CliArguments` | argv | required/optional/enum option, optional JSON output | Core 정책 |
+| `CliHelp` | 없음 | 기존 help stdout | routing |
+| `Commands/*Commands.cs` | command context와 argv | 기존 stdout/stderr·JSON·exit code | HTS/FlaUI 실행, verdict 재판정 |
+| `CliApplication` | argv | 정확한 handler 반환 code | 업무 JSON·hash 계산 |
+
+기능별 handler는 Dataset, TestPack, MAP, Scenario, Control Repository, Calibration, Order Scenario, Evaluation, Run Analysis의 아홉 파일로 나뉜다. `FindRoot`·`Full`은 context, `Required`·`GetOpt`·enum list·optional JSON output은 arguments가 단독 소유한다. 이 분리는 command 문자열, 인자, schema, CaseId·ScenarioId·planHash·approval hash, stdout/stderr와 exit code를 변경하지 않는다.
+
 ## 전체 호출 순서
 
 ```text

@@ -18,6 +18,30 @@
 
 실행 파일 이름이나 위치가 바뀌면 `pipeline.manifest.json`의 `entryPoints`를 수정한다. 호출 스크립트에 새 경로 문자열을 추가하지 않는다. 공통 경로 계산은 `Resolve-RulePath`, 진입점 탐색은 `Get-RulePipelineEntryPoint`를 사용한다.
 
+## CLI command 추가
+
+CLI process entrypoint는 `src/HtsQa.Cli/Program.cs`이며 새 command body를 이 파일에 넣지 않는다.
+
+1. 기능에 맞는 `src/HtsQa.Cli/Commands/*Commands.cs`에 Core adapter를 추가한다.
+2. `CliApplication.cs`의 명시적 switch에 기존 형식으로 route를 등록한다.
+3. `CliHelp.cs`에 사용법을 추가한다.
+4. 공통 option은 `CliArguments`, repository 경로는 `CliCommandContext`를 사용한다.
+5. command 목록 중복, router/help 불일치, stdout/stderr와 exit code는 `tests/PowerShell/cli-command-routing.tests.ps1`로 고정한다.
+
+| 기능 | handler |
+|---|---|
+| Dataset | `DatasetCommands.cs` |
+| TestPack | `TestPackCommands.cs` |
+| MAP | `MapCommands.cs` |
+| generated/compiled/physical Scenario | `ScenarioCommands.cs` |
+| Control Repository | `ControlRepositoryCommands.cs` |
+| Calibration | `CalibrationCommands.cs` |
+| Order Scenario | `OrderScenarioCommands.cs` |
+| canonical evaluation | `EvaluationCommands.cs` |
+| existing run display | `RunAnalysisCommands.cs` |
+
+handler는 UI 실행, locator 추정, verdict 계산을 소유하지 않는다. 새 command framework, reflection registration, 외부 DI package를 추가하지 않는다.
+
 ## 대상 프로필 변경
 
 대상 창, 화면 ID 정규식, 설치 경로와 MAP 패턴은 데이터셋 `targetProfile`에 둔다. 코드에 대상별 클래스명, 제목, 화면번호 범위를 추가하지 않는다.

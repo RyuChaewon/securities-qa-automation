@@ -85,13 +85,34 @@ Assert-RefactoringInvariant ($screenRunnerText -match 'Start-FlaUiBridge') 'Scre
 Assert-RefactoringInvariant ($bootstrapIndex -ge 0 -and $modeIndex -gt $bootstrapIndex) 'Approved TestPack bootstrap must precede mode routing and session startup.'
 Assert-RefactoringInvariant ($orchestrationText -notmatch 'Get-VariableCombinations|Get-RuleCases|Get-HtsSignalJudgment') 'Orchestration must not contain legacy generation or judgment functions.'
 
-$programPath = Join-Path $root 'src\HtsQa.Cli\Program.cs'
-$programText = Get-Content -LiteralPath $programPath -Raw -Encoding UTF8
-$runMethod = [regex]::Match($programText, '(?s)int RunTestPack\(.*?(?=\r?\nint [A-Z])').Value
-Assert-RefactoringInvariant (-not [string]::IsNullOrWhiteSpace($runMethod)) 'CLI RunTestPack method must exist.'
+$cliRoot = Join-Path $root 'src\HtsQa.Cli'
+$programText = Get-Content -LiteralPath (Join-Path $cliRoot 'Program.cs') -Raw -Encoding UTF8
+$applicationText = Get-Content -LiteralPath (Join-Path $cliRoot 'CliApplication.cs') -Raw -Encoding UTF8
+$argumentsText = Get-Content -LiteralPath (Join-Path $cliRoot 'CliArguments.cs') -Raw -Encoding UTF8
+$contextText = Get-Content -LiteralPath (Join-Path $cliRoot 'CliCommandContext.cs') -Raw -Encoding UTF8
+$helpText = Get-Content -LiteralPath (Join-Path $cliRoot 'CliHelp.cs') -Raw -Encoding UTF8
+$commandFiles = @(Get-ChildItem -LiteralPath (Join-Path $cliRoot 'Commands') -File -Filter '*Commands.cs')
+$testPackText = Get-Content -LiteralPath (Join-Path $cliRoot 'Commands\TestPackCommands.cs') -Raw -Encoding UTF8
+$runMethod = [regex]::Match($testPackText, '(?s)internal static int RunTestPack\(.*?(?=\r?\n\s*(?:internal|private) static|\r?\n})').Value
+$datasetText = Get-Content -LiteralPath (Join-Path $cliRoot 'Commands\DatasetCommands.cs') -Raw -Encoding UTF8
+Assert-RefactoringInvariant ($programText -match 'CliApplication\.Run\(args\)' -and $programText -notmatch 'switch|JsonFile|JsonSerializer') 'CLI Program must only delegate to CliApplication.'
+Assert-RefactoringInvariant ($applicationText -match 'command switch' -and $applicationText -match 'catch \(Exception ex\)') 'CliApplication must own routing and top-level exception handling.'
+Assert-RefactoringInvariant ($applicationText -notmatch 'JsonFile|JsonSerializer|ResultEvaluator|CombinationGenerator') 'CliApplication must not own business JSON or Core policy.'
+Assert-RefactoringInvariant ($commandFiles.Count -eq 9) 'CLI domain commands must remain split across nine handler files.'
 Assert-RefactoringInvariant ($runMethod -match 'LoadApprovedCases') 'CLI Runner must load cases through TestPackRunnerContract.'
 Assert-RefactoringInvariant ($runMethod -notmatch 'CombinationGenerator|RuleCaseExpander\.Expand|LoadValidatedDataset') 'CLI Runner must not expand a raw Dataset.'
-Assert-RefactoringInvariant ($programText -match 'run-rule-dataset.*support' -or $programText -match 'run-rule-dataset.*\uC9C0\uC6D0') 'Legacy raw Dataset run command must remain rejected.'
+Assert-RefactoringInvariant ($datasetText -match 'run-rule-dataset.*support' -or $datasetText -match 'run-rule-dataset.*\uC9C0\uC6D0') 'Legacy raw Dataset run command must remain rejected.'
+Assert-RefactoringInvariant ($argumentsText -match 'static string Required' -and $argumentsText -match 'static string GetOpt' -and $argumentsText -match 'static T\[\] ParseEnumList') 'CliArguments must own common option parsing.'
+Assert-RefactoringInvariant ($contextText -match 'static string FindRoot' -and $contextText -match 'string Full\(string path\)') 'CliCommandContext must own repository root discovery and path normalization.'
+Assert-RefactoringInvariant ($helpText -match 'HtsQa\.Cli \uBA85\uB839:' -and $helpText -notmatch 'command switch') 'CliHelp must own the stable help text only.'
+$otherCliText = @(
+    $applicationText
+    $contextText
+    $helpText
+    $commandFiles | ForEach-Object { Get-Content -LiteralPath $_.FullName -Raw -Encoding UTF8 }
+) -join [Environment]::NewLine
+Assert-RefactoringInvariant ($otherCliText -notmatch 'static string Required\(' -and $otherCliText -notmatch 'static string GetOpt\(') 'Required and GetOpt must have one owner.'
+Assert-RefactoringInvariant ($otherCliText -notmatch 'HtsQa\.FlaUi|FlaUiAutomationEngine|Start-FlaUiBridge') 'CLI routing and handlers must not invoke FlaUI.'
 
 $productionFiles = @(
     $coreFiles

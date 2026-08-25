@@ -18,6 +18,12 @@
 |   `-- dev/                실제 HTS를 건드리지 않는 개발 검증
 |-- src/
 |   |-- HtsQa.Cli/          정적 생성·검증·컴파일 명령 호스트
+|   |   |-- Program.cs      `CliApplication.Run(args)`만 호출하는 process entrypoint
+|   |   |-- CliApplication.cs  command routing과 최상위 오류·exit code
+|   |   |-- CliCommandContext.cs  repository root와 경로 정규화
+|   |   |-- CliArguments.cs  공통 option parsing과 optional JSON output
+|   |   |-- CliHelp.cs      기존 help stdout 계약
+|   |   `-- Commands/       기능군별 Core CLI adapter
 |   |-- HtsQa.Core/         UI와 무관한 도메인·파서·정책
 |   `-- HtsQa.FlaUi/        FlaUI UIA3 브리지와 자동화 엔진
 |-- targets/                화면별 Target Adapter, profile, importer와 호환 명령
@@ -112,6 +118,28 @@ Runner는 `RuleTestPack.cases`만 소비한다. `datasetSnapshot`은 대상 prof
 | `ScenarioIds.cs` | canonical 문자열 | 기존 fingerprint 기반 ID hash | 정책·I/O |
 
 `RuleScenarioGeneration.cs`와 `OrderScenarioAuthoring.cs`는 이 분리에서 변경하지 않는다. compiler와 binding은 `ResultEvaluator`를 호출하지 않으며, PowerShell과 reporter는 기존 JSON을 그대로 소비한다.
+
+## HtsQa.Cli 책임
+
+`Program.cs`는 인수를 바꾸지 않고 `CliApplication.Run(args)`에 위임한다. 실제 command 문자열, unknown command, 최상위 예외와 exit code는 `CliApplication` 한 곳에서 소유한다. command handler는 Core API와 JSON I/O를 연결하지만 HTS, FlaUI, verdict 정책을 실행하지 않는다.
+
+| 파일 | 소유 command 또는 공통 책임 | 담당하지 않는 책임 |
+|---|---|---|
+| `CliApplication.cs` | root context 생성, 명시적 switch routing, top-level stderr·exit code | 업무 JSON·hash·verdict |
+| `CliCommandContext.cs` | `FindRoot`, 상대·절대 경로 정규화 | option·업무 validation |
+| `CliArguments.cs` | `Required`, `GetOpt`, enum list, optional JSON output | command routing·업무 정책 |
+| `CliHelp.cs` | 기존 help command·사용법과 stdout 바이트 계약 | routing |
+| `Commands/DatasetCommands.cs` | `validate-rule-dataset`, `expand-rule-cases`, `run-rule-dataset` | TestPack 승인 |
+| `Commands/TestPackCommands.cs` | TestPack compile·approval template·validate·offline dry-run | 실제 HTS 실행 |
+| `Commands/MapCommands.cs` | `extract-map-models` | runtime discovery |
+| `Commands/ScenarioCommands.cs` | generated scenario, approval, logical/physical plan·binding command | Core compiler 정책 재구현 |
+| `Commands/ControlRepositoryCommands.cs` | repository review·approval·validation·resolution adapter | locator 자동 승인 |
+| `Commands/CalibrationCommands.cs` | read-only calibration session·review·registration adapter | UI capture 실행·자동 병합 |
+| `Commands/OrderScenarioCommands.cs` | order scenario validation·compile·DryRun adapter | UI action·risk verdict 재구현 |
+| `Commands/EvaluationCommands.cs` | Observation을 canonical `ResultEvaluator`에 전달 | 독자 verdict |
+| `Commands/RunAnalysisCommands.cs` | 기존 `summary.json` 표시 | 결과 재판정 |
+
+새 command는 가장 가까운 `Commands/*Commands.cs`에 handler를 두고 `CliApplication` switch와 `CliHelp` 사용법을 함께 갱신한다. 공통 helper를 handler에 복제하지 않으며, 새 기능군이 기존 책임과 겹치지 않을 때만 새 handler 파일을 만든다.
 
 ## FlaUI 책임
 
