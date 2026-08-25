@@ -68,6 +68,24 @@ public sealed class BridgeRequest
     public IReadOnlyList<LayoutRegionHint> RegionHints { get; set; } = Array.Empty<LayoutRegionHint>();
     public IReadOnlyList<SensitiveControlHint> SensitiveControlHints { get; set; } = Array.Empty<SensitiveControlHint>();
 
+    /// <summary>observeInteractionFrame에서 raw pixel 저장 없이 visual hash를 계산할지 선택한다.</summary>
+    public bool IncludeVisualSignature { get; set; } = true;
+    public int VisualGridColumns { get; set; } = 16;
+    public int VisualGridRows { get; set; } = 12;
+
+    /// <summary>analyzeObservedInteraction이 상관분석할 manual pointer와 frame evidence다.</summary>
+    public PassivePointerObservation? PointerDown { get; set; }
+    public PassivePointerObservation? PointerUp { get; set; }
+    public NativeInteractionFrameSnapshot? PreInteractionFrame { get; set; }
+    public IReadOnlyList<NativeInteractionFrameSnapshot> PostInteractionFrames { get; set; } = Array.Empty<NativeInteractionFrameSnapshot>();
+    public IReadOnlyList<PassiveWindowEventObservation> WindowEvents { get; set; } = Array.Empty<PassiveWindowEventObservation>();
+    public ObservedInteractionSnapshot? PreviousInteraction { get; set; }
+    public int InteractionSequence { get; set; }
+
+    /// <summary>clusterObservedInteractions가 ReviewRequired hit-zone 후보로 묶을 관찰 목록이다.</summary>
+    public IReadOnlyList<ObservedInteractionSnapshot> Interactions { get; set; } = Array.Empty<ObservedInteractionSnapshot>();
+    public double ZoneDistanceThreshold { get; set; } = 0.04;
+
 }
 
 /// <summary>
@@ -233,6 +251,9 @@ public sealed class BridgeResponse
     public ControlCaptureSnapshot? CaptureCandidate { get; set; }
     public ControlRepositoryPreflightSnapshot? ControlRepositoryPreflight { get; set; }
     public LayoutDiscoverySnapshot? LayoutDiscovery { get; set; }
+    public NativeInteractionFrameSnapshot? InteractionFrame { get; set; }
+    public ObservedInteractionSnapshot? ObservedInteraction { get; set; }
+    public IReadOnlyList<InteractionZoneCandidate> InteractionZones { get; set; } = Array.Empty<InteractionZoneCandidate>();
 
     /// <summary>프로토콜 수준 예외를 일관된 실패 응답으로 변환한다.</summary>
     public static BridgeResponse Failure(BridgeRequest request, string code, string message, bool fallback = false) => new()

@@ -12,7 +12,8 @@
     "reportExporter": "scripts/export-rule-results-xlsx.ps1",
     "tcReportExporter": "scripts/export-tc-results-xlsx.ps1",
     "bindingPlanner": "scripts/plan-scenario-bindings.ps1",
-    "externalPipeline": "scripts/invoke-scenario-pipeline.ps1"
+    "externalPipeline": "scripts/invoke-scenario-pipeline.ps1",
+    "passiveInteractionRecorder": "targets/1q-hts/0101/scripts/record-order-screen-interactions.ps1"
   },
   "sharedLibraries": [
     "scripts/modules/pipeline-common.ps1",

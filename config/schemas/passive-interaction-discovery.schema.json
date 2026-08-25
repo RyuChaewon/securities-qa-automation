@@ -1,0 +1,48 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://local.invalid/schemas/passive-interaction-discovery.schema.json",
+  "title": "Passive Interaction Discovery Artifact",
+  "type": "object",
+  "required": [
+    "schemaVersion",
+    "artifactRole",
+    "artifactKind",
+    "interactionRole",
+    "testExecution",
+    "verdictEligible",
+    "resultEvaluatorInvoked",
+    "canonicalVerdict",
+    "scenarioId",
+    "caseId",
+    "automated",
+    "payload"
+  ],
+  "properties": {
+    "schemaVersion": { "const": "1.0" },
+    "artifactRole": { "const": "Discovery" },
+    "artifactKind": {
+      "enum": [
+        "InteractionSession",
+        "ObservedInteractions",
+        "InteractionZones",
+        "StateTransitionSuggestions",
+        "LogicalRoleSuggestions",
+        "ControlRepositoryCandidates",
+        "ScenarioAuthoringHints"
+      ]
+    },
+    "interactionRole": { "const": "ObservedManualInteraction" },
+    "testExecution": { "const": false },
+    "verdictEligible": { "const": false },
+    "resultEvaluatorInvoked": { "const": false },
+    "canonicalVerdict": { "type": "null" },
+    "scenarioId": { "type": "null" },
+    "caseId": { "type": "null" },
+    "executionStatus": { "const": "NotExecuted" },
+    "verdictStatus": { "const": "NoCanonicalVerdict" },
+    "evaluatorStatus": { "const": "ResultEvaluatorNotInvoked" },
+    "automated": { "const": false },
+    "payload": { "type": "object" }
+  },
+  "additionalProperties": false
+}

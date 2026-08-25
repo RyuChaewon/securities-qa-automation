@@ -47,6 +47,9 @@ public sealed partial class FlaUiAutomationEngine : IDisposable
             "controlrepositorypreflight" => ObserveControlRepositoryPoint(request),
             "discover" => Discover(request),
             "discoverlayout" => DiscoverLayout(request),
+            "observeinteractionframe" => ObserveInteractionFrame(request),
+            "analyzeobservedinteraction" => AnalyzeObservedInteraction(request),
+            "clusterobservedinteractions" => ClusterObservedInteractions(request),
             "action" => Act(request),
             _ => BridgeResponse.Failure(request, "UNKNOWN_OPERATION", $"지원하지 않는 연산입니다: {request.Operation}")
         };

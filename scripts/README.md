@@ -32,6 +32,7 @@
 | `record-desktop-frames.ps1` | 대상 전체 창 프레임과 MP4 생성 |
 | `dev/verify-source-layout.ps1` | 폴더·manifest·주석 헤더·PowerShell 구문 검증 |
 | `../targets/1q-hts/0101/scripts/inspect-order-screen.ps1` | 열린 0101 HWND의 read-only FlaUI layout Discovery; UI Action·verdict 없음 |
+| `../targets/1q-hts/0101/scripts/record-order-screen-interactions.ps1` | 사용자의 manual click을 passive hook과 전후 frame으로 묶는 local Discovery; 자동 input·verdict 없음 |
 
 진단 명령도 동일한 대상 계약을 사용한다.
 
