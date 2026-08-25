@@ -1,6 +1,8 @@
 // 역할: 안정 ControlContractHash와 환경 실행 승인 재사용, drift, scope, zero-action 계약을 순수 synthetic 데이터로 검증한다.
 // 경계: HTS, FlaUI, UI, 파일 시스템, ResultEvaluator를 호출하지 않는다.
+using System.Globalization;
 using System.Text.Json;
+using System.Text.Json.Nodes;
 using HtsQa.Core;
 
 namespace HtsQa.Tests;
@@ -242,14 +244,117 @@ public sealed class ExecutionAuthorizationTests
     }
 
     [Fact]
-    public void Expired_Authorization_Is_Blocked()
+    public void Equivalent_Expiry_Offsets_Share_Canonical_Timestamp_And_Authorization_Hash()
     {
-        var authorization = ApprovedAuthorization(Scope() with { ExpiresAt = CheckedAt });
+        var timestamps = new[]
+        {
+            DateTimeOffset.Parse("2026-09-25T09:00:00+09:00", CultureInfo.InvariantCulture),
+            DateTimeOffset.Parse("2026-09-25T00:00:00Z", CultureInfo.InvariantCulture),
+            DateTimeOffset.Parse("2026-09-25T00:00:00+00:00", CultureInfo.InvariantCulture),
+            DateTimeOffset.Parse("2026-09-24T19:00:00-05:00", CultureInfo.InvariantCulture)
+        };
 
-        var decision = Service().Authorize(Request(authorization: authorization), CheckedAt);
+        var canonical = timestamps.Select(timestamp => ExecutionAuthorizationCanonicalTimestamp.Format(timestamp)).ToArray();
+        var hashes = timestamps.Select(timestamp => ExecutionAuthorizationWorkflow.ComputeHash(new ExecutionAuthorizationDraft
+        {
+            Environment = Environment(), Scope = Scope() with { ExpiresAt = timestamp }
+        })).ToArray();
 
-        Assert.Equal(ExecutionAuthorizationStatus.AuthorizationExpired, decision.Status);
-        Assert.Equal("AUTH.AUTHORIZATION_EXPIRED", Assert.Single(decision.Issues).Code);
+        Assert.All(canonical, value => Assert.Equal("2026-09-25T00:00:00.0000000Z", value));
+        Assert.Single(hashes.Distinct(StringComparer.Ordinal));
+    }
+
+    [Fact]
+    public void Different_Expiry_Instants_Keep_Full_Tick_Precision_And_Different_Hashes()
+    {
+        var boundary = DateTimeOffset.Parse("2026-09-25T00:00:00Z", CultureInfo.InvariantCulture);
+        var timestamps = new[] { boundary, boundary.AddSeconds(1), boundary.AddTicks(1), boundary.AddTicks(-1) };
+        var hashes = timestamps.Select(timestamp => ExecutionAuthorizationWorkflow.ComputeHash(new ExecutionAuthorizationDraft
+        {
+            Environment = Environment(), Scope = Scope() with { ExpiresAt = timestamp }
+        })).ToArray();
+
+        Assert.Equal("2026-09-25T00:00:00.0000001Z", ExecutionAuthorizationCanonicalTimestamp.Format(boundary.AddTicks(1)));
+        Assert.Equal("2026-09-24T23:59:59.9999999Z", ExecutionAuthorizationCanonicalTimestamp.Format(boundary.AddTicks(-1)));
+        Assert.Equal(timestamps.Length, hashes.Distinct(StringComparer.Ordinal).Count());
+    }
+
+    [Fact]
+    public void Canonical_Expiry_Is_Culture_Invariant_And_Null_Remains_Null()
+    {
+        var originalCulture = CultureInfo.CurrentCulture;
+        var originalUiCulture = CultureInfo.CurrentUICulture;
+        try
+        {
+            foreach (var cultureName in new[] { "ko-KR", "en-US", "tr-TR" })
+            {
+                CultureInfo.CurrentCulture = CultureInfo.GetCultureInfo(cultureName);
+                CultureInfo.CurrentUICulture = CultureInfo.GetCultureInfo(cultureName);
+                Assert.Equal("2026-09-25T00:00:00.1234567Z", ExecutionAuthorizationCanonicalTimestamp.Format(
+                    DateTimeOffset.Parse("2026-09-25T09:00:00.1234567+09:00", CultureInfo.InvariantCulture)));
+            }
+        }
+        finally
+        {
+            CultureInfo.CurrentCulture = originalCulture;
+            CultureInfo.CurrentUICulture = originalUiCulture;
+        }
+
+        Assert.Null(ExecutionAuthorizationCanonicalTimestamp.Format(null));
+    }
+
+    [Fact]
+    public void DotNet_Json_RoundTrip_And_Utc_Representation_Preserve_Authorization_Hash()
+    {
+        var authorization = ApprovedAuthorization(Scope() with
+        {
+            ExpiresAt = DateTimeOffset.Parse("2026-09-25T09:00:00+09:00", CultureInfo.InvariantCulture)
+        });
+        var json = JsonSerializer.Serialize(authorization, JsonDefaults.Options);
+        var roundTrip = JsonSerializer.Deserialize<ExecutionAuthorizationDocument>(json, JsonDefaults.Options)!;
+        var utcRepresentation = roundTrip with
+        {
+            Scope = roundTrip.Scope with { ExpiresAt = roundTrip.Scope.ExpiresAt!.Value.ToUniversalTime() }
+        };
+
+        Assert.Equal(authorization.AuthorizationHash, ExecutionAuthorizationWorkflow.ComputeHash(
+            utcRepresentation.EnvironmentFingerprint, utcRepresentation.Scope));
+        Assert.Equal(ExecutionAuthorizationStatus.Authorized,
+            Service().Authorize(Request(authorization: utcRepresentation), CheckedAt).Status);
+    }
+
+    [Fact]
+    public void Expiry_Uses_The_Utc_Instant_At_Before_Exact_And_After_Boundaries()
+    {
+        var expiresAt = DateTimeOffset.Parse("2026-09-25T09:00:00+09:00", CultureInfo.InvariantCulture);
+        var authorization = ApprovedAuthorization(Scope() with { ExpiresAt = expiresAt });
+
+        var before = Service().Authorize(Request(authorization: authorization), expiresAt.ToUniversalTime().AddTicks(-1));
+        var exact = Service().Authorize(Request(authorization: authorization), expiresAt.ToOffset(TimeSpan.FromHours(-5)));
+        var after = Service().Authorize(Request(authorization: authorization), expiresAt.ToUniversalTime().AddTicks(1));
+        var noExpiry = Service().Authorize(Request(authorization: ApprovedAuthorization(Scope() with { ExpiresAt = null })),
+            DateTimeOffset.Parse("2100-01-01T00:00:00Z", CultureInfo.InvariantCulture));
+
+        Assert.Equal(ExecutionAuthorizationStatus.Authorized, before.Status);
+        Assert.Equal(ExecutionAuthorizationStatus.AuthorizationExpired, exact.Status);
+        Assert.Equal("AUTH.AUTHORIZATION_EXPIRED", Assert.Single(exact.Issues).Code);
+        Assert.Equal(ExecutionAuthorizationStatus.AuthorizationExpired, after.Status);
+        Assert.Equal(ExecutionAuthorizationStatus.Authorized, noExpiry.Status);
+    }
+
+    [Fact]
+    public void Changing_Expiry_Instant_Invalidates_The_Existing_Approval_Hash()
+    {
+        var authorization = ApprovedAuthorization();
+        var tampered = authorization with
+        {
+            Scope = authorization.Scope with { ExpiresAt = authorization.Scope.ExpiresAt!.Value.AddTicks(1) }
+        };
+
+        var decision = Service().Authorize(Request(authorization: tampered), CheckedAt);
+
+        Assert.Equal(ExecutionAuthorizationStatus.InvalidAuthorization, decision.Status);
+        Assert.Equal("AUTH.HASH_MISMATCH", Assert.Single(decision.Issues).Code);
     }
 
     [Theory]
@@ -374,6 +479,22 @@ public sealed class ExecutionAuthorizationTests
 
         Assert.Equal(ExecutionAuthorizationStatus.ControlApprovalRequired, coordinateDecision.Status);
         Assert.Equal("AUTH.IMAGE_ONLY_PHYSICAL_FORBIDDEN", Assert.Single(visualDecision.Issues).Code);
+    }
+
+    [Fact]
+    public void Legacy_Authorization_Without_Hash_Version_Is_Deserializable_But_Requires_Reapproval()
+    {
+        var current = ApprovedAuthorization();
+        var node = JsonNode.Parse(JsonSerializer.Serialize(current, JsonDefaults.Options))!.AsObject();
+        Assert.True(node.Remove("authorizationHashVersion"));
+        var legacy = node.Deserialize<ExecutionAuthorizationDocument>(JsonDefaults.Options)!;
+
+        var decision = Service().Authorize(Request(authorization: legacy), CheckedAt);
+
+        Assert.Empty(legacy.AuthorizationHashVersion);
+        Assert.Equal(ExecutionAuthorizationStatus.InvalidAuthorization, decision.Status);
+        Assert.Equal("AUTH.HASH_VERSION_UNSUPPORTED", Assert.Single(decision.Issues).Code);
+        Assert.Equal(0, decision.ActualActionCallCount);
     }
 
     [Fact]

@@ -57,6 +57,10 @@ Anchor의 현재 관측값은 저장된 hash를 다시 만드는 입력이 아�
 
 `ExecutionAuthorizationHash`는 `EnvironmentFingerprint.Hash`와 정규화한 scope만 포함한다. Scope에는 target/screen/MAP, allowed action/risk, transactional 허용 여부, order type, 선택적인 case/quantity/amount 제한, 만료 시각과 policy schema/version이 들어간다. 승인자·승인 시각·근거는 provenance이며 canonical hash 입력은 아니다.
 
+Authorization hash algorithm `2.0`은 `ExpiresAt`을 UTC instant로 변환해 `yyyy-MM-ddTHH:mm:ss.fffffffZ` 형식으로 canonicalize한다. 7자리 fractional seconds를 항상 기록해 .NET `DateTimeOffset`의 100ns 정밀도를 자르지 않으며, `null`은 만료 없음이라는 기존 의미를 유지한다. 따라서 같은 instant의 `+09:00`, `Z`, `+00:00` 표기는 동일한 hash를 만들고 실제 instant가 1 tick이라도 다르면 다른 hash를 만든다. 외부 JSON은 원래 offset을 보존할 수 있지만 canonical hash payload에는 UTC 표현만 들어간다.
+
+`authorizationHashVersion`은 additive 필드이며 authorization schema는 `1.0`을 유지한다. 이 필드가 없거나 `2.0`이 아닌 구형 문서는 자동 재서명·자동 승인하지 않고 `InvalidAuthorization` / `AUTH.HASH_VERSION_UNSUPPORTED`로 차단한다. 기존 문서는 새 UTC canonical hash로 다시 생성하고 사람이 재승인해야 한다. 이 변경은 ControlContractHash, TestPack/plan hash, ScenarioId/CaseId와 locator approval hash에 영향을 주지 않는다.
+
 ## 재승인 truth table
 
 | 변화 | Control 재승인 | Environment 재승인 | 결과 |
@@ -98,7 +102,7 @@ Test/Simulation 환경 승인은 Production 또는 Real account 환경에서 재
 | `EnvironmentDrift` | `AUTH.ENVIRONMENT_DRIFT` | 환경 fingerprint 변화 |
 | `ControlContractDrift` | `AUTH.CONTROL_CONTRACT_DRIFT`, `AUTH.REPOSITORY_TARGET_MISMATCH`, `AUTH.CONTROL_PREFLIGHT_DRIFT` | 승인 contract, repository target 또는 current observation 변화 |
 | `ConfigurationRequired` | `AUTH.CONFIGURATION_REQUIRED`, `AUTH.CONTROL_PREFLIGHT_REQUIRED` | 분류·관측 입력 부족 |
-| `InvalidAuthorization` | `AUTH.HASH_MISMATCH`, `AUTH.INVALID_AUTHORIZATION` | schema/hash/provenance 위·변조 또는 구조 오류 |
+| `InvalidAuthorization` | `AUTH.HASH_MISMATCH`, `AUTH.HASH_VERSION_UNSUPPORTED`, `AUTH.INVALID_AUTHORIZATION` | schema/hash/provenance 위·변조, 구형 hash version 또는 구조 오류 |
 
 ## CLI와 PowerShell
 

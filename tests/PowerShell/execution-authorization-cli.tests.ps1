@@ -41,13 +41,19 @@ try {
     $applied=Invoke-Cli @('apply-execution-authorization-approval','--request',$draftPath,'--approval',$approvalPath,'--out',$authorizationPath)
     Assert-Equal 0 $applied.ExitCode 'authorization apply exit code';Assert-Equal '' $applied.StdErr 'authorization apply stderr'
 
+    $authorization=Get-Content -LiteralPath $authorizationPath -Raw|ConvertFrom-Json
+    Assert-Equal '2.0' $authorization.authorizationHashVersion 'authorization hash version'
+    $originalExpiry=[DateTimeOffset]::Parse([string]$authorization.scope.expiresAt,[Globalization.CultureInfo]::InvariantCulture)
+    $authorization.scope.expiresAt=$originalExpiry.UtcDateTime
     $requestPath=Join-Path $temp 'check.json';$decisionPath=Join-Path $temp 'decision.json'
     $request=[ordered]@{
-        currentEnvironment=$environment;authorization=(Get-Content -LiteralPath $authorizationPath -Raw|ConvertFrom-Json)
+        currentEnvironment=$environment;authorization=$authorization
         repository=[ordered]@{schemaVersion='1.0';repositoryId='empty-synthetic';targetProfileId='fixture-target';status='ConfigurationRequired';entries=@()}
         requirements=@();controlObservations=@();requestedCaseCount=1;planHash='plan-change-does-not-reapprove'
     }
     $request|ConvertTo-Json -Depth 30|Set-Content -LiteralPath $requestPath -Encoding utf8NoBOM
+    $requestJson=Get-Content -LiteralPath $requestPath -Raw
+    Assert-True ($requestJson-match'"expiresAt"\s*:\s*"2026-09-25T00:00:00(?:\.0000000)?Z"') 'PowerShell JSON round-trip writes the same instant in UTC'
     $checked=Invoke-Cli @('check-execution-authorization','--request',$requestPath,'--checked-at','2026-08-25T09:05:00+09:00','--out',$decisionPath)
     $decision=Get-Content -LiteralPath $decisionPath -Raw|ConvertFrom-Json
     Assert-Equal 0 $checked.ExitCode 'authorization check exit code';Assert-Equal 'Authorized' $decision.status 'Core decision is preserved'

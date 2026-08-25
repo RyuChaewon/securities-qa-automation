@@ -1,5 +1,7 @@
 // 역할: 컨트롤 안정 계약과 비운영 환경 실행 scope를 canonical hash로 승인하고 실행 전 fail-closed로 판정한다.
 // 경계: UI, 파일 시스템, PowerShell, verdict에 의존하지 않으며 실제 action을 전송하지 않는다.
+using System.Globalization;
+
 namespace HtsQa.Core;
 
 public enum ControlTransactionalRole
@@ -44,6 +46,7 @@ public static class ExecutionAuthorizationVersions
     public const string ControlContractSchema = "1.0";
     public const string EnvironmentFingerprintSchema = "1.0";
     public const string AuthorizationSchema = "1.0";
+    public const string AuthorizationHashAlgorithm = "2.0";
     public const string DecisionSchema = "1.0";
     public const double AnchorTolerance = 0.0025;
 }
@@ -286,9 +289,36 @@ public sealed record ExecutionAuthorizationDraft
     public required ExecutionAuthorizationScope Scope { get; init; }
 }
 
+public static class ExecutionAuthorizationCanonicalTimestamp
+{
+    public const string UtcFormat = "yyyy-MM-dd'T'HH:mm:ss.fffffff'Z'";
+
+    public static string? Format(DateTimeOffset? value) => value is null
+        ? null
+        : value.Value.ToUniversalTime().ToString(UtcFormat, CultureInfo.InvariantCulture);
+}
+
+internal sealed record ExecutionAuthorizationCanonicalScope
+{
+    public string SchemaVersion { get; init; } = "";
+    public string PolicyVersion { get; init; } = "";
+    public string[] TargetIds { get; init; } = [];
+    public string[] Screens { get; init; } = [];
+    public string[] Maps { get; init; } = [];
+    public ControlRepositoryAction[] AllowedActions { get; init; } = [];
+    public ControlRiskClass[] AllowedRiskClasses { get; init; } = [];
+    public bool TransactionalActionsAllowed { get; init; }
+    public string[] AllowedOrderTypes { get; init; } = [];
+    public int? MaximumCaseCount { get; init; }
+    public decimal? MaximumQuantity { get; init; }
+    public decimal? MaximumAmount { get; init; }
+    public string? ExpiresAtUtc { get; init; }
+}
+
 public sealed record ExecutionAuthorizationDocument
 {
     public string SchemaVersion { get; init; } = ExecutionAuthorizationVersions.AuthorizationSchema;
+    public string AuthorizationHashVersion { get; init; } = "";
     public required string AuthorizationId { get; init; }
     public required EnvironmentFingerprint EnvironmentFingerprint { get; init; }
     public required ExecutionAuthorizationScope Scope { get; init; }
@@ -320,6 +350,7 @@ public static class ExecutionAuthorizationWorkflow
         var approved = overlay.Status == TestPackApprovalStatus.Approved;
         return new()
         {
+            AuthorizationHashVersion = ExecutionAuthorizationVersions.AuthorizationHashAlgorithm,
             AuthorizationId = $"execution-auth-{hash[..16]}", EnvironmentFingerprint = fingerprint, Scope = scope, AuthorizationHash = hash,
             Approval = new()
             {
@@ -338,8 +369,29 @@ public static class ExecutionAuthorizationWorkflow
         return ComputeHash(fingerprint, scope);
     }
 
-    public static string ComputeHash(EnvironmentFingerprint fingerprint, ExecutionAuthorizationScope scope) =>
-        CanonicalJson.Sha256(new { fingerprint.SchemaVersion, EnvironmentFingerprintHash = fingerprint.Hash, Scope = NormalizeScope(scope) });
+    public static string ComputeHash(EnvironmentFingerprint fingerprint, ExecutionAuthorizationScope scope) => CanonicalJson.Sha256(new
+    {
+        AuthorizationHashVersion = ExecutionAuthorizationVersions.AuthorizationHashAlgorithm,
+        fingerprint.SchemaVersion,
+        EnvironmentFingerprintHash = fingerprint.Hash,
+        Scope = CanonicalScope(scope)
+    });
+
+    private static ExecutionAuthorizationCanonicalScope CanonicalScope(ExecutionAuthorizationScope value)
+    {
+        var scope = NormalizeScope(value);
+        return new()
+        {
+            SchemaVersion = scope.SchemaVersion, PolicyVersion = scope.PolicyVersion,
+            TargetIds = scope.TargetIds, Screens = scope.Screens, Maps = scope.Maps,
+            AllowedActions = scope.AllowedActions, AllowedRiskClasses = scope.AllowedRiskClasses,
+            TransactionalActionsAllowed = scope.TransactionalActionsAllowed,
+            AllowedOrderTypes = scope.AllowedOrderTypes,
+            MaximumCaseCount = scope.MaximumCaseCount, MaximumQuantity = scope.MaximumQuantity,
+            MaximumAmount = scope.MaximumAmount,
+            ExpiresAtUtc = ExecutionAuthorizationCanonicalTimestamp.Format(scope.ExpiresAt)
+        };
+    }
 
     internal static ExecutionAuthorizationScope NormalizeScope(ExecutionAuthorizationScope value) => value with
     {
@@ -428,6 +480,9 @@ public sealed class ExecutionAuthorizationService : IExecutionAuthorizationServi
             return Decision(ExecutionAuthorizationStatus.EnvironmentApprovalRequired, "AUTH.ENVIRONMENT_APPROVAL_REQUIRED", "No environment execution authorization was supplied.", "Create and obtain human approval for this exact environment and scope.", environmentHash: current.Hash);
         if (authorization.SchemaVersion != ExecutionAuthorizationVersions.AuthorizationSchema)
             return Decision(ExecutionAuthorizationStatus.InvalidAuthorization, "AUTH.SCHEMA_VERSION", "Execution authorization schema is unsupported.", "Regenerate the authorization with the supported schema.", environmentHash: current.Hash);
+        if (!authorization.AuthorizationHashVersion.Equals(ExecutionAuthorizationVersions.AuthorizationHashAlgorithm, StringComparison.Ordinal))
+            return Decision(ExecutionAuthorizationStatus.InvalidAuthorization, "AUTH.HASH_VERSION_UNSUPPORTED", "Execution authorization hash version is missing or unsupported.",
+                "Regenerate the authorization with the current UTC canonicalization and obtain a new human approval.", current.Hash, authorization.AuthorizationHash);
 
         string expectedAuthorizationHash;
         try
@@ -445,7 +500,7 @@ public sealed class ExecutionAuthorizationService : IExecutionAuthorizationServi
             !authorization.Approval.ApprovedContentHash.Equals(expectedAuthorizationHash, StringComparison.OrdinalIgnoreCase) ||
             string.IsNullOrWhiteSpace(authorization.Approval.ApprovedBy) || authorization.Approval.ApprovedAt is null || authorization.Approval.EvidenceRefs.Length == 0)
             return Decision(ExecutionAuthorizationStatus.InvalidAuthorization, "AUTH.HASH_MISMATCH", "Execution authorization approval payload is missing or was modified.", "Regenerate and obtain a new human approval.", current.Hash, authorization.AuthorizationHash);
-        if (authorization.Scope.ExpiresAt is { } expiresAt && now >= expiresAt)
+        if (authorization.Scope.ExpiresAt is { } expiresAt && now.ToUniversalTime() >= expiresAt.ToUniversalTime())
             return Decision(ExecutionAuthorizationStatus.AuthorizationExpired, "AUTH.AUTHORIZATION_EXPIRED", "Execution authorization has expired.", "Obtain a new time-bounded authorization.", current.Hash, authorization.AuthorizationHash);
         if (!authorization.EnvironmentFingerprint.Hash.Equals(current.Hash, StringComparison.OrdinalIgnoreCase))
             return Decision(ExecutionAuthorizationStatus.EnvironmentDrift, "AUTH.ENVIRONMENT_DRIFT", "Current environment fingerprint differs from the approved environment.", "Review the changed version, host, routing, account, adapter, or policy classification and reapprove.", current.Hash, authorization.AuthorizationHash);
