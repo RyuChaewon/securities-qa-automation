@@ -180,7 +180,7 @@ function Invoke-HtsPassiveInteractionRecording {
     $regionCounts=@($interactions|Group-Object{$_.hitTarget.spatialRegion}|ForEach-Object{[ordered]@{region=$_.Name;interactionCount=$_.Count}})
     $session=[ordered]@{
         sessionId='passive-'+[Guid]::NewGuid().ToString('N');rootHwnd=$RootHwnd;processId=[int]$initial.processId
-        startedAt=$startedAt;completedAt=$completedAt;durationSeconds=[Math]::Round(($completedAt-$startedAt).TotalSeconds,3);stopReason=$stopReason
+        hookRegistrationAttemptedAt=$hookRegistrationAttemptedAt;htsWindowDetected=($RootHwnd -eq [Int64]$initial.rootHwnd);startedAt=$startedAt;completedAt=$completedAt;durationSeconds=[Math]::Round(($completedAt-$startedAt).TotalSeconds,3);stopReason=$stopReason
         executionStatus=if($interactionArray.Count -eq 0){'NoInteractionsCaptured'}else{'Completed'}
         diagnosticCode=if($interactionArray.Count -eq 0){switch($stopReason){'MaximumDuration'{'PASSIVE_TIMEOUT_NO_INTERACTIONS'}'F10'{'PASSIVE_F10_NO_INTERACTIONS'}'ConsoleEnter'{'PASSIVE_ENTER_NO_INTERACTIONS'}default{'PASSIVE_NO_INTERACTIONS'}}}else{$null}
         diagnosticMessage=if($interactionArray.Count -eq 0){'Recorder waited for manual interaction and ended without a captured interaction.'}else{$null}
@@ -198,7 +198,4 @@ function Invoke-HtsPassiveInteractionRecording {
     }
     [pscustomobject]@{OutputDirectory=$fullOutput;Session=$session;Interactions=$interactionArray;Zones=$zones;ArtifactFiles=[string[]]$artifacts.Keys;UiActionCount=0;TransactionalActionCount=0}
 }
-
-
-
 
