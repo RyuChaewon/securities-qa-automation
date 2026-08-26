@@ -61,8 +61,8 @@ function Get-HtsPassiveRecorderRegions {
 function New-HtsPassiveInteractionArtifactSet {
     param(
         [Parameter(Mandatory = $true)]$Session,
-        [Parameter(Mandatory = $true)][object[]]$Interactions,
-        [Parameter(Mandatory = $true)][object[]]$Zones)
+        [Parameter(Mandatory = $true)][AllowNull()][AllowEmptyCollection()][object[]]$Interactions,
+        [Parameter(Mandatory = $true)][AllowNull()][AllowEmptyCollection()][object[]]$Zones)
     $roleSuggestions=@($Interactions|ForEach-Object{
         [ordered]@{interactionId=[string]$_.interactionId;status='ReviewRequired';role=[string]$_.suggestion.inferredRole
             actionKind=[string]$_.suggestion.inferredActionKind;confidence=[double]$_.suggestion.confidence
@@ -176,11 +176,14 @@ function Invoke-HtsPassiveInteractionRecording {
     }finally{Invoke-HtsPassiveRecorderDependency $Context 'StopObserver'|Out-Null}
     $completedAt=Invoke-HtsPassiveRecorderDependency $Context 'Now'
     $interactionArray=$interactions.ToArray()
-    $zones=@(Invoke-HtsPassiveRecorderDependency $Context 'ClusterInteractions' @($interactionArray,0.04))
+    $zones = if ($interactionArray.Count -eq 0) { @() } else { @(Invoke-HtsPassiveRecorderDependency $Context 'ClusterInteractions' @($interactionArray,0.04)) }
     $regionCounts=@($interactions|Group-Object{$_.hitTarget.spatialRegion}|ForEach-Object{[ordered]@{region=$_.Name;interactionCount=$_.Count}})
     $session=[ordered]@{
         sessionId='passive-'+[Guid]::NewGuid().ToString('N');rootHwnd=$RootHwnd;processId=[int]$initial.processId
         startedAt=$startedAt;completedAt=$completedAt;durationSeconds=[Math]::Round(($completedAt-$startedAt).TotalSeconds,3);stopReason=$stopReason
+        executionStatus=if($interactionArray.Count -eq 0){'NoInteractionsCaptured'}else{'Completed'}
+        diagnosticCode=if($interactionArray.Count -eq 0){switch($stopReason){'MaximumDuration'{'PASSIVE_TIMEOUT_NO_INTERACTIONS'}'F10'{'PASSIVE_F10_NO_INTERACTIONS'}'ConsoleEnter'{'PASSIVE_ENTER_NO_INTERACTIONS'}default{'PASSIVE_NO_INTERACTIONS'}}}else{$null}
+        diagnosticMessage=if($interactionArray.Count -eq 0){'Recorder waited for manual interaction and ended without a captured interaction.'}else{$null}
         interactionCount=$interactions.Count;uniqueTargetHwndCount=@($interactions.hitTarget.primaryHwnd|Sort-Object -Unique).Count
         ownerDrawnZoneCount=@($zones|Where-Object{[string]$_.className-match'^Afx|OwnerDrawn'}).Count;popupChangeCount=@($interactions|Where-Object{@($_.delta.popupCreatedHwnds).Count-gt0-or@($_.delta.popupClosedHwnds).Count-gt0}).Count
         selectionChangeCount=@($interactions|Where-Object{[bool]$_.delta.selectionEventObserved}).Count;stateChangeCount=@($interactions|Where-Object{[bool]$_.delta.stateFingerprintChanged}).Count
@@ -195,3 +198,7 @@ function Invoke-HtsPassiveInteractionRecording {
     }
     [pscustomobject]@{OutputDirectory=$fullOutput;Session=$session;Interactions=$interactionArray;Zones=$zones;ArtifactFiles=[string[]]$artifacts.Keys;UiActionCount=0;TransactionalActionCount=0}
 }
+
+
+
+
